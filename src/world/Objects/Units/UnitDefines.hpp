@@ -850,14 +850,13 @@ enum UnitStandFlags
 };
 
 // byte flags value (UNIT_FIELD_BYTES_1,3)
-enum UnitBytes1_AnimationFlags
+enum AnimationTier : uint8_t
 {
-    UNIT_BYTE1_FLAG_GROUND       = 0x00,
-    UNIT_BYTE1_FLAG_ALWAYS_STAND = 0x01,
-    UNIT_BYTE1_FLAG_HOVER        = 0x02,    // It is called hover
-    UNIT_BYTE1_FLAG_FLY          = 0x03,
-    UNIT_BYTE1_FLAG_UNTRACKABLE  = 0x04,
-    UNIT_BYTE1_FLAG_ALL          = 0xFF
+    Ground                          = 0, // plays ground tier animations
+    Swim                            = 1, // falls back to ground tier animations, not handled by the client, should never appear in sniffs, will prevent tier change animations from playing correctly if used
+    Hover                           = 2, // plays flying tier animations or falls back to ground tier animations, automatically enables hover clientside when entering visibility with this value
+    Fly                             = 3, // plays flying tier animations
+    Submerged                       = 4
 };
 
 // byte value (UNIT_FIELD_BYTES_2,0)

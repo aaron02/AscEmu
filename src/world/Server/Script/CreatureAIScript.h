@@ -181,6 +181,9 @@ public:
 
     float getRangeToObject(Object* object);
 
+
+    Creature* summonCreature(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t duration);
+
     CreatureAIScript* spawnCreatureAndGetAIScript(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t factionId = 0, uint32_t phase = 1);
 
     Creature* spawnCreature(uint32_t entry, LocationVector pos, uint32_t factionId = 0, uint32_t phase = 1);

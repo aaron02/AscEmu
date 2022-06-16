@@ -913,7 +913,7 @@ void Unit::setBytes1ForOffset(uint32_t offset, uint8_t value)
             setStandStateFlags(value);
             break;
         case 3:
-            setAnimationFlags(value);
+            setAnimationTier(AnimationTier(value));
             break;
         default:
             sLogger.failure("Offset %u is not a valid offset value for byte_1 data (max 3)", offset);
@@ -1556,11 +1556,11 @@ void Unit::setMoveHover(bool set_hover)
         }
 
         if (hasUnitMovementFlag(MOVEFLAG_DISABLEGRAVITY))
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_FLY);
+            setAnimationTier(AnimationTier::Fly);
         else if (isHovering())
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_HOVER);
+            setAnimationTier(AnimationTier::Hover);
         else
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_GROUND);
+            setAnimationTier(AnimationTier::Ground);
     }
 }
 
@@ -1608,48 +1608,29 @@ void Unit::setMoveCanFly(bool set_fly)
 
     if (isCreature())
     {
-        if (!movespline->Initialized())
+        if (set_fly == hasUnitMovementFlag(MOVEFLAG_CAN_FLY))
             return;
 
         if (set_fly)
         {
             addUnitMovementFlag(MOVEFLAG_CAN_FLY);
-
-            // Remove falling flag if set
             removeUnitMovementFlag(MOVEFLAG_FALLING);
-
-            WorldPacket data(SMSG_SPLINE_MOVE_SET_FLYING, 10);
-#if VERSION_STRING < Cata
-            data << GetNewGUID();
-#else
-            obj_movement_info.writeMovementInfo(data, SMSG_SPLINE_MOVE_SET_FLYING);
-#endif
-            sendMessageToSet(&data, false);
         }
         else
         {
-            // Remove all fly related moveflags
             removeUnitMovementFlag(MOVEFLAG_CAN_FLY);
-#if VERSION_STRING > TBC
-            removeUnitMovementFlag(MOVEFLAG_DESCENDING);
-#endif
-            removeUnitMovementFlag(MOVEFLAG_ASCENDING);
-
-            WorldPacket data(SMSG_SPLINE_MOVE_UNSET_FLYING, 10);
-#if VERSION_STRING < Cata
-            data << GetNewGUID();
-#else
-            obj_movement_info.writeMovementInfo(data, SMSG_SPLINE_MOVE_UNSET_FLYING);
-#endif
-            sendMessageToSet(&data, false);
         }
 
-        if (hasUnitMovementFlag(MOVEFLAG_DISABLEGRAVITY))
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_FLY);
-        else if (isHovering())
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_HOVER);
-        else
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_GROUND);
+        if (!movespline->Initialized())
+            return;
+
+        WorldPacket data(set_fly ? SMSG_SPLINE_MOVE_SET_FLYING : SMSG_SPLINE_MOVE_UNSET_FLYING, 10);
+#if VERSION_STRING < Cata
+        data << GetNewGUID();
+#else
+        obj_movement_info.writeMovementInfo(data, SMSG_SPLINE_MOVE_SET_FLYING);
+#endif
+        sendMessageToSet(&data, false);
     }
 }
 
@@ -1783,37 +1764,39 @@ void Unit::setMoveDisableGravity(bool disable_gravity)
 
     if (isCreature())
     {
+        if (disable_gravity == hasUnitMovementFlag(MOVEFLAG_DISABLEGRAVITY))
+            return;
+
         if (disable_gravity)
         {
             addUnitMovementFlag(MOVEFLAG_DISABLEGRAVITY);
-
-            WorldPacket data(SMSG_SPLINE_MOVE_GRAVITY_DISABLE, 10);
-#if VERSION_STRING < Cata
-            data << GetNewGUID();
-#else
-            obj_movement_info.writeMovementInfo(data, SMSG_SPLINE_MOVE_GRAVITY_DISABLE);
-#endif
-            sendMessageToSet(&data, false);
+            removeUnitMovementFlag(MOVEFLAG_FALLING);
         }
         else
         {
             removeUnitMovementFlag(MOVEFLAG_DISABLEGRAVITY);
-
-            WorldPacket data(SMSG_SPLINE_MOVE_GRAVITY_ENABLE, 10);
-#if VERSION_STRING < Cata
-            data << GetNewGUID();
-#else
-            obj_movement_info.writeMovementInfo(data, SMSG_SPLINE_MOVE_GRAVITY_ENABLE);
-#endif
-            sendMessageToSet(&data, false);
         }
 
-        if (hasUnitMovementFlag(MOVEFLAG_DISABLEGRAVITY))
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_FLY);
-        else if (isHovering())
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_HOVER);
-        else
-            setAnimationTier(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_GROUND);
+        if (isAlive() && !hasUnitStateFlag(UNIT_STATE_ROOTED))
+        {
+            if (hasUnitMovementFlag(MOVEFLAG_DISABLEGRAVITY))
+                setAnimationTier(AnimationTier::Fly);
+            else if (isHovering())
+                setAnimationTier(AnimationTier::Hover);
+            else
+                setAnimationTier(AnimationTier::Ground);
+        }
+
+        if (!movespline->Initialized())
+            return;
+
+        WorldPacket data(disable_gravity ? SMSG_SPLINE_MOVE_GRAVITY_DISABLE : SMSG_SPLINE_MOVE_GRAVITY_ENABLE, 10);
+#if VERSION_STRING < Cata
+        data << GetNewGUID();
+#else
+        obj_movement_info.writeMovementInfo(data, SMSG_SPLINE_MOVE_GRAVITY_DISABLE);
+#endif
+        sendMessageToSet(&data, false);
     }
 #endif
 }
@@ -1952,12 +1935,12 @@ void Unit::handleFall(MovementInfo const& movementInfo)
     m_zAxisPosition = 0.0f;
 }
 
-void Unit::setAnimationTier(uint8_t tier)
+void Unit::setAnimationTier(AnimationTier tier)
 {
     if (!isCreature())
         return;
 
-    setAnimationFlags(tier);
+    setAnimationFlags(static_cast<uint8_t>(tier));
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -2621,7 +2604,7 @@ void Unit::updateSplineMovement(uint32 t_diff)
         disableSpline();
 
         if (movespline->HasAnimation())
-            setAnimationFlags(movespline->GetAnimationTier());
+            setAnimationTier(movespline->GetAnimationTier());
     }
 
     updateSplinePosition();

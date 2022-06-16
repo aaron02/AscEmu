@@ -665,7 +665,7 @@ void MovementManager::moveLand(uint32_t id, LocationVector const& pos, Optional<
 {
     MovementNew::MoveSplineInit init(_owner);
     init.MoveTo(positionToVector3(pos), false);
-    init.SetAnimation(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_GROUND);
+    init.SetAnimation(AnimationTier::Ground);
     if (velocity)
         init.SetVelocity(*velocity);
     add(new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, id));
@@ -675,7 +675,7 @@ void MovementManager::moveTakeoff(uint32_t id, LocationVector const& pos, Option
 {
     MovementNew::MoveSplineInit init(_owner);
     init.MoveTo(positionToVector3(pos), false);
-    init.SetAnimation(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_HOVER);
+    init.SetAnimation(AnimationTier::Hover);
     if (velocity)
         init.SetVelocity(*velocity);
     add(new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, id));
@@ -819,7 +819,7 @@ void MovementManager::moveCirclePath(float x, float y, float z, float radius, bo
     {
         init.SetFly();
         init.SetCyclic();
-        init.SetAnimation(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_HOVER);
+        init.SetAnimation(AnimationTier::Hover);
     }
     else
     {

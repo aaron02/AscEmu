@@ -48,6 +48,8 @@ public:
     // void OnPreRemoveFromWorld();                     // not used
     // void OnRemoveFromWorld();                        // not used
 
+    void OnLoaded();
+
     GameEvent * mEvent = nullptr;
 
     // npc flag helper

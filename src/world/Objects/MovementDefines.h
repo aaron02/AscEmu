@@ -137,7 +137,7 @@ enum MovementFlags
     MOVEFLAG_STRAFING_MASK              = 0x0C,
     MOVEFLAG_TURNING_MASK               = 0x30,         // MOVEFLAG_TURN_LEFT + MOVEFLAG_TURN_RIGHT
     MOVEFLAG_FALLING_MASK               = 0x6000,
-    MOVEFLAG_FLYING_MASK                = MOVEFLAG_FLYING | MOVEFLAG_DISABLEGRAVITY,
+    MOVEFLAG_FLYING_MASK                = MOVEFLAG_CAN_FLY | MOVEFLAG_DISABLEGRAVITY,
     MOVEFLAG_MOTION_MASK                = 0xE00F,       // Forwards, Backwards, Strafing, Falling
     MOVEFLAG_PENDING_MASK               = 0x7F0000,
     MOVEFLAG_PENDING_STRAFE_MASK        = 0x600000,

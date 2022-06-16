@@ -993,7 +993,6 @@ void Creature::AddToWorld()
     Object::AddToWorld();
     searchFormation();   
     motion_Initialize();
-    immediateMovementFlagsUpdate();
 
     if (getMovementTemplate().isRooted())
         setControlled(true, UNIT_STATE_ROOTED);
@@ -1017,7 +1016,6 @@ void Creature::AddToWorld(WorldMap* pMapMgr)
     Object::AddToWorld(pMapMgr);
     searchFormation();
     motion_Initialize();
-    immediateMovementFlagsUpdate();
 
     if (getMovementTemplate().isRooted())
         setControlled(true, UNIT_STATE_ROOTED);
@@ -1588,13 +1586,21 @@ bool Creature::Load(MySQLStructure::CreatureSpawn* spawn, uint8 mode, MySQLStruc
     BaseAttackType = creature_properties->attackSchool;
 
     setModCastSpeed(1.0f);   // better set this one
+
+    // Bytes 0
     setBytes0(spawn->bytes0);
-    setBytes1(spawn->bytes1);
+
+    // Bytes 1
+    setStandState(static_cast<uint8_t>((spawn->bytes1) & 0xFF));
+    setPetTalentPoints(static_cast<uint8_t>((spawn->bytes1 >> 8) & 0xFF));
+    setStandStateFlags(static_cast<uint8_t>((spawn->bytes1 >> 16) & 0xFF));
+    setAnimationTier(static_cast<AnimationTier>((spawn->bytes1 >> 24) & 0xFF));
+
+    // Bytes 2
     setBytes2(spawn->bytes2);
 
     ////////////AI
-    getAIInterface()->initialiseScripts(getEntry());
-    getAIInterface()->eventOnLoad();
+    sEventMgr.AddEvent(this, &Creature::OnLoaded, 0, 100, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 
     if (!creature_properties->isTrainingDummy && !isVehicle())
     {
@@ -1834,8 +1840,7 @@ void Creature::Load(CreatureProperties const* properties_, float x, float y, flo
     setModCastSpeed(1.0f);   // better set this one
 
     ////////////AI
-    getAIInterface()->initialiseScripts(getEntry());
-    getAIInterface()->eventOnLoad();
+    sEventMgr.AddEvent(this, &Creature::OnLoaded, 0, 100, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 
     //////////////AI
 
@@ -1907,6 +1912,14 @@ void Creature::Load(CreatureProperties const* properties_, float x, float y, flo
             m_corpseDelay = worldConfig.corpseDecay.normalTimeInSeconds;
             break;
     }
+}
+
+void Creature::OnLoaded()
+{
+    getAIInterface()->initialiseScripts(getEntry());
+    getAIInterface()->eventOnLoad();
+
+    immediateMovementFlagsUpdate();
 }
 
 void Creature::OnPushToWorld()

@@ -284,6 +284,42 @@ float CreatureAIScript::getRangeToObject(Object* object)
     return _creature->CalcDistance(object);
 }
 
+Creature* CreatureAIScript::summonCreature(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t duration)
+{
+    CreatureProperties const* properties = sMySQLStore.getCreatureProperties(entry);
+    if (properties == nullptr)
+        return nullptr;
+
+    if (Creature* tempSpawn = _creature->getWorldMap()->createCreature(entry))
+    {
+        tempSpawn->Load(properties, posX, posY, posZ);
+        tempSpawn->SetZoneId(_creature->GetZoneId());
+
+        if (tempSpawn->GetCreatureProperties()->Faction == 35)
+        {
+            tempSpawn->setFaction(_creature->getFactionTemplate());
+        }
+        else
+        {
+            tempSpawn->setFaction(properties->Faction);
+        }
+
+        tempSpawn->setSummonedByGuid(_creature->getGuid());
+        tempSpawn->setCreatedByGuid(_creature->getGuid());
+
+        tempSpawn->PushToWorld(_creature->getWorldMap());
+
+        // Delay this a bit to make sure its Spawned
+        sEventMgr.AddEvent(tempSpawn, &Creature::InitSummon, static_cast<Object*>(_creature), EVENT_UNK, 100, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+
+        //make sure they will be desummoned (roxor)
+        sEventMgr.AddEvent(tempSpawn, &Creature::SummonExpire, EVENT_SUMMON_EXPIRE, duration, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+        return tempSpawn;
+    }
+
+    return nullptr;
+}
+
 CreatureAIScript* CreatureAIScript::spawnCreatureAndGetAIScript(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t factionId /* = 0*/, uint32_t phase /*= 1*/)
 {
     Creature* creature = spawnCreature(entry, posX, posY, posZ, posO, factionId, phase);
@@ -505,10 +541,10 @@ void CreatureAIScript::setWaypointToMove(uint32_t pathId, uint32_t pWaypointId)
     switch (waypoint.moveType)
     {
     case WAYPOINT_MOVE_TYPE_LAND:
-        init.SetAnimation(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_GROUND);
+        init.SetAnimation(AnimationTier::Ground);
         break;
     case WAYPOINT_MOVE_TYPE_TAKEOFF:
-        init.SetAnimation(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_HOVER);
+        init.SetAnimation(AnimationTier::Hover);
         break;
     case WAYPOINT_MOVE_TYPE_RUN:
         init.SetWalk(false);

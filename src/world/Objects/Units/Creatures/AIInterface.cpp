@@ -1065,6 +1065,9 @@ void AIInterface::updateTargets(unsigned long time_passed)
             return;
         }
 
+        bool canhave = getUnit()->getThreatManager().canHaveThreatList();
+        bool hastarget = getUnit()->getThreatManager().isThreatenedBy(getCurrentTarget());
+
         // If unit has target but does not have threat with it, evade
         if (getUnit()->getThreatManager().canHaveThreatList() && !getUnit()->getThreatManager().isThreatenedBy(getCurrentTarget()))
         {
@@ -3027,10 +3030,10 @@ void AIInterface::setWayPointToMove(uint32_t waypointId)
     switch (waypoint.moveType)
     {
     case WAYPOINT_MOVE_TYPE_LAND:
-        init.SetAnimation(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_GROUND);
+        init.SetAnimation(AnimationTier::Ground);
         break;
     case WAYPOINT_MOVE_TYPE_TAKEOFF:
-        init.SetAnimation(UnitBytes1_AnimationFlags::UNIT_BYTE1_FLAG_HOVER);
+        init.SetAnimation(AnimationTier::Hover);
         break;
     case WAYPOINT_MOVE_TYPE_RUN:
         init.SetWalk(false);

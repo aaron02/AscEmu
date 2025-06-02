@@ -25,6 +25,7 @@ class GameEvent;
 struct QuestRelation;
 struct QuestProperties;
 class CreatureGroup;
+class CreatureAI;
 
 namespace MySQLStructure
 {
@@ -85,7 +86,7 @@ public:
 
     //type helper
     bool isVehicle() const override;
-    bool isTrainingDummy() override;
+    bool isTrainingDummy() const override;
 
     //pvp helper
     bool isPvpFlagSet() const override;
@@ -165,7 +166,84 @@ public:
     MovementGeneratorType getDefaultMovementType() const override { return m_defaultMovementType; }
     void setDefaultMovementType(MovementGeneratorType mgt) { m_defaultMovementType = mgt; }
 
-    bool isDungeonBoss() { return (GetCreatureProperties()->extra_a9_flags & 0x10000000) != 0; }
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Creature Rank
+    bool isElite() const;
+    bool isWorldBoss() const;
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Creature Extra Flags
+    bool isCivilian() const { return (GetCreatureProperties()->extra_a9_flags & CREATURE_FLAG_EXTRA_CIVILIAN) != 0; }
+    bool isTrigger() const { return (GetCreatureProperties()->extra_a9_flags & CREATURE_FLAG_EXTRA_TRIGGER) != 0; }
+    bool isGuard() const { return (GetCreatureProperties()->extra_a9_flags & CREATURE_FLAG_EXTRA_GUARD) != 0; }
+    bool isDungeonBoss() const { return (GetCreatureProperties()->extra_a9_flags & CREATURE_FLAG_EXTRA_DUNGEON_BOSS) != 0; }
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Creature Type Mask
+    uint32_t hasTypeMask(uint32_t mask) const { return mask & m_Creature_TypeMask; }
+    void addTypeMask(uint32_t mask) { m_Creature_TypeMask |= mask; }
+    bool isSummon() const { return (m_Creature_TypeMask & CREATURE_TYPE_MASK_SUMMON) != 0; }
+    bool isGuardian() const { return (m_Creature_TypeMask & CREATURE_TYPE_MASK_GUARDIAN) != 0; }
+    bool isPet() const { return (m_Creature_TypeMask & CREATURE_TYPE_MASK_PET) != 0; }
+    bool isHunterPet() const { return (m_Creature_TypeMask & CREATURE_TYPE_MASK_HUNTER_PET) != 0; }
+    bool isTotem() const { return (m_Creature_TypeMask & CREATURE_TYPE_MASK_TOTEM) != 0; }
+    //bool isVehicle() const { return (m_Creature_TypeMask & CREATURE_TYPE_MASK_VEHICLE) != 0; }
+
+protected:
+    uint32_t m_Creature_TypeMask;
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Combat
+public:
+    Unit* selectVictim();
+
+    void setCannotReachTarget(bool cannotReach);
+    bool canNotReachTarget() const { return m_cannotReachTarget; }
+
+    bool isInEvadeMode() const { return hasUnitStateFlag(UNIT_STATE_EVADING); }
+    bool isEvadingAttacks() const { return isInEvadeMode() || canNotReachTarget(); }
+
+    bool isTargetAcceptable(Unit* target);
+    bool canAttackTarget(Unit* victim, bool force = true);
+
+    float calcAggroRange(Unit* target);
+
+protected:
+    bool m_cannotReachTarget;
+    std::unique_ptr<Util::SmallTimeTracker> m_cannotReachTimer;
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Assistance / Fleeing
+public:
+    void fleeToGetAssistance();
+    void callForHelp(float fRadius);
+    void callAssistance();
+
+    void setNoCallAssistance(bool val) { m_AlreadyCallAssistance = val; }
+    void setNoSearchAssistance(bool val) { m_AlreadySearchedAssistance = val; }
+    bool hasSearchedAssistance() const { return m_AlreadySearchedAssistance; }
+    bool canAssistTo(Unit* u, Unit* enemy, bool checkfaction = true);
+
+protected:
+    bool m_AlreadyCallAssistance;
+    bool m_AlreadySearchedAssistance;
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // AI Scripting
+public:
+    CreatureAI* getAI() const;
+
+    bool AI_Destroy();
+    bool AI_Create(CreatureAI* ai = nullptr);
+    bool AI_Initialize(CreatureAI* ai = nullptr);
+    void AI_InitializeAndEnable();
+
+    bool isAIEnabled() { return m_IsAIEnabled; }
+
+protected:
+    CreatureAI* m_AI;
+    bool m_IsAIEnabled;
+    bool m_AI_locked;
 
 private:
 #if VERSION_STRING < WotLK
@@ -321,7 +399,7 @@ public:
 
         void CallScriptUpdate(unsigned long time_passed);
 
-        CreatureProperties const* GetCreatureProperties();
+        CreatureProperties const* GetCreatureProperties() const;
         void SetCreatureProperties(CreatureProperties const* creature_properties);
 
         Trainer const* GetTrainer();
@@ -329,11 +407,30 @@ public:
         WDB::Structures::CreatureFamilyEntry const* myFamily = nullptr;
 
         bool IsExotic();
-        bool isCritter() override;
+        bool isCritter() const override;
 
         void ChannelLinkUpGO(uint32_t SqlId);
         void ChannelLinkUpCreature(uint32_t SqlId);
 
+        void setTarget(uint64_t guid);
+        void mustReacquireTarget();
+        void doNotReacquireTarget();
+
+        void focusTarget(Spell const* focusSpell, Object const* target);
+        bool isFocusing(Spell const* focusSpell = nullptr, bool withDelay = false);
+        void releaseFocus(Spell const* focusSpell = nullptr, bool withDelay = true);
+
+        AIInterface2* getAIInterface2() const override { return m_aiInterface2; }
+        AIInterface2* m_aiInterface2;
+
+private:
+        Spell const* m_focusSpell;
+        std::chrono::high_resolution_clock::time_point m_focusDelay;
+        bool m_shouldReacquireTarget;
+        uint64_t m_suppressedTarget; // Stores the creature's "real" target while casting
+        float m_suppressedOrientation; // Stores the creature's "real" orientation while casting
+
+public:
         uint32_t spawnid = 0;
         uint32_t original_emotestate = 0;
 

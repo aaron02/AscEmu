@@ -45,6 +45,11 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Summons/SummonHandler.hpp"
 #include "Utilities/Random.hpp"
 
+#include "Vehicle.hpp"
+#include "AI/CreatureAI.h"
+#include "AI/Factory/CreatureAIManager.h"
+#include "Spell/Definitions/LockTypes.hpp"
+
 uint8_t CreatureProperties::generateRandomDisplayIdAndReturnGender(uint32_t* displayId) const
 {
     if (isTriggerNpc)
@@ -151,7 +156,14 @@ bool CreatureProperties::isExotic() const
     return (typeFlags & CREATURE_FLAG1_EXOTIC) != 0;
 }
 
-Creature::Creature(uint64_t guid)
+Creature::Creature(uint64_t guid) : 
+    m_AI(nullptr),
+    m_AI_locked(false),
+    m_Creature_TypeMask(CREATURE_TYPE_MASK_NONE),
+    m_focusSpell(nullptr),
+    m_shouldReacquireTarget(false),
+    m_suppressedOrientation(0.0f),
+    m_aiInterface2(new AIInterface2(this))
 {
     //////////////////////////////////////////////////////////////////////////
     m_objectTypeId = TYPEID_UNIT;
@@ -180,6 +192,9 @@ Creature::Creature(uint64_t guid)
 Creature::~Creature()
 {
     sEventMgr.RemoveEvents(this);
+
+    delete m_AI;
+    m_AI = nullptr;
 
     if (_myScriptClass)
     {
@@ -222,7 +237,7 @@ bool Creature::isVehicle() const
     return creature_properties->vehicleid != 0;
 }
 
-bool Creature::isTrainingDummy()
+bool Creature::isTrainingDummy() const
 {
     return creature_properties->isTrainingDummy;
 }
@@ -772,6 +787,35 @@ void Creature::Update(unsigned long time_passed)
     // Update DeathState
     switch (m_deathState)
     {
+        case ALIVE:
+        {
+            if (m_shouldReacquireTarget && !isFocusing(nullptr, true))
+            {
+                setTarget(m_suppressedTarget);
+
+                if (!hasUnitFlags2(UNIT_FLAG2_DISABLE_TURN))
+                {
+                    if (m_suppressedTarget)
+                    {
+                        if (Object const* objTarget = getWorldMapObject(m_suppressedTarget))
+                            setFacingToObject(objTarget, false);
+                    }
+                    else
+                        setFacingTo(m_suppressedOrientation, false);
+                }
+                m_shouldReacquireTarget = false;
+            }
+
+
+            // UpdateAI
+            if (!isInEvadeMode() && m_IsAIEnabled && m_AI)
+            {
+                // do not allow the AI to be changed during update
+                m_AI_locked = true;
+                m_AI->updateAI(time_passed);
+                m_AI_locked = false;
+            }
+        } break;
         case DEAD:
         {
             if (m_respawnTime <= now)
@@ -1459,7 +1503,7 @@ void Creature::CallScriptUpdate(unsigned long time_passed)
         _myScriptClass->_internalAIUpdate(time_passed);
 }
 
-CreatureProperties const* Creature::GetCreatureProperties()
+CreatureProperties const* Creature::GetCreatureProperties() const
 {
     return creature_properties;
 }
@@ -1558,6 +1602,158 @@ void Creature::ChannelLinkUpCreature(uint32_t SqlId)
     }
 }
 
+void Creature::setTarget(uint64_t guid)
+{
+    if (isFocusing(nullptr, true))
+        m_suppressedTarget = guid;
+    else
+        setTargetGuid(guid);
+}
+
+void Creature::mustReacquireTarget()
+{
+    m_shouldReacquireTarget = true;
+}
+
+void Creature::doNotReacquireTarget()
+{
+    m_shouldReacquireTarget = false;
+    m_suppressedTarget = 0; 
+    setTargetGuid(0);
+    m_suppressedOrientation = 0.0f;
+}
+
+void Creature::focusTarget(Spell const* focusSpell, Object const* target)
+{
+    if (m_focusSpell)
+        return;
+
+    // Prevent dead/feigning death creatures from setting a focus target, so they won't turn
+    if (!isAlive() || hasUnitFlags2(UNIT_FLAG2_FEIGN_DEATH) || hasAuraWithAuraEffect(SPELL_AURA_FEIGN_DEATH))
+        return;
+
+    // Don't allow stunned creatures to set a focus target
+    if (hasUnitFlags(UNIT_FLAG_STUNNED))
+        return;
+
+    SpellInfo const* spellInfo = focusSpell->getSpellInfo();
+
+    // don't use spell focus for vehicle spells
+    if (spellInfo->hasEffectApplyAuraName(SPELL_AURA_CONTROL_VEHICLE))
+        return;
+
+    if ((!target || target == this) && !focusSpell->getFullCastTime()) // instant cast, untargeted (or self-targeted) spell doesn't need any facing updates
+        return;
+
+    // store pre-cast values for target and orientation (used to later restore)
+    if (!isFocusing(nullptr, true))
+    { // only overwrite these fields if we aren't transitioning from one spell focus to another
+        m_suppressedTarget = getTargetGuid();
+        m_suppressedOrientation = GetOrientation();
+    }
+
+    m_focusSpell = focusSpell;
+
+    // set target, then force send update packet to players if it changed to provide appropriate facing
+    uint64_t newTarget = target ? target->getGuid() : 0;
+    if (getTargetGuid() != newTarget)
+    {
+        setTargetGuid(newTarget);
+
+        if ( // here we determine if the (relatively expensive) forced update is worth it, or whether we can afford to wait until the scheduled update tick
+            ( // only require instant update for spells that actually have a visual
+                spellInfo->getSpellVisual(0) ||
+                spellInfo->getSpellVisual(1)
+                ) && (
+                    !focusSpell->getFullCastTime() || // if the spell is instant cast
+                    spellInfo->hasAttribute(ATTRIBUTESEXE_DONT_TURN_DURING_CAST) // client gets confused if we attempt to turn at the regularly scheduled update packet
+                    )
+            )
+        {
+            for (const auto& itr : getInRangePlayersSet())
+            {
+                Player* pPlayer = static_cast<Player*>(itr);
+                if (pPlayer->getSession())
+                {
+                    // todo aaron02 send packet update
+                }
+            }
+        }
+    }
+
+    bool const noTurnDuringCast = spellInfo->hasAttribute(ATTRIBUTESEXE_DONT_TURN_DURING_CAST);
+
+    if (!hasUnitFlags2(UNIT_FLAG2_DISABLE_TURN))
+    {
+        // Face the target - we need to do this before the unit state is modified for no-turn spells
+        if (target)
+            setFacingToObject(target, false);
+        else if (noTurnDuringCast)
+            if (Unit* victim = getVictim())
+                setFacingToObject(victim, false); // ensure orientation is correct at beginning of cast
+    }
+
+    if (noTurnDuringCast)
+        addUnitStateFlag(UNIT_STATE_CANNOT_TURN);
+}
+
+bool Creature::isFocusing(Spell const* focusSpell, bool withDelay)
+{
+    if (!isAlive()) // dead creatures cannot focus
+    {
+        releaseFocus(nullptr, false);
+        return false;
+    }
+
+    if (focusSpell && (focusSpell != m_focusSpell))
+        return false;
+
+    if (!m_focusSpell)
+    {
+        if (!withDelay || !m_focusDelay.time_since_epoch().count())
+            return false;
+        if (Util::GetTimeDifferenceToNow(m_focusDelay) > 1000)
+        {
+            m_focusDelay = std::chrono::high_resolution_clock::time_point();
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void Creature::releaseFocus(Spell const* focusSpell, bool withDelay)
+{
+    if (!m_focusSpell)
+        return;
+
+    // focused to something else
+    if (focusSpell && focusSpell != m_focusSpell)
+        return;
+
+    if (isPet() && !hasUnitFlags2(UNIT_FLAG2_DISABLE_TURN)) // player pets do not use delay system
+    {
+        setTargetGuid(m_suppressedTarget);
+        if (m_suppressedTarget)
+        {
+            if (Object const* objTarget = getWorldMapObject(m_suppressedTarget))
+                setFacingToObject(objTarget, false);
+        }
+        else
+            setFacingTo(m_suppressedOrientation, false);
+    }
+    else
+        // tell the creature that it should reacquire its actual target after the delay expires (this is handled in ::Update)
+        // player pets don't need to do this, as they automatically reacquire their target on focus release
+        mustReacquireTarget();
+
+    if (m_focusSpell->getSpellInfo()->hasAttribute(ATTRIBUTESEXE_DONT_TURN_DURING_CAST))
+        removeUnitStateFlag(UNIT_STATE_CANNOT_TURN);
+
+    m_focusSpell = nullptr;
+    m_focusDelay = (!isPet() && withDelay) ? Util::TimeNow() : std::chrono::high_resolution_clock::time_point(); // don't allow re-target right away to prevent visual bugs
+}
+
 bool Creature::isattackable(MySQLStructure::CreatureSpawn* spawn)
 {
     if (spawn == nullptr)
@@ -1580,6 +1776,353 @@ uint8_t get_byte(uint32_t buffer, uint32_t index)
     buffer = buffer & mask;
 
     return (uint8_t)buffer;
+}
+
+Unit* Creature::selectVictim()
+{
+    Unit* target = nullptr;
+
+    if (getThreatManager().canHaveThreatList())
+    {
+        target = getThreatManager().getCurrentVictim();
+    }
+    else if (!hasReactState(REACT_PASSIVE))
+    {
+        // We have player pet probably
+        target = getTargetForPet();
+        if (!target && isSummon())
+        {
+            if (Unit* owner = ToSummon()->getUnitOwner())
+            {
+                if (owner->isInCombat())
+                    target = owner->getTargetForPet();
+                if (!target)
+                {
+                    for (auto itr : owner->getSummonInterface()->getSummons())
+                    {
+                        if ((itr)->isInCombat())
+                        {
+                            target = (itr)->getTargetForPet();
+                            if (target)
+                                break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        return nullptr;
+    }
+
+    if (target && isTargetAcceptable(target) && canAttackTarget(target))
+    {
+        if (!isFocusing())
+            setInFront(target);
+        return target;
+    }
+
+
+
+
+    if (getVehicle())
+        return nullptr;
+
+    // search nearby enemy before enter evade mode
+    if (hasReactState(REACT_AGGRESSIVE))
+    {
+        target = selectNearestTargetInAttackDistance(m_CombatDistance ? m_CombatDistance : 5.0f);
+
+        if (target && isTargetAcceptable(target) && canAttackTarget(target))
+            return target;
+    }
+
+    auto const& iAuras = getAuraEffectList(SPELL_AURA_MOD_INVISIBILITY);
+    if (!iAuras.empty())
+    {
+        for (auto& aura : iAuras)
+        {
+            if (aura->getAura()->getMaxDuration() == -1)
+            {
+                getAI()->internalEnterEvadeMode();
+                break;
+            }
+        }
+        return nullptr;
+    }
+
+    // enter in evade mode in other case
+    getAI()->internalEnterEvadeMode();
+
+    return nullptr;
+}
+
+void Creature::setCannotReachTarget(bool cannotReach)
+{
+    if (cannotReach == m_cannotReachTarget)
+        return;
+
+    m_cannotReachTarget = cannotReach;
+    m_cannotReachTimer->resetInterval(5000);
+}
+
+bool Creature::isTargetAcceptable(Unit* target)
+{
+    return false;
+}
+
+bool Creature::canAttackTarget(Unit* victim, bool force)
+{
+    if (!victim->IsInMap(this))
+        return false;
+
+    if (!isValidAttackTarget(victim))
+        return false;
+
+    if (!victim->isInAccessiblePlaceFor(this))
+        return false;
+
+    if (isAIEnabled && !getAI()->canAIAttack(victim))
+        return false;
+
+    if (getWorldMap()->getBaseMap()->isDungeon())
+        return true;
+
+    // if the mob is actively being damaged, do not reset due to distance unless it's a world boss
+    if (!isWorldBoss())
+        if (time(nullptr) - getLastDamagedTime() <= (10 * TimeVarsMs::Second))
+            return true;
+
+    //Use AttackDistance in distance check if threat radius is lower. This prevents creature bounce in and out of combat every update tick.
+    float dist = std::max(calcAggroRange(victim), 15.0f);
+
+    if (Unit* unit = getUnitOwnerOrSelf())
+        return victim->IsWithinDist(unit, dist);
+    else
+        return victim->isInDist(m_spawnLocation, dist);
+}
+
+float Creature::calcAggroRange(Unit* target)
+{
+    if (!canSee(target))
+        return 0;
+
+    // WoW Wiki: the minimum radius seems to be 5 yards, while the maximum range is 45 yards
+    float maxRadius = 45.0f;
+    float minRadius = 5.0f;
+
+    int32_t levelDifference = getLevel() - target->getLevel();
+
+    // The aggro radius for creatures with equal level as the player is 20 yards.
+    // The combatreach should not get taken into account for the distance so we drop it from the range (see Supremus as expample, its a Big Model with a big CombatReach)
+    float baseAggroDistance = 20.0f - getCombatReach();
+
+    // + - 1 yard for each level difference between player and creature
+    float aggroRadius = baseAggroDistance + float(levelDifference);
+
+    // SPELL_AURA_MOD_DETECT_RANGE
+    const auto modDetectRange = static_cast<float_t>(target->getDetectRangeMod(getGuid()));
+    aggroRadius += modDetectRange;
+    if (target->isPlayer())
+    {
+        aggroRadius += static_cast<float_t>(dynamic_cast<Player*>(target)->m_detectedRange);
+    }
+
+    // Check to see if the target is a player mining a node
+    bool isMining = false;
+    if (target->isPlayer())
+    {
+        if (target->isCastingSpell())
+        {
+            // If nearby miners weren't spotted already we'll give them a little surprise.
+            Spell* sp = target->getCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (sp != nullptr && sp->getSpellInfo()->getEffect(0) == SPELL_EFFECT_OPEN_LOCK && sp->getSpellInfo()->getEffectMiscValue(0) == LOCKTYPE_MINING)
+            {
+                isMining = true;
+            }
+        }
+    }
+
+    // If the target is of a much higher level the aggro range must be scaled down, unless the target is mining a nearby resource node
+    if (levelDifference > 8 && !isMining)
+    {
+        aggroRadius += aggroRadius * static_cast<float_t>((levelDifference - 8) * 5 / 100);
+    }
+
+    // Multiply by elite value
+    if (GetCreatureProperties()->Rank > 0)
+    {
+        aggroRadius *= static_cast<float_t>(GetCreatureProperties()->Rank) * 1.50f;
+    }
+
+    // The aggro range of creatures with higher levels than the total player level for the expansion should get the maxlevel treatment
+    // This makes sure that creatures such as bosses wont have a bigger aggro range than the rest of the npc's
+    // The following code is used for blizzlike behaivior such as skippable bosses
+    if (getLevel() > worldConfig.player.playerGeneratedInformationByLevelCap)
+        aggroRadius = baseAggroDistance + float(worldConfig.player.playerGeneratedInformationByLevelCap - target->getLevel());
+
+    // Make sure that we wont go over the total range limits
+    if (aggroRadius > maxRadius)
+        aggroRadius = maxRadius;
+    else if (aggroRadius < minRadius)
+        aggroRadius = minRadius;
+
+    return aggroRadius;
+}
+
+void Creature::fleeToGetAssistance()
+{
+    if (!getVictim())
+        return;
+
+    if (getAuraWithAuraEffect(SPELL_AURA_PREVENTS_FLEEING))
+        return;
+
+    // maybe move to Config file
+    float radius = 30.0f;
+
+    if (radius > 0)
+    {
+        Creature* creature = getWorldMap()->getInterface()->getNearestAssistCreatureInCell(this, getVictim(), radius);
+
+        setNoSearchAssistance(true);
+
+        if (!creature)
+            setControlled(true, UNIT_STATE_FLEEING);
+        else
+            getMovementManager()->moveSeekAssistance(creature->GetPositionX(), creature->GetPositionY(), creature->GetPositionZ());
+    }
+}
+
+void Creature::callForHelp(float radius)
+{
+    if (radius <= 0.0f || !isEngaged() || !isAlive() || isPet() || isCharmed())
+        return;
+
+    Unit* target = getThreatManager().getCurrentVictim();
+    if (!target)
+        target = getThreatManager().getAnyTarget();
+
+    if (!target)
+        return;
+
+    // todo
+}
+
+void Creature::callAssistance()
+{
+    if (!m_AlreadyCallAssistance && getVictim() && !isPet() && !isCharmed())
+    {
+        setNoCallAssistance(true);
+
+        // maybe move to Config file
+        float radius = 10.0f;
+
+        if (radius > 0)
+        {
+            Creature* creature = getWorldMap()->getInterface()->getNearestAssistCreatureInCell(this, getVictim(), radius);
+
+            if (creature)
+                creature->getAIInterface()->onHostileAction(getVictim());
+        }
+    }
+}
+
+bool Creature::canAssistTo(Unit* u, Unit* enemy, bool checkfaction)
+{
+    // is it true?
+    if (!hasReactState(REACT_AGGRESSIVE))
+        return false;
+
+    // we don't need help from zombies :)
+    if (!isAlive())
+        return false;
+
+    // we cannot assist in evade mode
+    if (isInEvadeMode())
+        return false;
+
+    // or if enemy is in evade mode
+    if (enemy->getObjectTypeId() == TYPEID_UNIT && enemy->ToCreature()->isInEvadeMode())
+        return false;
+
+    if (hasUnitFlags(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE) || isImmuneToNPC())
+        return false;
+
+    // skip fighting creature
+    if (isEngaged())
+        return false;
+
+    // only free creature
+    if (getUnitOwner())
+        return false;
+
+    // only from same creature faction
+    if (checkfaction)
+    {
+        if (getFactionTemplate() != u->getFactionTemplate())
+            return false;
+    }
+    else
+    {
+        if (!isFriendlyTo(u))
+            return false;
+    }
+
+    // skip non hostile to caster enemy creatures
+    if (!isHostileTo(enemy))
+        return false;
+
+    return true;
+}
+
+CreatureAI* Creature::getAI() const
+{
+    return reinterpret_cast<CreatureAI*>(m_AI);
+}
+
+bool Creature::AI_Destroy()
+{
+    if (m_AI_locked)
+    {
+        sLogger.debug("Creature::AI_Destroy(), failed to destroy because AI is Locked.");
+        return false;
+    }
+
+    delete m_AI;
+    m_AI = nullptr;
+
+    m_IsAIEnabled = false;
+    return true;
+}
+
+bool Creature::AI_Create(CreatureAI* ai)
+{
+    AI_Destroy();
+
+    motion_Initialize();
+
+    m_AI = ai ? ai : sAIManager->selectAI(this);
+    return true;
+}
+
+bool Creature::AI_Initialize(CreatureAI* ai)
+{
+    if (!AI_Create(ai))
+        return false;
+
+    AI_InitializeAndEnable();
+    return true;
+}
+
+void Creature::AI_InitializeAndEnable()
+{
+    m_IsAIEnabled = true;
+    m_AI->initializeAI();
+    // Initialize vehicle
+    if (getVehicleKit())
+        getVehicleKit()->initialize();
 }
 
 bool Creature::teleport(const LocationVector& vec, WorldMap* map)
@@ -2597,7 +3140,7 @@ bool Creature::IsExotic()
     return creature_properties->isExotic();
 }
 
-bool Creature::isCritter()
+bool Creature::isCritter() const
 {
     if (creature_properties->Type == UNIT_TYPE_CRITTER)
         return true;
@@ -2904,6 +3447,23 @@ CreatureMovementData const& Creature::getMovementTemplate()
         return *movementOverride;
 
     return GetCreatureProperties()->Movement;
+}
+
+bool Creature::isElite() const
+{
+    if (isPet())
+        return false;
+
+    uint32_t rank = GetCreatureProperties()->Rank;
+    return rank != ELITE_NORMAL && rank != ELITE_RARE;
+}
+
+bool Creature::isWorldBoss() const
+{
+    if (isPet())
+        return false;
+
+    return (GetCreatureProperties()->typeFlags & CREATURE_FLAG1_BOSS) != 0;
 }
 
 void Creature::InitSummon(Object* summoner)

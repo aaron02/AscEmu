@@ -22,7 +22,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Spell/Spell.hpp"
 #include "Spell/SpellInfo.hpp"
 #include "Storage/WDB/WDBStructures.hpp"
-
+#include "Spell/Definitions/SummonControlTypes.hpp"
 #include "CommonTime.hpp"
 
 static CreatureSummonDespawnType getDefaultDespawnTypeForSummon(Summon const* summon)
@@ -42,6 +42,7 @@ static CreatureSummonDespawnType getDefaultDespawnTypeForSummon(Summon const* su
 
 Summon::Summon(uint64_t guid, WDB::Structures::SummonPropertiesEntry const* properties) : Creature(guid), m_summonProperties(properties)
 {
+    addTypeMask(CREATURE_TYPE_MASK_SUMMON);
     // Disable respawn in Creature class
     m_noRespawn = true;
     // Override initialization from Creature class
@@ -424,7 +425,15 @@ bool Summon::_hasExtendedDespawnDelayInDeath() const
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-GuardianSummon::GuardianSummon(uint64_t GUID, WDB::Structures::SummonPropertiesEntry const* properties) : Summon(GUID, properties) {}
+GuardianSummon::GuardianSummon(uint64_t GUID, WDB::Structures::SummonPropertiesEntry const* properties) : Summon(GUID, properties)
+{
+    addTypeMask(CREATURE_TYPE_MASK_GUARDIAN);
+
+    if (properties && properties->Type == SUMMONTYPE_PET || properties->ControlType == SUMMON_CONTROL_TYPE_PET)
+    {
+        addTypeMask(CREATURE_TYPE_MASK_CONTROLABLE_GUARDIAN);
+    }
+}
 GuardianSummon::~GuardianSummon() = default;
 
 void GuardianSummon::load(CreatureProperties const* properties_, Unit* pOwner, LocationVector const& position, uint32_t duration, uint32_t spellid)
@@ -438,7 +447,6 @@ void GuardianSummon::load(CreatureProperties const* properties_, Unit* pOwner, L
     setLevel(pOwner->getLevel());
     setMaxHealth(getMaxHealth() + 28 + 30 * getLevel());
     setHealth(getMaxHealth());
-    SetType(CREATURE_TYPE_GUARDIAN);
 
     m_aiInterface->Init(this, pOwner);
     m_aiInterface->setPetOwner(pOwner);
@@ -496,6 +504,7 @@ void WildSummon::load(CreatureProperties const* properties_, Unit* pOwner, Locat
 
 TotemSummon::TotemSummon(uint64_t guid, WDB::Structures::SummonPropertiesEntry const* properties) : Summon(guid, properties)
 {
+    addTypeMask(CREATURE_TYPE_MASK_TOTEM);
     // Override initialization from Summon class
     getThreatManager().initialize();
 }

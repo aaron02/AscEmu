@@ -15,6 +15,8 @@ This file is released under the MIT license. See README-MIT for more information
 #include <functional>
 #include "Utilities/TimeTracker.hpp"
 
+#include "AI/AI_Defines.h"
+
 inline bool inRangeYZX(const float* v1, const float* v2, const float r, const float h)
 {
     const float dx = v2[0] - v1[0];
@@ -35,242 +37,15 @@ class SpellCastTargets;
 class CreatureAIScript;
 class CreatureGroup;
 class SpellInfo;
+class CreatureAISpells;
 
 enum MovementGeneratorType : uint8_t;
-
-enum AI_SCRIPT_EVENT_TYPES
-{
-    onLoad              = 0,
-    onEnterCombat       = 1,
-    onLeaveCombat       = 2,
-    onDied              = 3,
-    onTargetDied        = 4,
-    onAIUpdate          = 5,
-    onCallForHelp       = 6,
-    onRandomWaypoint    = 7,
-    onDamageTaken       = 8,
-    onFlee              = 9,
-    onTaunt             = 10
-};
-
-enum AI_SCRIPT_ACTION_TYPES
-{
-    actionNone          = 0,
-    actionSpell         = 1,
-    actionSendMessage   = 2,
-    actionPhaseChange   = 3
-};
-
-struct AI_SCRIPT_SENDMESSAGES
-{
-    uint32_t textId;
-    float canche;
-    uint32_t phase;
-    float healthPrecent;
-    uint32_t count;
-    uint32_t maxCount;
-};
-
-typedef std::vector<std::unique_ptr<AI_SCRIPT_SENDMESSAGES>> definedEmoteVector;
-
-enum ReactStates : uint8_t
-{
-    REACT_PASSIVE = 0,
-    REACT_DEFENSIVE = 1,
-    REACT_AGGRESSIVE = 2
-};
-
-enum AI_Agent : uint8_t
-{
-    AGENT_NULL,
-    AGENT_MELEE,
-    AGENT_RANGED,
-    AGENT_FLEE,
-    AGENT_SPELL,
-    AGENT_CALLFORHELP
-};
-
-enum AI_SpellType
-{
-    STYPE_NULL,
-    STYPE_ROOT,
-    STYPE_HEAL,
-    STYPE_STUN,
-    STYPE_FEAR,
-    STYPE_SILENCE,
-    STYPE_CURSE,
-    STYPE_AOEDAMAGE,
-    STYPE_DAMAGE,
-    STYPE_SUMMON,
-    STYPE_BUFF,
-    STYPE_DEBUFF
-};
-
-enum AI_SpellTargetType
-{
-    TTYPE_NULL,
-    TTYPE_SINGLETARGET,
-    TTYPE_DESTINATION,
-    TTYPE_SOURCE,
-    TTYPE_CASTER,
-    TTYPE_OWNER
-};
-
-enum AISpellTargetType
-{
-    TARGET_SELF,
-    TARGET_VARIOUS,
-    TARGET_ATTACKING,
-    TARGET_DESTINATION,
-    TARGET_SOURCE,
-    TARGET_RANDOM_FRIEND,
-    TARGET_RANDOM_SINGLE,
-    TARGET_RANDOM_DESTINATION,
-    TARGET_CLOSEST,
-    TARGET_FURTHEST,
-    TARGET_CUSTOM,
-    TARGET_FUNCTION
-};
-
-class SERVER_DECL CreatureAISpells
-{
-public:
-    CreatureAISpells(SpellInfo const* spellInfo, float castChance, uint32_t targetType, uint32_t duration, uint32_t cooldown, bool forceRemove, bool isTriggered);
-    ~CreatureAISpells() = default;
-
-    SpellInfo const* mSpellInfo;
-    float mCastChance;
-    uint32_t mTargetType;
-    uint8_t scriptType;
-
-    std::function<Unit* ()> getTargetFunction = nullptr;
-
-    std::unique_ptr<Util::SmallTimeTracker> mDurationTimer;
-    std::unique_ptr<Util::SmallTimeTracker> mCooldownTimer;
-
-    uint32_t mDuration;
-    void setdurationTimer(uint32_t durationTimer);
-    void setCooldownTimer(uint32_t cooldownTimer);
-    uint32_t mCooldown;
-
-    uint32_t mMaxCount;
-    uint32_t mCastCount;
-    void setMaxCastCount(uint32_t castCount);
-    const uint32_t getMaxCastCount();
-    const uint32_t getCastCount();
-    void setCastCount(uint32_t count) { mCastCount = count; }
-    void increaseCastCount() { ++mCastCount; }
-
-    bool mForceRemoveAura;
-    bool mIsTriggered;
-
-    AI_SpellType spell_type;
-
-    //Zyres: temp boolean to determine if its coming from db or not
-    bool fromDB = false;
-
-    // non db script messages
-    struct AISpellEmotes
-    {
-        AISpellEmotes(std::string pText, uint8_t pType, uint32_t pSoundId)
-        {
-            mText = (!pText.empty() ? pText : "");
-            mType = pType;
-            mSoundId = pSoundId;
-        }
-
-        std::string mText;
-        uint8_t mType;
-        uint32_t mSoundId;
-    };
-    typedef std::vector<AISpellEmotes> AISpellEmoteArray;
-    AISpellEmoteArray mAISpellEmote;
-
-    void addDBEmote(uint32_t textId);
-    void addEmote(std::string pText, uint8_t pType = CHAT_MSG_MONSTER_YELL, uint32_t pSoundId = 0);
-
-    void sendRandomEmote(Unit* creatureAI);
-
-    uint32_t mMaxStackCount;
-
-    void setMaxStackCount(uint32_t stackCount);
-    const uint32_t getMaxStackCount();
-
-    float mMinPositionRangeToCast;
-    float mMaxPositionRangeToCast;
-
-    const bool isDistanceInRange(float targetDistance);
-    void setMinMaxDistance(float minDistance, float maxDistance);
-
-    // if it is not a random target type it sets the hp range when the creature can cast this spell
-    // if it is a random target it controles when the spell can be cast based on the target hp
-    float mMinHpRangeToCast;
-    float mMaxHpRangeToCast;
-
-    const bool isHpInPercentRange(float targetHp);
-    void setMinMaxPercentHp(float minHp, float maxHp);
-
-    typedef std::vector<uint32_t> ScriptPhaseList;
-    ScriptPhaseList mPhaseList;
-
-    void setAvailableForScriptPhase(std::vector<uint32_t> phaseVector);
-    bool isAvailableForScriptPhase(uint32_t scriptPhase);
-
-    uint32_t mAttackStopTimer;
-    void setAttackStopTimer(uint32_t attackStopTime);
-    uint32_t getAttackStopTimer();
-
-    std::string mAnnouncement;
-    void setAnnouncement(std::string announcement);
-    void sendAnnouncement(Unit* pUnit);
-
-    Unit* mCustomTargetCreature;
-    void setCustomTarget(Unit* targetCreature);
-    Unit* getCustomTarget();
-};
 
 class SpellInfo;
 
 const uint32_t AISPELL_ANY_DIFFICULTY = 4;
 typedef std::set<Unit*> AssistTargetSet;
 typedef std::vector<Unit*> UnitArray;
-
-enum TargetFilter : uint32_t
-{
-    // Standard filters
-    TargetFilter_None = 0,                              // 0
-    TargetFilter_Closest = 1 << 0,                      // 1
-    TargetFilter_Friendly = 1 << 1,                     // 2
-    TargetFilter_NotCurrent = 1 << 2,                   // 4
-    TargetFilter_Wounded = 1 << 3,                      // 8
-    TargetFilter_SecondMostHated = 1 << 4,              // 16
-    TargetFilter_Aggroed = 1 << 5,                      // 32
-    TargetFilter_Corpse = 1 << 6,                       // 64
-    TargetFilter_InMeleeRange = 1 << 7,                 // 128
-    TargetFilter_InRangeOnly = 1 << 8,                  // 256
-    TargetFilter_IgnoreSpecialStates = 1 << 9,          // 512 - not really a TargetFilter, more like requirement for spell
-    TargetFilter_IgnoreLineOfSight = 1 << 10,           // 1024
-    TargetFilter_Current = 1 << 11,                     // 2048
-    TargetFilter_LowestHealth = 1 << 12,                // 4096
-    TargetFilter_Health = 1 << 13,                      // 8192
-    TargetFilter_AOE = 1 << 14,                         // 16348 - not really a Filter just no Target for AOE spells
-    TargetFilter_Self = 1 << 15,                        // 32768 - mostlikely return ourself unless we set aura filtering and we dont have it
-    TargetFilter_Caster = 1 << 16,                      // 65536 - Mana Based Class
-    TargetFilter_Casting = 1 << 17,                     // 131072 - Target is Casting currently
-    TargetFilter_Player = 1 << 18,                      // 262144 - Players Only
-
-    // Predefined filters
-    TargetFilter_ClosestFriendly = TargetFilter_Closest | TargetFilter_Friendly,                // 3
-    TargetFilter_ClosestNotCurrent = TargetFilter_Closest | TargetFilter_NotCurrent,            // 5
-    TargetFilter_WoundedFriendly = TargetFilter_Wounded | TargetFilter_Friendly,                // 10
-    TargetFilter_FriendlyCorpse = TargetFilter_Corpse | TargetFilter_Friendly,                  // 66
-    TargetFilter_ClosestFriendlyCorpse = TargetFilter_Closest | TargetFilter_FriendlyCorpse,    // 67
-    TargetFilter_CurrentInRangeOnly = TargetFilter_Current | TargetFilter_InRangeOnly,          // 2304
-    TargetFilter_WoundedFriendlyLowestHealth = TargetFilter_Wounded | TargetFilter_Friendly | TargetFilter_LowestHealth, // 4106
-    TargetFilter_WoundedFriendlyLowestHealthInRange = TargetFilter_Wounded | TargetFilter_Friendly | TargetFilter_LowestHealth | TargetFilter_InRangeOnly, // 4362
-    TargetFilter_CasterWhileCasting = TargetFilter_Casting | TargetFilter_Caster, // 196608
-    TargetFilter_SelfBelowHealth = TargetFilter_Self | TargetFilter_Health  // 40960
-};
 
 struct AI_Spell
 {
@@ -291,6 +66,24 @@ struct AI_Spell
     float minrange;
     float maxrange;
     uint32_t autocast_type;
+};
+
+class SERVER_DECL AIInterface2
+{
+protected:
+    Creature* self;
+public:
+    AIInterface2(Creature* owner);
+    virtual ~AIInterface2();
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Combat
+public:
+    bool canStartAttack(Unit* target, bool force);
+    bool canOwnerAttackUnit(Unit* pUnit, bool force);
+
+    bool isTargetAcceptable(Unit* target);
+    bool isTargetableForAttack(bool checkFakeDeath);
 };
 
 class SERVER_DECL AIInterface

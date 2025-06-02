@@ -53,6 +53,23 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Storage/WDB/WDBStores.hpp"
 #include "Storage/WDB/WDBStructures.hpp"
 
+#include "AI/Factory/CreatureAIFactory.h"
+#include "AI/Types/CombatAI.h"
+#include "AI/Types/AgressorAI.h"
+#include "AI/Types/CritterAI.h"
+#include "AI/Types/DefaultAI.h"
+#include "AI/Types/GuardAI.h"
+#include "AI/Types/PassiveAI.h"
+#include "AI/Types/PetAI.h"
+#include "AI/Types/ReactorAI.h"
+#include "AI/Types/TotemAI.h"
+#include "AI/Types/TriggerAI.h"
+#include "AI/Types/CasterAI.h"
+#include "AI/Types/RangedAI.h"
+#include "AI/Types/StationaryAI.h"
+#include "AI/Types/VehicleAI.h"
+
+
 #if VERSION_STRING >= Cata
 #include "Management/Guild/GuildFinderMgr.hpp"
 #endif
@@ -675,6 +692,26 @@ bool World::setInitialWorldSettings()
 {
     auto startTime = Util::TimeNow();
 
+    // AI Factory
+    (new CreatureAIFactory<DefaultAI>("DefaultAI"))->registerSelf();
+    (new CreatureAIFactory<TriggerAI>("TriggerAI"))->registerSelf();
+    (new CreatureAIFactory<AggressorAI>("AgressorAI"))->registerSelf();
+
+    (new CreatureAIFactory<ReactorAI>("ReactorAI"))->registerSelf();
+    (new CreatureAIFactory<PassiveAI>("PassiveAI"))->registerSelf();
+    (new CreatureAIFactory<CritterAI>("CritterAI"))->registerSelf();
+    (new CreatureAIFactory<GuardAI>("GuardAI"))->registerSelf();
+    (new CreatureAIFactory<PetAI>("PetAI"))->registerSelf();
+    (new CreatureAIFactory<TotemAI>("TotemAI"))->registerSelf();
+
+    (new CreatureAIFactory<CombatAI>("CombatAI"))->registerSelf();
+    (new CreatureAIFactory<CasterAI>("CasterAI"))->registerSelf();
+    (new CreatureAIFactory<RangedAI>("RangedAI"))->registerSelf();
+    (new CreatureAIFactory<StationaryAI>("StationaryAI"))->registerSelf();
+    (new CreatureAIFactory<VehicleAI>("VehicleAI"))->registerSelf();
+    //(new CreatureAIFactory<SmartAI>("SmartAI")); todo aaron02
+
+    // Movement Factory
     (new IdleMovementFactory())->registerSelf();
     (new RandomMovementFactory())->registerSelf();
     (new WaypointMovementFactory())->registerSelf();

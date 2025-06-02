@@ -24,6 +24,11 @@ This file is released under the MIT license. See README-MIT for more information
 Vehicle::Vehicle(Unit* unit, WDB::Structures::VehicleEntry const* vehInfo, uint32_t creatureEntry) :
     usableSeatNum(0), _owner(unit), _vehicleInfo(vehInfo), _creatureEntry(creatureEntry), _status(STATUS_NONE), _lastShootPos()
 {
+    if (unit && unit->isCreature())
+    {
+        unit->ToCreature()->addTypeMask(CREATURE_TYPE_MASK_VEHICLE);
+    }
+
     initialize();
 }
 

@@ -3589,14 +3589,71 @@ float Object::CalcDistance(float OaX, float OaY, float OaZ, float ObX, float ObY
     return sqrtf(zdest * zdest + ydest * ydest + xdest * xdest);
 }
 
-bool Object::IsWithinDistInMap(Object* obj, const float dist2compare) const
+bool Object::IsWithinDist(Object const* obj, float dist2compare, bool is3D) const
 {
     if (obj != nullptr)
     {
-        float xdest = this->GetPositionX() - obj->GetPositionX();
-        float ydest = this->GetPositionY() - obj->GetPositionY();
-        float zdest = this->GetPositionZ() - obj->GetPositionZ();
-        return sqrtf(zdest * zdest + ydest * ydest + xdest * xdest) <= dist2compare;
+        float sizefactor = getScale() + obj->getScale();
+        float maxdist = dist2compare + sizefactor;
+
+        if (GetTransport() && obj->GetTransport() && obj->GetTransport()->getGuid() == GetTransport()->getGuid())
+        {
+            float dtx = obj_movement_info.transport_position.x - obj->obj_movement_info.transport_position.x;
+            float dty = obj_movement_info.transport_position.y - obj->obj_movement_info.transport_position.y;
+            float disttsq = dtx * dtx + dty * dty;
+            if (is3D)
+            {
+                float dtz = obj_movement_info.transport_position.z - obj->obj_movement_info.transport_position.z;
+                disttsq += dtz * dtz;
+            }
+            return disttsq < (maxdist * maxdist);
+        }
+
+        float dx = GetPositionX() - obj->GetPositionX();
+        float dy = GetPositionY() - obj->GetPositionY();
+        float distsq = dx * dx + dy * dy;
+        if (is3D)
+        {
+            float dz = GetPositionZ() - obj->GetPositionZ();
+            distsq += dz * dz;
+        }
+
+        return distsq < maxdist * maxdist;
+    }
+
+    return false;
+}
+
+bool Object::IsWithinDistInMap(Object* obj, const float dist2compare, bool is3D) const
+{
+    if (obj != nullptr && GetPhase() == obj->GetPhase())
+    {
+        float sizefactor = getScale() + obj->getScale();
+        float maxdist = dist2compare + sizefactor;
+
+        if (GetTransport() && obj->GetTransport() && obj->GetTransport()->getGuid() == GetTransport()->getGuid())
+        {
+            float dtx = obj_movement_info.transport_position.x - obj->obj_movement_info.transport_position.x;
+            float dty = obj_movement_info.transport_position.y - obj->obj_movement_info.transport_position.y;
+            float disttsq = dtx * dtx + dty * dty;
+            if (is3D)
+            {
+                float dtz = obj_movement_info.transport_position.z - obj->obj_movement_info.transport_position.z;
+                disttsq += dtz * dtz;
+            }
+            return disttsq < (maxdist * maxdist);
+        }
+
+        float dx = GetPositionX() - obj->GetPositionX();
+        float dy = GetPositionY() - obj->GetPositionY();
+        float distsq = dx * dx + dy * dy;
+        if (is3D)
+        {
+            float dz = GetPositionZ() - obj->GetPositionZ();
+            distsq += dz * dz;
+        }
+
+        return distsq < maxdist * maxdist;
     }
     return false;
 }

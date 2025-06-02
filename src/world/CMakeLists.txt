@@ -3,6 +3,9 @@
 # set up our project name.
 set(EXECUTABLE_NAME world)
 
+file(GLOB SRC_AI_FILES AI/*.cpp AI/*.h AI/*.hpp)
+file(GLOB SRC_AI_FACTORY_FILES AI/Factory/*.cpp AI/Factory/*.h AI/Factory/*.hpp)
+file(GLOB SRC_AI_TYPES_FILES AI/Types/*.cpp AI/Types/*.h AI/Types/*.hpp)
 file(GLOB SRC_CHAT_FILES Chat/*.cpp Chat/*.h Chat/*.hpp)
 file(GLOB SRC_COMMAND_FILES Chat/Commands/*.cpp Chat/Commands/*.h Chat/Commands/*.hpp)
 file(GLOB SRC_COMMAND_ACCOUNT_FILES Chat/Commands/Account/*.cpp Chat/Commands/Account/*.hpp)
@@ -53,6 +56,9 @@ endif ()
 ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(${EXECUTABLE_NAME}
+    ${SRC_AI_FILES}
+    ${SRC_AI_FACTORY_FILES}
+    ${SRC_AI_TYPES_FILES}
     ${SRC_CHAT_FILES}
     ${SRC_COMMAND_FILES}
     ${SRC_COMMAND_ACCOUNT_FILES}

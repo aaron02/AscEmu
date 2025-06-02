@@ -439,8 +439,10 @@ public:
         float CalcDistance(Object* Oa, float ObX, float ObY, float ObZ);
         float CalcDistance(float OaX, float OaY, float OaZ, float ObX, float ObY, float ObZ);
         // NYS: scriptdev2
-        bool IsInMap(Object* obj) { return GetMapId() == obj->GetMapId() && GetInstanceID() == obj->GetInstanceID(); }
-        bool IsWithinDistInMap(Object* obj, const float dist2compare) const;
+        bool IsInMap(const Object* obj) const { return GetMapId() == obj->GetMapId() && GetInstanceID() == obj->GetInstanceID(); }
+        
+        bool IsWithinDist(Object const* obj, float dist2compare, bool is3D = true) const;
+        bool IsWithinDistInMap(Object* obj, const float dist2compare, bool is3D = true) const;
         bool IsWithinLOSInMap(Object* obj);
         bool IsWithinLOS(LocationVector location);
 

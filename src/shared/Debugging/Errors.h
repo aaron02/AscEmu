@@ -42,6 +42,19 @@ static void arcAssertFailed(const char* fname, int line, const char* expr)
 // This should always halt everything.  If you ever find yourself wanting to remove the assert( false ), switch to WPWarning or WPError
 #define WPFatal(assertion, errmsg) if(!(assertion)) { Log::getSingleton().outError("%s:%i FATAL ERROR:\n  %s\n", __FILE__, __LINE__, (char*)errmsg); assert(#assertion &&0); abort(); }
 
+
+// Logs the pointer name and the location of the failed assertion.
+template <typename T>
+inline T* ASSERT_NOTNULL_IMPL(T* pointer, char const* expr)
+{
+    WPAssert(pointer, "%s", expr);
+    return pointer;
+}
+
+// Provides a user-friendly macro to assert that a pointer is not null.
+// Example: ASSERT_NOTNULL(myPointer);
+#define ASSERT_NOTNULL(pointer) ASSERT_NOTNULL_IMPL(pointer, #pointer)
+
 #define ASSERT WPAssert
 
 #endif      //_ERRORS_H

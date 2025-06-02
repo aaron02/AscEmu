@@ -49,6 +49,10 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Utilities/Random.hpp"
 #include "Utilities/TimeTracker.hpp"
 
+#include "AI/CreatureAISpells.h"
+
+#include "AI/CreatureAI.h"
+
 // Random and guessed values for Internal Spell cast chance
 float spellChanceModifierDispell[12] =
 {
@@ -431,7 +435,7 @@ bool AIInterface::canUnitEvade(unsigned long time_passed)
     if (!getUnit()->getWorldMap()->getBaseMap()->isRaid())
     {
         // if we dont have a Valid target go in Evade Mode
-        if (!getCurrentTarget() && !getUnit()->isInEvadeMode())
+        if (!getCurrentTarget() && !getUnit()->ToCreature()->isInEvadeMode())
         {
             m_noTargetTimer->updateTimer(time_passed);
             if (m_noTargetTimer->isTimePassed())
@@ -442,7 +446,7 @@ bool AIInterface::canUnitEvade(unsigned long time_passed)
         }
 
         // if we cannot reach the Target go in Evade Mode
-        if (canNotReachTarget() && !getUnit()->isInEvadeMode())
+        if (canNotReachTarget() && !getUnit()->ToCreature()->isInEvadeMode())
         {
             m_cannotReachTimer->updateTimer(time_passed);
             if (m_cannotReachTimer->isTimePassed())
@@ -451,7 +455,7 @@ bool AIInterface::canUnitEvade(unsigned long time_passed)
     }
 
     // periodic check to see if the creature has passed an evade boundary
-    if (!getUnit()->isInEvadeMode())
+    if (!getUnit()->ToCreature()->isInEvadeMode())
     {
         m_boundaryCheckTime->updateTimer(time_passed);
         if (m_boundaryCheckTime->isTimePassed())
@@ -469,7 +473,7 @@ bool AIInterface::canUnitEvade(unsigned long time_passed)
 
 bool AIInterface::_enterEvadeMode()
 {
-    if (getUnit()->isInEvadeMode())
+    if (getUnit()->ToCreature()->isInEvadeMode())
         return false;
 
     //if (getUnit()->isPet())
@@ -991,7 +995,7 @@ bool AIInterface::doInitialAttack(Unit* target, bool isMelee)
         return false;
 
     // cannot attack while evading
-    if (getUnit()->isInEvadeMode())
+    if (getUnit()->ToCreature()->isInEvadeMode())
         return false;
 
     // nobody can attack GM when GM Flag is set
@@ -1180,7 +1184,7 @@ Unit* AIInterface::getTargetForPet()
 
 void AIInterface::updateAgent(uint32_t p_time)
 {
-    if (getUnit()->isCreature() && static_cast<Creature*>(getUnit())->GetCreatureProperties()->Type == UNIT_TYPE_CRITTER && static_cast<Creature*>(getUnit())->GetType() != CREATURE_TYPE_GUARDIAN)
+    if (getUnit()->isCreature() && static_cast<Creature*>(getUnit())->GetCreatureProperties()->Type == UNIT_TYPE_CRITTER && !static_cast<Creature*>(getUnit())->isGuardian())
         return;
 
     if (getUnit()->getWorldMap() == nullptr)
@@ -1296,7 +1300,7 @@ void AIInterface::handleAgentRanged()
 
     if (distance >= combatReach[0] && distance <= combatReach[1]) // Target is in Range -> Attack
     {
-        if (m_Unit->isAttackReady(RANGED) && !getUnit()->isInEvadeMode())
+        if (m_Unit->isAttackReady(RANGED) && !getUnit()->ToCreature()->isInEvadeMode())
         {
             bool infront = m_Unit->isInFront(getCurrentTarget());
 
@@ -1407,7 +1411,7 @@ void AIInterface::handleAgentSpell(uint32_t spellId)
 
 void AIInterface::handleAgentFlee(uint32_t p_time)
 {
-    if (getUnit()->isInEvadeMode())
+    if (getUnit()->ToCreature()->isInEvadeMode())
         return;
 
     m_fleeTimer->updateTimer(p_time);
@@ -1574,7 +1578,7 @@ bool AIInterface::canAssistTo(Unit* u, Unit* enemy, bool checkfaction /*= true*/
         return false;
 
     // we cannot assist in evade mode
-    if (getUnit()->isInEvadeMode())
+    if (getUnit()->ToCreature()->isInEvadeMode())
         return false;
 
     // or if enemy is in evade mode
@@ -1629,7 +1633,7 @@ void AIInterface::selectCurrentAgent(Unit* target, uint32_t spellid)
     if (this->isCastDisabled() && getCurrentAgent() == AGENT_SPELL)
         setCurrentAgent(AGENT_NULL);
 
-    if (target->isAlive() && !getUnit()->isInEvadeMode())
+    if (target->isAlive() && !getUnit()->ToCreature()->isInEvadeMode())
     {
         if (canFlee() && !m_hasFleed && ((static_cast<float>(m_Unit->getHealth()) / static_cast<float>(m_Unit->getMaxHealth()) < m_FleeHealth)))
         {
@@ -1855,7 +1859,7 @@ bool AIInterface::canOwnerAttackUnit(Unit* pUnit)
             return false;
     }
 
-    if (getUnit()->isInEvadeMode())
+    if (getUnit()->ToCreature()->isInEvadeMode())
         return false;
 
     if (pUnit->ToCreature() && pUnit->ToCreature()->isInEvadeMode())
@@ -2388,7 +2392,7 @@ void AIInterface::eventFear(Unit* pUnit, uint32_t /*misc1*/)
 
 void AIInterface::eventUnfear(Unit* /*pUnit*/, uint32_t /*misc1*/)
 {
-    if (getUnit()->isInEvadeMode())
+    if (getUnit()->ToCreature()->isInEvadeMode())
         return;
 
     getUnit()->setControlled(false, UNIT_STATE_FLEEING);
@@ -2402,7 +2406,7 @@ void AIInterface::eventFollowOwner(Unit* /*pUnit*/, uint32_t /*misc1*/)
 
 void AIInterface::eventDamageTaken(Unit* pUnit, uint32_t misc1)
 {
-    if (getUnit()->isInEvadeMode())
+    if (getUnit()->ToCreature()->isInEvadeMode())
         return;
 
     if (pUnit == nullptr)
@@ -3476,192 +3480,6 @@ uint32_t AIInterface::fixupCorridor(dtPolyRef* path, const uint32_t npath, const
     return req + size;
 }
 
-CreatureAISpells::CreatureAISpells(SpellInfo const* spellInfo, float castChance, uint32_t targetType, uint32_t duration, uint32_t cooldown, bool forceRemove, bool isTriggered) :
-    mDurationTimer(std::make_unique<Util::SmallTimeTracker>(0)), mCooldownTimer(std::make_unique<Util::SmallTimeTracker>(0))
-{
-    mSpellInfo = spellInfo;
-    mCastChance = castChance;
-    mTargetType = targetType;
-    mDuration = duration;
-
-    mCooldown = cooldown;
-    mForceRemoveAura = forceRemove;
-    mIsTriggered = isTriggered;
-
-    mMaxStackCount = 1;
-    mCastCount = 0;
-    mMaxCount = 0;
-
-    scriptType = onAIUpdate;
-
-    mMinPositionRangeToCast = 0.0f;
-    mMaxPositionRangeToCast = 0.0f;
-
-    mMinHpRangeToCast = 0;
-    mMaxHpRangeToCast = 100;
-
-    spell_type = STYPE_NULL;
-
-    if (mSpellInfo != nullptr)
-    {
-        mMinPositionRangeToCast = mSpellInfo->getMinRange();
-        mMaxPositionRangeToCast = mSpellInfo->getMaxRange();
-    }
-
-    mAttackStopTimer = 0;
-
-    mCustomTargetCreature = nullptr;
-}
-
-void CreatureAISpells::setdurationTimer(uint32_t durationTimer)
-{
-    mDurationTimer->resetInterval(durationTimer);
-}
-
-void CreatureAISpells::setCooldownTimer(uint32_t cooldownTimer)
-{
-    mCooldownTimer->resetInterval(cooldownTimer);
-}
-
-void CreatureAISpells::addDBEmote(uint32_t textId)
-{
-    MySQLStructure::NpcScriptText const* npcScriptText = sMySQLStore.getNpcScriptText(textId);
-    if (npcScriptText != nullptr)
-        addEmote(npcScriptText->text, npcScriptText->type, npcScriptText->sound);
-    else
-        sLogger.debug("A script tried to add a spell emote with {}! Id is not available in table npc_script_text.", textId);
-}
-
-void CreatureAISpells::addEmote(std::string pText, uint8_t pType, uint32_t pSoundId)
-{
-    if (!pText.empty() || pSoundId)
-        mAISpellEmote.emplace_back(AISpellEmotes(pText, pType, pSoundId));
-}
-
-void CreatureAISpells::sendRandomEmote(Unit* creatureAI)
-{
-    if (!mAISpellEmote.empty() && creatureAI != nullptr)
-    {
-        sLogger.debug("AISpellEmotes::sendRandomEmote() : called");
-
-        uint32_t randomUInt = (mAISpellEmote.size() > 1) ? Util::getRandomUInt(static_cast<uint32_t>(mAISpellEmote.size() - 1)) : 0;
-        creatureAI->sendChatMessage(mAISpellEmote[randomUInt].mType, LANG_UNIVERSAL, mAISpellEmote[randomUInt].mText);
-
-        if (mAISpellEmote[randomUInt].mSoundId != 0)
-            creatureAI->PlaySoundToSet(mAISpellEmote[randomUInt].mSoundId);
-    }
-}
-
-void CreatureAISpells::setMaxStackCount(uint32_t stackCount)
-{
-    mMaxStackCount = stackCount;
-}
-
-const uint32_t CreatureAISpells::getMaxStackCount()
-{
-    return mMaxStackCount;
-}
-
-void CreatureAISpells::setMaxCastCount(uint32_t castCount)
-{
-    mMaxCount = castCount;
-}
-
-const uint32_t CreatureAISpells::getMaxCastCount()
-{
-    return mMaxCount;
-}
-
-const uint32_t CreatureAISpells::getCastCount()
-{
-    return mCastCount;
-}
-
-const bool CreatureAISpells::isDistanceInRange(float targetDistance)
-{
-    if (targetDistance >= mMinPositionRangeToCast && targetDistance <= mMaxPositionRangeToCast)
-        return true;
-
-    return false;
-}
-
-void CreatureAISpells::setMinMaxDistance(float minDistance, float maxDistance)
-{
-    mMinPositionRangeToCast = minDistance;
-    mMaxPositionRangeToCast = maxDistance;
-}
-
-const bool CreatureAISpells::isHpInPercentRange(float targetHp)
-{
-    if (targetHp >= mMinHpRangeToCast && targetHp <= mMaxHpRangeToCast)
-        return true;
-
-    return false;
-}
-
-void CreatureAISpells::setMinMaxPercentHp(float minHp, float maxHp)
-{
-    mMinHpRangeToCast = minHp;
-    mMaxHpRangeToCast = maxHp;
-}
-
-void CreatureAISpells::setAvailableForScriptPhase(std::vector<uint32_t> phaseVector)
-{
-    for (const auto& phase : phaseVector)
-    {
-        mPhaseList.push_back(phase);
-    }
-}
-
-bool CreatureAISpells::isAvailableForScriptPhase(uint32_t scriptPhase)
-{
-    if (mPhaseList.empty())
-        return true;
-
-    for (const auto& availablePhase : mPhaseList)
-    {
-        if (availablePhase == scriptPhase)
-            return true;
-    }
-
-    return false;
-}
-
-void CreatureAISpells::setAttackStopTimer(uint32_t attackStopTime)
-{
-    mAttackStopTimer = attackStopTime;
-}
-
-uint32_t CreatureAISpells::getAttackStopTimer()
-{
-    return mAttackStopTimer;
-}
-
-void CreatureAISpells::setAnnouncement(std::string announcement)
-{
-    mAnnouncement = announcement;
-}
-
-void CreatureAISpells::sendAnnouncement(Unit* pUnit)
-{
-    if (!mAnnouncement.empty() && pUnit != nullptr)
-    {
-        sLogger.debug("AISpellEmotes::sendAnnouncement() : called");
-
-        pUnit->sendChatMessage(CHAT_MSG_RAID_BOSS_EMOTE, LANG_UNIVERSAL, mAnnouncement);
-    }
-}
-
-void CreatureAISpells::setCustomTarget(Unit* targetCreature)
-{
-    mCustomTargetCreature = targetCreature;
-}
-
-Unit* CreatureAISpells::getCustomTarget()
-{
-    return mCustomTargetCreature;
-}
-
 CreatureAISpells* AIInterface::addAISpell(uint32_t spellId, float castChance, uint32_t targetType, uint32_t duration /*= 0*/, uint32_t cooldown /*= 0*/, bool forceRemove /*= false*/, bool isTriggered /*= false*/)
 {
     const auto spellInfo = sSpellMgr.getSpellInfo(spellId);
@@ -4133,4 +3951,154 @@ void AIInterface::sendStoredText(definedEmoteVector& store, Unit* target)
             }
         }
     }
+}
+
+AIInterface2::AIInterface2(Creature* owner) : self(owner)
+{
+}
+
+AIInterface2::~AIInterface2()
+{
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Combat
+bool AIInterface2::canStartAttack(Unit* target, bool force)
+{
+    if (self->isCivilian())
+        return false;
+
+    // This set of checks is should be done only for creatures
+    if ((self->isImmuneToNPC() && !target->hasUnitFlags(UNIT_FLAG_PVP_ATTACKABLE))
+        || (self->isImmuneToPC() && target->hasUnitFlags(UNIT_FLAG_PVP_ATTACKABLE)))
+        return false;
+
+    // Do not attack non-combat pets
+    if (target && target->ToCreature()->GetCreatureProperties()->Type == UNIT_TYPE_NONCOMBAT_PET)
+        return false;
+
+    // Dont Aggro Flying stuff we cannot reach
+    if (!self->canFly() && (self->getDistanceZ(target) > 3 + self->getMeleeRange(target)))
+        return false;
+
+    if (!force)
+    {
+        if (!isTargetAcceptable(target))
+            return false;
+
+        if (self->isNeutralToAll() || !self->IsWithinDistInMap(target, calcAggroRange(target)))
+            return false;
+    }
+
+    if (!canOwnerAttackUnit(target, force))
+        return false;
+
+    if (worldConfig.terrainCollision.isCollisionEnabled)
+    {
+        return self->IsWithinLOSInMap(target);
+    }
+
+    return true;
+}
+
+bool AIInterface2::canOwnerAttackUnit(Unit* pUnit, bool force)
+{
+    if (!pUnit->IsInWorld())
+        return false;
+
+    if (!self->isValidTarget(pUnit))
+        return false;
+
+    if (!pUnit->isInAccessiblePlaceFor(self))
+        return false;
+
+    // Script Interface Function
+    if (self->getAI())
+    {
+        if (self->getAI()->canAIAttack(pUnit))
+            return false;
+    }
+
+    if (self->isInEvadeMode())
+        return false;
+
+    if (pUnit->ToCreature() && pUnit->ToCreature()->isInEvadeMode())
+        return false;
+
+    if (!self->isCharmed())
+    {
+        if (self->getWorldMap()->getBaseMap()->isDungeon())
+            return true;
+
+        if (!(self->GetCreatureProperties()->typeFlags & CREATURE_FLAG1_BOSS) != 0 || self->hasAuraWithAuraEffect(SPELL_AURA_MOD_TAUNT))
+            return true;
+    }
+
+    // Map Visibility Range but not more than the Distance of 2 Cells
+    float distance = std::min<float>(self->getWorldMap()->getVisibilityRange(), Map::Cell::cellSize * 2);
+
+    uint64_t ownerGuid = self->getCharmedByGuid() ? self->getCharmedByGuid() : self->getCreatedByGuid();
+    if (Unit* unit = self->getWorldMapUnit(ownerGuid))
+    {
+        return pUnit->IsWithinDistInMap(unit, distance);
+    }
+    else
+    {
+        // include sizes for huge npcs
+        distance += self->getCombatReach() + pUnit->getCombatReach();
+
+        // to prevent creatures in air ignore attacks because distance is already too high...
+        if (self->getMovementTemplate().isFlightAllowed())
+            return pUnit->isInDist2d(self->GetSpawnPosition(), distance);
+        else
+            return pUnit->isInDist(self->GetSpawnPosition(), distance);
+    }
+}
+
+bool AIInterface2::isTargetAcceptable(Unit* target)
+{
+    if (!target)
+        return false;
+
+    if (!target->IsInWorld())
+        return false;
+
+    // if the target cannot be attacked, the target is not acceptable
+#ifdef FT_VEHICLES
+    if (self->isFriendlyTo(target) || !target->getAIInterface()->isTargetableForAttack(false)
+        || (self->getVehicle() && (self->isOnVehicle(target) || self->getVehicle()->getBase()->isOnVehicle(target))))
+        return false;
+#else
+    if (self->isFriendlyTo(target) || !target->getAIInterface()->isTargetableForAttack(false))
+        return false;
+#endif
+
+    if (target->hasUnitStateFlag(UNIT_STATE_DIED))
+    {
+#if VERSION_STRING > Classic
+        // guards can detect fake death
+        if (self->isGuard() && target->hasUnitFlags2(UNIT_FLAG2_FEIGN_DEATH))
+            return true;
+        else
+#endif
+            return false;
+    }
+
+    // if I'm already fighting target, or I'm hostile towards the target, the target is acceptable
+    if (self->isEngagedBy(target) || self->isHostileTo(target))
+        return true;
+
+    // if the target's victim is not friendly, or the target is friendly, the target is not acceptable
+    return false;
+}
+
+bool AIInterface2::isTargetableForAttack(bool checkFakeDeath)
+{
+    if (!self->isAlive())
+        return false;
+
+    if (self->hasUnitFlags(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE))
+        return false;
+
+    return !self->hasUnitStateFlag(UNIT_STATE_UNATTACKABLE) && (!checkFakeDeath || !self->hasUnitStateFlag(UNIT_STATE_DIED));
 }

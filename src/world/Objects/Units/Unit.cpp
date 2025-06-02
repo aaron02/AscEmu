@@ -80,6 +80,8 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Utilities/Narrow.hpp"
 #include "Utilities/Random.hpp"
 
+#include "AI/CreatureAI.h"
+
 #if VERSION_STRING <= TBC
 #include "Server/Packets/SmsgUpdateAuraDuration.h"
 #include "Server/Packets/SmsgSetExtraAuraInfo.h"
@@ -96,7 +98,9 @@ Unit::Unit() :
 #ifdef FT_VEHICLES
     m_vehicleKit(nullptr),
 #endif
-    m_damageSplitTarget(nullptr)
+    m_damageSplitTarget(nullptr),
+    m_reactState(REACT_AGGRESSIVE),
+    m_isEngaged(false)
 {
     m_objectType |= TYPE_UNIT;
 
@@ -1722,7 +1726,7 @@ void Unit::setPhase(uint8_t command/* = PHASE_SET*/, uint32_t newPhase/* = 1*/)
     updateVisibility();
 }
 
-bool Unit::isWithinCombatRange(Unit* obj, float dist2compare)
+bool Unit::isWithinCombatRange(const Unit* obj, float dist2compare) const
 {
     if (!obj || !IsInMap(obj) || !(GetPhase() == obj->GetPhase()))
         return false;
@@ -1738,7 +1742,7 @@ bool Unit::isWithinCombatRange(Unit* obj, float dist2compare)
     return distsq < maxdist* maxdist;
 }
 
-bool Unit::isWithinMeleeRangeAt(LocationVector const& pos, Unit* obj)
+bool Unit::isWithinMeleeRangeAt(LocationVector const& pos, const Unit* obj) const
 {
     if (!obj || !IsInMap(obj) || !(GetPhase() == obj->GetPhase()))
         return false;
@@ -1753,7 +1757,7 @@ bool Unit::isWithinMeleeRangeAt(LocationVector const& pos, Unit* obj)
     return distsq <= maxdist * maxdist;
 }
 
-float Unit::getMeleeRange(Unit* target)
+float Unit::getMeleeRange(const Unit* target) const
 {
     float range = getCombatReach() + target->getCombatReach() + 4.0f / 3.0f;
     return std::max(range, NOMINAL_MELEE_RANGE);
@@ -1976,7 +1980,7 @@ void Unit::setFacingTo(float ori, bool force)
     init.Launch();
 }
 
-void Unit::setFacingToObject(Object* object, bool force)
+void Unit::setFacingToObject(Object const* object, bool force)
 {
     // do not face when already moving
     if (!force && (/*!IsStopped() ||*/ !movespline->Finalized()))
@@ -7936,6 +7940,399 @@ bool Unit::isUnitOwnerInRaid(Unit* unit)
     return false;
 }
 
+void Unit::setReactState(ReactStates st)
+{
+    m_reactState = st;
+}
+
+ReactStates Unit::getReactState() const
+{
+    return m_reactState;
+}
+
+bool Unit::hasReactState(ReactStates state) const
+{
+    return m_reactState == state;
+}
+
+void Unit::initializeReactState()
+{
+    if (isTotem() || isCritter() || isTrainingDummy())
+        setReactState(REACT_PASSIVE);
+    else
+        setReactState(REACT_AGGRESSIVE);
+}
+
+Unit* Unit::getTargetForPet() const
+{   
+    if (Unit* victim = getVictim())
+        if ((!isPet() && !getPlayerOwnerOrSelf()) || isInCombatWith(victim))
+            return victim;
+    
+    uint64_t ownerGuid = getCharmedByGuid() ? getCharmedByGuid() : getCreatedByGuid();
+    Unit* owner = getWorldMapUnit(ownerGuid);
+    
+    if (owner && owner->getTargetGuid())
+        return owner->getWorldMapUnit(owner->getTargetGuid());
+    
+    return nullptr;
+}
+
+Unit* Unit::getVictim() const
+{
+    return m_attacking;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// AI Handling
+bool Unit::attackStart(Unit* target, bool meleeAttack)
+{
+    if (!target || target == this)
+        return false;
+
+    // dead units can neither attack nor be attacked
+    if (!isAlive() || !target->IsInWorld() || !target->isAlive())
+        return false;
+
+    // player cannot attack in mount state
+    if (getObjectTypeId() == TYPEID_PLAYER && isMounted())
+        return false;
+
+    Creature* creature = ToCreature();
+    // creatures cannot attack while evading
+    if (creature && creature->isInEvadeMode())
+        return false;
+
+    if (hasUnitFlags(UNIT_FLAG_PACIFIED))
+        return false;
+
+    // nobody can attack GM in GM-mode
+    if (target->getObjectTypeId() == TYPEID_PLAYER)
+    {
+        if (target->ToPlayer()->isGMFlagSet())
+            return false;
+    }
+    else
+    {
+        if (target->ToCreature()->isEvadingAttacks())
+            return false;
+    }
+
+    if (hasAuraWithAuraEffect(SPELL_AURA_MOD_UNATTACKABLE))
+    {
+        removeAllAurasByAuraEffect(SPELL_AURA_MOD_UNATTACKABLE);
+    }
+
+    if (m_attacking)
+    {
+        if (m_attacking == target)
+        {
+            // switch to melee attack from ranged/magic
+            if (meleeAttack)
+            {
+                if (!hasUnitStateFlag(UNIT_STATE_MELEE_ATTACKING))
+                {
+                    addUnitStateFlag(UNIT_STATE_MELEE_ATTACKING);
+                    smsg_AttackStart(target);
+                    return true;
+                }
+            }
+            else if (hasUnitStateFlag(UNIT_STATE_MELEE_ATTACKING))
+            {
+                removeUnitStateFlag(UNIT_STATE_MELEE_ATTACKING);
+                smsg_AttackStop(target);
+                return true;
+            }
+            return false;
+        }
+
+        // switch target
+        interruptSpellWithSpellType(CURRENT_MELEE_SPELL);
+        if (!meleeAttack)
+            removeUnitStateFlag(UNIT_STATE_MELEE_ATTACKING);
+    }
+
+    if (m_attacking)
+    {
+        m_attacking->removeAttacker(this);
+    }
+
+    m_attacking = target;
+    m_attacking->addAttacker(this);
+
+    // Set our target
+    if (isCreature())
+    {
+        ToCreature()->setTarget(target->getGuid());
+    }
+    
+    if (meleeAttack)
+        addUnitStateFlag(UNIT_STATE_MELEE_ATTACKING);
+
+    if (creature && !getPlayerOwner())
+    {
+        // should not let player enter combat by right clicking target - doesn't helps
+        getThreatManager().addThreat(target, 0.0f);
+        getCombatHandler().onHostileAction(target);
+
+        if (target->getObjectTypeId() == TYPEID_PLAYER)
+            target->getCombatHandler().onHostileAction(this);
+
+        if (Unit* owner = target->getUnitOwner())
+        {
+            getThreatManager().addThreat(owner, 0.0f);
+            getCombatHandler().onHostileAction(owner);
+
+            if (owner->getObjectTypeId() == TYPEID_PLAYER)
+                owner->getCombatHandler().takeCombatAction(this);
+        }
+
+        creature->SendAIReaction(AI_REACTION_HOSTILE);
+        creature->callAssistance();
+
+        // Remove emote state - will be restored on creature reset
+        setEmoteState(EMOTE_ONESHOT_NONE);
+    }
+
+    // delay offhand weapon attack by 50% of the base attack time
+    if (canDualWield() && getObjectTypeId() != TYPEID_PLAYER)
+    {
+        setAttackTimer(OFFHAND, std::max(getAttackTimer(OFFHAND), getAttackTimer(MELEE) + uint32(getBaseAttackTime(MELEE) * 50 / 100.0f)));
+    }
+
+    if (meleeAttack)
+    {
+        smsg_AttackStart(target);
+    }
+
+    // Let the pet know we've started attacking someting. Handles melee attacks only
+    if (getObjectTypeId() == TYPEID_PLAYER && getSummonInterface())
+    {
+        for (Unit* controlled : getSummonInterface()->getSummons())
+        {
+            if (Creature* cControlled = controlled->ToCreature())
+            {
+                if (cControlled->isAIEnabled())
+                {
+                    cControlled->getAI()->onOwnerAttacked(target);
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+bool Unit::attackStop()
+{
+    if (!m_attacking)
+        return false;
+
+    Unit* victim = m_attacking;
+
+    m_attacking->removeAttacker(this);
+    m_attacking = nullptr;
+
+    // Clear our target
+    if (isCreature())
+    {
+        ToCreature()->setTarget(0);
+    }
+
+    removeUnitStateFlag(UNIT_STATE_MELEE_ATTACKING);
+
+    interruptSpellWithSpellType(CURRENT_MELEE_SPELL);
+
+    // reset only at real combat stop
+    if (Creature* creature = ToCreature())
+    {
+        creature->setNoCallAssistance(false);
+
+        if (creature->hasSearchedAssistance())
+        {
+            creature->setNoSearchAssistance(false);
+            updateSpeed();
+        }
+    }
+
+    smsg_AttackStop(victim);
+
+    return true;
+}
+
+void Unit::castStop(uint32_t spellid)
+{
+    interruptSpell(spellid, true);
+}
+
+bool Unit::isEngaged()
+{
+    return m_isEngaged;
+}
+
+bool Unit::isEngagedBy(Unit* who) const
+{
+    return getThreatManager().canHaveThreatList() ? getThreatManager().isThreatenedBy(who, true) : getCombatHandler().isInPreCombatWithUnit(who);
+}
+
+bool Unit::isImmuneToNPC()
+{
+    return hasUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
+}
+
+bool Unit::isImmuneToPC()
+{
+    return hasUnitFlags(UNIT_FLAG_IGNORE_PLAYER_COMBAT);
+}
+
+void Unit::setImmuneToNPC(bool apply)
+{
+    if (apply)
+    {
+        addUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
+    }
+    else
+    {
+        removeUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
+    }
+}
+
+void Unit::setImmuneToPC(bool apply)
+{
+    if (apply)
+    {
+        addUnitFlags(UNIT_FLAG_IGNORE_PLAYER_COMBAT);
+    }
+    else
+    {
+        removeUnitFlags(UNIT_FLAG_IGNORE_PLAYER_COMBAT);
+    }
+}
+
+void Unit::addAttacker(Unit* pAttacker)
+{
+    m_attackers.insert(pAttacker);
+}
+
+void Unit::removeAttacker(Unit* pAttacker)
+{
+    m_attackers.erase(pAttacker);
+}
+
+Unit* Unit::selectNearestTarget(float dist, bool playerOnly)
+{
+    if (dist == 0.0f)
+        dist = Map::Terrain::TileSize;
+
+    Unit* target = nullptr;
+
+    for (const auto& itr : getInRangeObjectsSet())
+    {
+        Object* iro = itr;
+        if (!iro || !iro->isCreatureOrPlayer())
+            continue;
+
+        Unit* pUnit = static_cast<Unit*>(iro);
+
+        if (!IsWithinDistInMap(pUnit, dist))
+            continue;
+
+        if (!isValidTarget(pUnit))
+            continue;
+
+        if (playerOnly && pUnit->getObjectTypeId() != TYPEID_PLAYER)
+            continue;
+
+        float range = getDistanceSq(iro);
+
+        if (range < dist)
+        {
+            dist = range;
+            target = pUnit;
+        }
+    }
+
+    return target;
+}
+
+Unit* Unit::selectNearestTargetInAttackDistance(float dist)
+{
+    if (dist > Map::Terrain::TileSize)
+    {
+        dist = 5.0f;
+    }
+
+    Unit* target = nullptr;
+
+    for (const auto& itr : getInRangeObjectsSet())
+    {
+        Object* iro = itr;
+        if (!iro || !iro->isCreatureOrPlayer())
+            continue;
+
+        Unit* pUnit = static_cast<Unit*>(iro);
+
+        if (!canSee(pUnit))
+            continue;
+
+        if (dist == 0 ? false : true)
+        {
+            if (!isValidTarget(pUnit))
+                continue;
+        }
+
+        //if (!canStartAttack(pUnit, false)) todo aaron02
+        //    continue;
+
+        float range = getDistanceSq(iro);
+
+        if (range < dist)
+        {
+            dist = range;
+            target = pUnit;
+        }
+    }
+
+    return target;
+}
+
+Unit* Unit::selectNearestHostileUnitInAggroRange(bool useLOS)
+{
+    // Selects nearest hostile target within creature's aggro range. Used primarily by
+    //  pets set to aggressive. Will not return neutral or friendly targets.
+
+    Unit* target = nullptr;
+    float dist = 0.0f;
+
+    for (const auto& itr : getInRangeObjectsSet())
+    {
+        Object* iro = itr;
+        if (!iro || !iro->isCreatureOrPlayer())
+            continue;
+
+        Unit* pUnit = static_cast<Unit*>(iro);
+
+        if (!pUnit->isHostileTo(this))
+            continue;
+
+        if (!isValidTarget(pUnit))
+            continue;
+
+        if (useLOS && !pUnit->IsWithinLOSInMap(this))
+            continue;
+
+        float range = getDistanceSq(iro);
+
+        if (range < 45.0f)
+        {
+            dist = range;
+            target = pUnit;
+        }
+    }
+
+    return target;
+}
+
 uint64_t Unit::getTransGuid()
 {
 #ifdef FT_VEHICLES
@@ -11178,7 +11575,7 @@ DamageInfo Unit::strike(Unit* pVictim, WeaponDamageType weaponType, SpellInfo co
     //special states processing
     if (pVictim->isCreature())
     {
-        if (pVictim->isInEvadeMode())
+        if (pVictim->ToCreature()->isInEvadeMode())
             /*      || (pVictim->getAIInterface()->GetIsSoulLinked() && pVictim->getAIInterface()->getSoullinkedWith() != this))*/
         {
             vstate = VisualState::EVADE;

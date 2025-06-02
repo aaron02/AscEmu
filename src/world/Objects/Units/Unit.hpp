@@ -23,6 +23,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Spell/Definitions/SpellModifierType.hpp"
 #include "Spell/Definitions/SpellTypes.hpp"
 #include "Spell/SpellProc.hpp"
+#include "AI/AI_Defines.h"
 
 #include <array>
 #include <list>
@@ -52,6 +53,7 @@ template <class T>
 using Optional = std::optional<T>;
 
 class AIInterface;
+class AIInterface2;
 class Aura;
 class DynamicObject;
 class GameObject;
@@ -530,10 +532,10 @@ public:
 
     virtual void setPhase(uint8_t command = PHASE_SET, uint32_t newPhase = 1);
 
-    bool isWithinCombatRange(Unit* obj, float dist2compare);
-    bool isWithinMeleeRange(Unit* obj) { return isWithinMeleeRangeAt(GetPosition(), obj); }
-    bool isWithinMeleeRangeAt(LocationVector const& pos, Unit* obj);
-    float getMeleeRange(Unit* target);
+    bool isWithinCombatRange(const Unit* obj, float dist2compare) const;
+    bool isWithinMeleeRange(const Unit* obj) const { return isWithinMeleeRangeAt(GetPosition(), obj); }
+    bool isWithinMeleeRangeAt(LocationVector const& pos,const Unit* obj) const;
+    float getMeleeRange(const Unit* target) const;
 
     bool isInInstance() const;
     virtual bool isInWater() const;
@@ -594,7 +596,7 @@ private:
 public:
     void setInFront(Object const* target);
     void setFacingTo(float const ori, bool force = true);
-    void setFacingToObject(Object* object, bool force = true);
+    void setFacingToObject(Object const* object, bool force = true);
     void setMoveWaterWalk();
     void setMoveLandWalk();
     void setMoveFeatherFall();
@@ -703,6 +705,7 @@ protected:
 
 public:
     AIInterface* getAIInterface() const { return m_aiInterface.get(); }
+    virtual AIInterface2* getAIInterface2() const { return nullptr; }
 
     void setAItoUse(bool value) { m_useAI = value; }
     bool isAIEnabled() { return m_useAI; }
@@ -717,9 +720,6 @@ public:
     bool hasUnitStateFlag(uint32_t state_flag) const { return (m_unitState & state_flag ? true : false); }
     void removeUnitStateFlag(uint32_t state_flag) { m_unitState &= ~state_flag; }
     uint32_t getUnitStateFlags() { return m_unitState; }
-
-    // helper
-    bool isInEvadeMode() const { return hasUnitStateFlag(UNIT_STATE_EVADING); }
 
     void setControlled(bool apply, UnitStates state);
     void applyControlStatesIfNeeded();
@@ -1068,11 +1068,11 @@ public:
     void unsetDetectRangeMod(uint64_t guid);
     int32_t getDetectRangeMod(uint64_t guid) const;
 
-    virtual bool isCritter() { return false; }
+    virtual bool isCritter() const { return false; }
 
     void knockbackFrom(float x, float y, float speedXY, float speedZ);
 
-    virtual bool isTrainingDummy() { return false; }
+    virtual bool isTrainingDummy() const { return false; }
 
     GameObject* getGameObject(uint32_t spellId) const;
     void addGameObject(GameObject* gameObj);
@@ -1171,6 +1171,52 @@ public:
 public:
     bool isUnitOwnerInParty(Unit* unit);
     bool isUnitOwnerInRaid(Unit* unit);
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // React State
+public:
+    void setReactState(ReactStates st);
+    ReactStates getReactState() const;
+    bool hasReactState(ReactStates state) const;
+    void initializeReactState();
+
+protected:
+    ReactStates m_reactState;
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Combat
+public:
+    Unit* getTargetForPet() const;
+    Unit* getVictim() const;
+
+    bool attackStart(Unit* target, bool meleeAttack);
+    bool attackStop();
+    void castStop(uint32_t spellid = 0);
+
+    bool isEngaged();
+    bool isEngagedBy(Unit* who) const;
+
+    bool isImmuneToNPC();
+    bool isImmuneToPC();
+    void setImmuneToNPC(bool apply);
+    void setImmuneToPC(bool apply);
+
+private:
+    void addAttacker(Unit* pAttacker);
+    void removeAttacker(Unit* pAttacker);
+
+protected:
+    std::set<Unit*> m_attackers;
+    Unit* m_attacking;
+
+    bool m_isEngaged;
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Target
+public:
+    Unit* selectNearestTarget(float dist = 0, bool playerOnly = false);
+    Unit* selectNearestTargetInAttackDistance(float dist = 0);
+    Unit* selectNearestHostileUnitInAggroRange(bool useLOS = false);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Threat Management

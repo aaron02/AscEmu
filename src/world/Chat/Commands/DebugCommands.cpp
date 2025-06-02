@@ -256,6 +256,14 @@ bool ChatHandler::HandlePositionCommand(const char* /*args*/, WorldSession* sess
     if (selected_unit == nullptr)
         return true;
 
+    selected_unit->AI_Initialize();
+
+    return true;
+    /*
+    Creature* selected_unit = GetSelectedCreature(session);
+    if (selected_unit == nullptr)
+        return true;
+
     LocationVector spawnPos = selected_unit->GetSpawnPosition();
     LocationVector pos = selected_unit->GetPosition();
 
@@ -272,7 +280,7 @@ bool ChatHandler::HandlePositionCommand(const char* /*args*/, WorldSession* sess
 
     SystemMessage(session, "Outdoor: %u", selected_unit->isOutdoors());
     SystemMessage(session, "posZ_floor: %f", selected_unit->getFloorZ());
-    return true;
+    return true;*/
 }
 
 bool ChatHandler::HandleSetOrientationCommand(const char* args, WorldSession* session)

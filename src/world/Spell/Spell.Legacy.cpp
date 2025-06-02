@@ -455,7 +455,7 @@ uint8_t Spell::DidHit(uint32_t effindex, Unit* target)
     // MIT Start
 
     // Check if creature target is in evade mode
-    if (target->isCreature() && target->isInEvadeMode())
+    if (target->isCreature() && target->ToCreature()->isInEvadeMode())
         return SPELL_DID_HIT_EVADE;
 
     // Check if unit target is immune to this spell effect

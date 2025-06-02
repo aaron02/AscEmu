@@ -15,6 +15,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Map/Maps/InstanceMap.hpp"
 #include "Movement/WaypointDefines.h"
 
+#include "AI/CreatureAISpells.h"
 #include "CreatureAIFunctionScheduler.hpp"
 #include "CreatureAIFunction.hpp"
 #include "AIUtils.hpp"

@@ -224,7 +224,7 @@ enum SpellAttributesExE : uint32_t
     ATTRIBUTESEXE_ITEM_CLASS_CHECK                  = 0x00010000,   // 17 TODO: this allows spells with EquippedItemClass to affect spells from other items if the required item is equipped
     ATTRIBUTESEXE_USABLE_WHILE_FEARED               = 0x00020000,   // 18 usable while feared
     ATTRIBUTESEXE_USABLE_WHILE_CONFUSED             = 0x00040000,   // 19 usable while confused
-    ATTRIBUTESEXE_UNK21                             = 0x00080000,   // 20
+    ATTRIBUTESEXE_DONT_TURN_DURING_CAST             = 0x00080000,   // 20
     ATTRIBUTESEXE_UNK22                             = 0x00100000,   // 21
     ATTRIBUTESEXE_UNK23                             = 0x00200000,   // 22
     ATTRIBUTESEXE_UNK24                             = 0x00400000,   // 23

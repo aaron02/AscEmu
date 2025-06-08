@@ -12,7 +12,6 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Data/WoWItem.hpp"
 #include "Server/UpdateFieldInclude.h"
 
-class QueryBuffer;
 class Field;
 struct Loot;
 
@@ -241,7 +240,7 @@ public:
 #endif
 
     void loadFromDB(Field* fields, Player* plr, bool light);
-    void saveToDB(int8_t containerslot, int8_t slot, bool firstsave, QueryBuffer* buf);
+    void saveToDB(int8_t containerslot, int8_t slot, bool firstsave);
     bool loadAuctionItemFromDB(uint64_t guid);
     void deleteFromDB();
     bool isEligibleForRefund();

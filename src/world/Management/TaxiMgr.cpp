@@ -412,12 +412,13 @@ void TaxiMgr::loadTaxiNodeLevelData()
 {
     auto oldMSTime = Util::TimeNow();
 
-    //                                               0            1
-    auto result = WorldDatabase.Query("SELECT TaxiNodeId, `Level` FROM taxi_level_data ORDER BY TaxiNodeId ASC");
+    bool success = false;
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SELECT_TAXI_LEVEL_DATA);
+    auto result = WorldDatabase.QueryStatement(&success, std::move(stmt));
 
-    if (!result)
+    if (!success || !result)
     {
-        sLogger.info("TaxiMgr:: Loaded 0 taxi node level definitions. DB table `taxi_level_data` is empty.");
+        sLogger.info("TaxiMgr:: Loaded 0 taxi node level definitions. DB table `taxi_level_data` is empty or failed.");
         return;
     }
 
@@ -430,15 +431,15 @@ void TaxiMgr::loadTaxiNodeLevelData()
         uint8_t level = fields[1].asUint8();
 
         const auto node = sTaxiNodesStore.lookupEntry(taxiNodeId);
-        if (node == nullptr)
+        if (!node)
         {
             sLogger.failure("TaxiMgr:: Table `taxi_level_data` has data for nonexistent taxi node (ID: {}), skipped", taxiNodeId);
             continue;
-        };
+        }
 
         _taxiNodeLevelDataStore.emplace(taxiNodeId, level);
-
         ++count;
+
     } while (result->NextRow());
 
     sLogger.info("TaxiMgr:: Loaded {} taxi node level definitions in {} ms", count, Util::GetTimeDifferenceToNow(oldMSTime));

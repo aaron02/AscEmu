@@ -11,11 +11,12 @@ class Field
 {
 public:
     bool isSet() const;
-    void setValue(char* value);
+    void setValue(const char* value);
 
     const char* asCString() const;
 
     float asFloat() const;
+    double asDouble() const;
     bool asBool() const;
 
     uint8_t asUint8(bool _silencedError = false) const;
@@ -31,5 +32,5 @@ public:
     int64_t asInt64() const;
 
 private:
-    char* m_value;
+    const char* m_value;
 };

@@ -78,105 +78,37 @@ void AchievementMgr::loadFromDb(QueryResult* _achievementResult, QueryResult* _c
     }
 }
 
-void AchievementMgr::saveToDb(QueryBuffer* _buffer)
+void AchievementMgr::saveToDb()
 {
     if (!m_completedAchievements.empty())
     {
-        std::ostringstream ss;
-
-        ss << "DELETE FROM character_achievement WHERE guid = ";
-        ss << m_player->getGuidLow();
-        ss << ";";
-
-        if (_buffer == nullptr)
-            CharacterDatabase.ExecuteNA(ss.str().c_str());
-        else
-            _buffer->AddQueryNA(ss.str().c_str());
-
-        ss.rdbuf()->str("");
-
-        ss << "INSERT INTO character_achievement VALUES ";
-        bool first = true;
-        for (auto iterCompletedAchievements : m_completedAchievements)
+        for (const auto& [achievementId, date] : m_completedAchievements)
         {
-            if (ss.str().length() >= 16000)
-            {
-                // SQL query length is limited to 16384 characters
-                if (_buffer == nullptr)
-                    CharacterDatabase.ExecuteNA(ss.str().c_str());
-                else
-                    _buffer->AddQueryNA(ss.str().c_str());
-
-                ss.str("");
-                ss << "INSERT INTO character_achievement VALUES ";
-                first = true;
-            }
-
-            if (!first)
-                ss << ", ";
-            else
-                first = false;
-
-            ss << "(" << m_player->getGuidLow() << ", " << iterCompletedAchievements.first << ", " << iterCompletedAchievements.second << ")";
+            auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ACHIEVEMENT_REPLACE);
+            stmt->Bind(0, m_player->getGuidLow());
+            stmt->Bind(1, achievementId);
+            stmt->Bind(2, date);
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
-
-        if (_buffer == nullptr)
-            CharacterDatabase.ExecuteNA(ss.str().c_str());
-        else
-            _buffer->AddQueryNA(ss.str().c_str());
     }
 
     if (!m_criteriaProgress.empty())
     {
-        std::ostringstream ss;
+        auto stmtDel = CharacterDatabase.CreateStatement(CHARACTER_ACHIEVEMENT_PROGRESS_DELETE);
+        stmtDel->Bind(0, m_player->getGuidLow());
+        CharacterDatabase.ExecuteStatement(std::move(stmtDel));
 
-        ss << "DELETE FROM character_achievement_progress WHERE guid = ";
-        ss << m_player->getGuidLow();
-        ss << ";";
-
-        if (_buffer == nullptr)
-            CharacterDatabase.ExecuteNA(ss.str().c_str());
-        else
-            _buffer->AddQueryNA(ss.str().c_str());
-
-        ss.rdbuf()->str("");
-
-        ss << "INSERT INTO character_achievement_progress VALUES ";
-
-        bool first = true;
-        for (const auto& iterCriteriaProgress : m_criteriaProgress)
+        for (const auto& [criteriaId, progress] : m_criteriaProgress)
         {
-            if (canSaveAchievementProgressToDB(iterCriteriaProgress.second.get()))
-            {
-                // only save some progresses, others will be updated when character logs in
-                if (ss.str().length() >= 16000)
-                {
-                    // SQL query length is limited to 16384 characters
-                    if (_buffer == nullptr)
-                        CharacterDatabase.ExecuteNA(ss.str().c_str());
-                    else
-                        _buffer->AddQueryNA(ss.str().c_str());
-                    ss.str("");
-                    ss << "INSERT INTO character_achievement_progress VALUES ";
-                    first = true;
-                }
+            if (!canSaveAchievementProgressToDB(progress.get()))
+                continue;
 
-                if (!first)
-                    ss << ", ";
-                else
-                    first = false;
-
-                ss << "(" << m_player->getGuidLow() << ", " << iterCriteriaProgress.first << ", " << iterCriteriaProgress.second->counter << ", " << iterCriteriaProgress.second->date << ")";
-            }
-        }
-
-        if (!first)
-        {
-            // don't execute query if there's no entries to save
-            if (_buffer == nullptr)
-                CharacterDatabase.ExecuteNA(ss.str().c_str());
-            else
-                _buffer->AddQueryNA(ss.str().c_str());
+            auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ACHIEVEMENT_PROGRESS_INSERT);
+            stmt->Bind(0, m_player->getGuidLow());
+            stmt->Bind(1, criteriaId);
+            stmt->Bind(2, progress->counter);
+            stmt->Bind(3, progress->date);
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
     }
 }
@@ -1129,14 +1061,21 @@ void AchievementMgr::gmResetCriteria(uint32_t _criteriaId, bool _finishAll/* = f
         }
 
         m_criteriaProgress.clear();
-        CharacterDatabase.Execute("DELETE FROM character_achievement_progress WHERE guid = %u", m_player->getGuidLow());
+
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ACHIEVEMENT_PROGRESS_DELETE);
+        stmt->Bind(0, m_player->getGuidLow());
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
     else
     {
         getPlayer()->sendPacket(SmsgCriteriaDeleted(_criteriaId).serialise().get());
 
         m_criteriaProgress.erase(_criteriaId);
-        CharacterDatabase.Execute("DELETE FROM character_achievement_progress WHERE guid = %u AND criteria = %u", m_player->getGuidLow(), static_cast<uint32_t>(_criteriaId));
+        
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ACHIEVEMENT_PROGRESS_DELETE_BY_CRITERIA);
+        stmt->Bind(0, m_player->getGuidLow());
+        stmt->Bind(1, _criteriaId);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     updateAllAchievementCriteria();
@@ -1746,14 +1685,21 @@ void AchievementMgr::gmResetAchievement(uint32_t _achievementId, bool _finishAll
             getPlayer()->sendPacket(SmsgAchievementDeleted(completedAchievement.first).serialise().get());
 
         m_completedAchievements.clear();
-        CharacterDatabase.Execute("DELETE FROM character_achievement WHERE guid = %u", m_player->getGuidLow());
+
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ACHIEVEMENT_DELETE);
+        stmt->Bind(0, m_player->getGuidLow());
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
     else
     {
         getPlayer()->sendPacket(SmsgAchievementDeleted(_achievementId).serialise().get());
 
         m_completedAchievements.erase(_achievementId);
-        CharacterDatabase.Execute("DELETE FROM character_achievement WHERE guid = %u AND achievement = %u", m_player->getGuidLow(), static_cast<uint32_t>(_achievementId));
+
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ACHIEVEMENT_DELETE_BY_ID);
+        stmt->Bind(0, m_player->getGuidLow());
+        stmt->Bind(1, _achievementId);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 }
 
@@ -1838,17 +1784,18 @@ bool AchievementMgr::showCompletedAchievement(uint32_t _achievementId, const Pla
         case 1427: // Realm First! Grand Master Tailor
         case 1463: // Realm First! Northrend Vanguard: First player on the realm to gain exalted reputation with the Argent Crusade, Wyrmrest Accord, Kirin Tor and Knights of the Ebon Blade.
         {
-            auto achievementResult = CharacterDatabase.Query("SELECT guid FROM character_achievement WHERE achievement=%u ORDER BY date LIMIT 1", _achievementId);
-            if (achievementResult != nullptr)
+            auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ACHIEVEMENT_FIRST_GUID_SELECT);
+            stmt->Bind(0, _achievementId);
+
+            auto achievementResult = CharacterDatabase.QueryStatement(std::move(stmt));
+            if (achievementResult)
             {
                 Field* field = achievementResult->Fetch();
-                if (field != nullptr)
+                if (field)
                 {
-                    // somebody has this Realm First achievement... is it this player?
-                    uint64_t firstguid = field->asUint32();
-                    if (firstguid != (uint32_t)_player->getGuid())
+                    uint32_t firstguid = field->asUint32();
+                    if (firstguid != static_cast<uint32_t>(_player->getGuid()))
                     {
-                        // nope, somebody else was first.
                         return false;
                     }
                 }
@@ -1922,7 +1869,7 @@ void AchievementMgr::giveAchievementReward(WDB::Structures::AchievementEntry con
         }
         else if (item != nullptr)
         {
-            item->saveToDB(-1, -1, true, nullptr);
+            item->saveToDB(-1, -1, true);
 
             sMailSystem.SendCreatureGameobjectMail(MAIL_TYPE_CREATURE, sender, receiver, messageSubject, messageBody, 0, 0, item->getGuid(), 0, MAIL_CHECK_MASK_HAS_BODY, MAIL_DEFAULT_EXPIRATION_TIME);
 

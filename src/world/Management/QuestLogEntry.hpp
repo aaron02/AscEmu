@@ -34,7 +34,7 @@ public:
     void initPlayerData();
 
     void loadFromDB(Field* fields);
-    void saveToDB(QueryBuffer* queryBuffer);
+    void saveToDB();
 
     uint8_t getSlot() const;
     void setSlot(uint8_t slot);

@@ -5,7 +5,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "DatabaseUpdater.hpp"
 #include <Logging/Logger.hpp>
-#include "Database.h"
+#include "Database.hpp"
 #include "Field.hpp"
 #include "CommonFilesystem.hpp"
 #include <Utilities/Util.hpp>
@@ -16,6 +16,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 void DatabaseUpdater::initBaseIfNeeded(const std::string& dbName, const std::string& dbBaseType, Database& dbPointer)
 {
+    /*
     auto dbResult = dbPointer.Query("SHOW TABLES FROM %s", dbName.c_str());
     if (dbResult == nullptr)
     {
@@ -62,11 +63,12 @@ void DatabaseUpdater::initBaseIfNeeded(const std::string& dbName, const std::str
 
             Arcemu::Sleep(250);
         }
-    }
+    }*/
 }
 
 void DatabaseUpdater::setupDatabase(const std::string& database, Database& dbPointer)
 {
+    /*
     const std::string sqlBaseDir = "sql/" + database;
     fs::path baseFilePath = fs::current_path();
     baseFilePath /= sqlBaseDir + "/" + database + "_base.sql";
@@ -92,18 +94,19 @@ void DatabaseUpdater::setupDatabase(const std::string& database, Database& dbPoi
 
         for (const auto& statements : seglist)
             dbPointer.ExecuteNA(statements.c_str());
-    }
+    }*/
 }
 
 void DatabaseUpdater::checkAndApplyDBUpdatesIfNeeded(const std::string& database, Database& dbPointer)
 {
+    /*
     applyUpdatesForDatabase(database, dbPointer);
 
     while (dbPointer.GetQueueSize() > 0)
     {
         sLogger.info("-- busy updating database \"{}\". Waiting for {} queries to be executed.", database, dbPointer.GetQueueSize());
         Arcemu::Sleep(500);
-    }
+    }*/
 }
 
 struct DatabaseUpdateFile
@@ -115,6 +118,7 @@ struct DatabaseUpdateFile
 
 void DatabaseUpdater::applyUpdatesForDatabase(const std::string& database, Database& dbPointer)
 {
+    /*
     const std::string sqlUpdateDir = "sql/" + database + "/updates";
 
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -134,10 +138,10 @@ void DatabaseUpdater::applyUpdatesForDatabase(const std::string& database, Datab
 
     const auto lastUpdateMajor = Util::readMajorVersionFromString(dbLastUpdate);
     const auto lastUpdateMinor = Util::readMinorVersionFromString(dbLastUpdate);
-
+    */
     //////////////////////////////////////////////////////////////////////////////////////////
     // 2. check if update folder exist in *dir*/sql/
-    std::map<uint32_t, DatabaseUpdateFile> updateSqlStore;
+    /*std::map<uint32_t, DatabaseUpdateFile> updateSqlStore;
 
     uint32_t count = 0;
     std::vector<std::string> updateFiles;
@@ -236,5 +240,5 @@ void DatabaseUpdater::applyUpdatesForDatabase(const std::string& database, Datab
                 }
             }
         }
-    }
+    }*/
 }

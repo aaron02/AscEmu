@@ -195,7 +195,7 @@ void WorldSession::handleAuctionSellItem(WorldPacket& recvPacket)
 
         item->setOwner(nullptr);
         item->m_isDirty = true;
-        item->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true, nullptr);
+        item->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true);
 
         auto auction = std::make_unique<Auction>();
         auction->buyoutPrice = srlPacket.buyoutPrice;

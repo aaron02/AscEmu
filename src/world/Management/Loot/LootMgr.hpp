@@ -73,7 +73,7 @@ public:
     // Load Loot Tables
     void loadLoot();
     void loadLootProp();
-    void loadLootTables(std::string const& szTableName, LootTemplateMap* LootTable);
+    void loadLootTables(uint32_t const statementID, LootTemplateMap* LootTable, std::string const szTableName);
     void loadAndGenerateLoot(uint8_t type);
     void addLoot(Loot* loot, uint32_t itemid, std::vector<float> chance, uint32_t mincount, uint32_t maxcount, uint8_t lootDifficulty);
 

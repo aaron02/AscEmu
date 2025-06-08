@@ -3486,7 +3486,7 @@ void ItemInterface::mLoadItemsFromDatabase(QueryResult* result)
 }
 
 /// Item saving
-void ItemInterface::mSaveItemsToDatabase(bool first, QueryBuffer* buf)
+void ItemInterface::mSaveItemsToDatabase(bool first)
 {
     // Make sure durations of temporary enchanted items are saved to db
     sendEnchantDurations();
@@ -3499,11 +3499,11 @@ void ItemInterface::mSaveItemsToDatabase(bool first, QueryBuffer* buf)
         {
             if (IsBagSlot(x) && GetInventoryItem(x)->isContainer())
             {
-                static_cast<Container*>(GetInventoryItem(x))->saveToDB(static_cast<int8_t>(x), first, buf);
+                static_cast<Container*>(GetInventoryItem(x))->saveToDB(static_cast<int8_t>(x), first);
             }
             else
             {
-                GetInventoryItem(x)->saveToDB(INVENTORY_SLOT_NOT_SET, static_cast<int8_t>(x), first, buf);
+                GetInventoryItem(x)->saveToDB(INVENTORY_SLOT_NOT_SET, static_cast<int8_t>(x), first);
             }
         }
     }

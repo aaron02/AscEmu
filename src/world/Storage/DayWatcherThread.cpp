@@ -108,34 +108,50 @@ void DayWatcherThread::dupe_tm_pointer(tm* returnvalue, tm* mypointer)
 
 void DayWatcherThread::update_settings()
 {
-    CharacterDatabase.Execute("REPLACE INTO server_settings VALUES(\'last_arena_update_time\', %u);", m_lastArenaTime);
-    CharacterDatabase.Execute("REPLACE INTO server_settings VALUES(\'last_daily_update_time\', %u);", m_lastDailyTime);
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_REP_SERVER_SETTING_ARENA_UPDATE);
+        stmt->Bind(0, m_lastArenaTime);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_REP_SERVER_SETTING_DAILY_UPDATE);
+        stmt->Bind(0, m_lastDailyTime);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 }
 
 void DayWatcherThread::load_settings()
 {
     m_arenaPeriod = get_timeout_from_string(worldConfig.period.arenaUpdate, WEEKLY);
-    auto result = CharacterDatabase.Query("SELECT setting_value FROM server_settings WHERE setting_id = \'last_arena_update_time\'");
-    if (result)
     {
-        m_lastArenaTime = result->Fetch()[0].asUint32();
-    }
-    else
-    {
-        sLogger.info("DayWatcherThread : Initializing Arena Updates to zero.");
-        m_lastArenaTime = 0;
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_SERVER_SETTING);
+        stmt->Bind(0, "last_arena_update_time");
+
+        auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+        if (result)
+            m_lastArenaTime = result->Fetch()[0].asUint32();
+        else
+        {
+            sLogger.info("DayWatcherThread : Initializing Arena Updates to zero.");
+            m_lastArenaTime = 0;
+        }
     }
 
     m_dailyPeriod = get_timeout_from_string(worldConfig.period.dailyUpdate, DAILY);
-    auto result2 = CharacterDatabase.Query("SELECT setting_value FROM server_settings WHERE setting_id = \'last_daily_update_time\'");
-    if (result2)
     {
-        m_lastDailyTime = result2->Fetch()[0].asUint32();
-    }
-    else
-    {
-        sLogger.info("DayWatcherThread : Initializing Daily Updates to zero.");
-        m_lastDailyTime = 0;
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_SERVER_SETTING);
+        stmt->Bind(0, "last_daily_update_time");
+
+        auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+        if (result)
+            m_lastDailyTime = result->Fetch()[0].asUint32();
+        else
+        {
+            sLogger.info("DayWatcherThread : Initializing Daily Updates to zero.");
+            m_lastDailyTime = 0;
+        }
     }
 }
 
@@ -180,8 +196,8 @@ void DayWatcherThread::update_daily()
 {
     sLogger.info("DayWatcherThread : Running Daily Quest Reset...");
 
-    CharacterDatabase.WaitExecute("UPDATE characters SET finisheddailies = ''");
-    CharacterDatabase.WaitExecute("UPDATE characters SET rbg_daily = '0'");     // Reset RBG
+    CharacterDatabase.ExecuteStatement(CharacterDatabase.CreateStatement(CHAR_UPD_RESET_FINISHED_DAILIES));
+    CharacterDatabase.ExecuteStatement(CharacterDatabase.CreateStatement(CHAR_UPD_RESET_RBG_DAILY));
 
     sObjectMgr.resetDailies();
     m_lastDailyTime = UNIXTIME;
@@ -193,7 +209,9 @@ void DayWatcherThread::update_arena()
 {
     sLogger.info("DayWatcherThread : Running Weekly Arena Point Maintenance...");
 
-    auto result = CharacterDatabase.Query("SELECT guid, arenaPoints FROM characters");
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_GUID_ARENA_POINTS);
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+
     uint32_t arenapointsPerTeam[3] = { 0 };
     if (result)
     {
@@ -273,7 +291,11 @@ void DayWatcherThread::update_arena()
                     sChatHandler.SystemMessage(player->getSession(), "Your arena points have been updated! Check your PvP tab!");
                 }
 
-                CharacterDatabase.Execute("UPDATE characters SET arenaPoints = %u WHERE guid = %u", arenapoints, guid);
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_CHARACTER_ARENA_POINTS);
+                stmt->Bind(0, arenapoints);
+                stmt->Bind(1, guid);
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
             }
         } while (result->NextRow());
     }

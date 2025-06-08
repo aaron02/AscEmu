@@ -2886,17 +2886,27 @@ CachedCharacterInfo* Player::getPlayerInfo() const { return m_playerInfo; }
 
 void Player::changeLooks(uint64_t guid, uint8_t gender, uint8_t skin, uint8_t face, uint8_t hairStyle, uint8_t hairColor, uint8_t facialHair)
 {
-    auto result = CharacterDatabase.Query("SELECT bytes2 FROM `characters` WHERE guid = '%u'", static_cast<uint32_t>(guid));
+    // SELECT bytes2
+    auto stmtSelect = CharacterDatabase.CreateStatement(CHAR_SEL_BYTES2_BY_GUID);
+    stmtSelect->Bind(0, static_cast<uint32_t>(guid));
+    auto result = CharacterDatabase.QueryStatement(std::move(stmtSelect));
     if (!result)
         return;
 
     Field* fields = result->Fetch();
-
     uint32_t player_bytes2 = fields[0].asUint32();
     player_bytes2 &= ~0xFF;
     player_bytes2 |= facialHair;
 
-    CharacterDatabase.Execute("UPDATE `characters` SET gender = '%u', bytes = '%u', bytes2 = '%u' WHERE guid = '%u'", gender, skin | (face << 8) | (hairStyle << 16) | (hairColor << 24), player_bytes2, (uint32_t)guid);
+    // UPDATE gender, bytes, bytes2
+    uint32_t bytes = skin | (face << 8) | (hairStyle << 16) | (hairColor << 24);
+    auto stmtUpdate = CharacterDatabase.CreateStatement(CHAR_UPD_CHARACTER_APPEARANCE);
+    stmtUpdate->Bind(0, gender);
+    stmtUpdate->Bind(1, bytes);
+    stmtUpdate->Bind(2, player_bytes2);
+    stmtUpdate->Bind(3, static_cast<uint32_t>(guid));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmtUpdate));
 }
 
 void Player::changeLanguage(uint64_t guid, uint8_t race)
@@ -2954,76 +2964,112 @@ void Player::changeLanguage(uint64_t guid, uint8_t race)
         return 0;
     };
 
-#if VERSION_STRING < TBC
-    CharacterDatabase.Execute("DELETE FROM `playerspells` WHERE GUID = '%u' AND SpellID IN ('%u', '%u', '%u', '%u', '%u','%u', '%u', '%u', '%u');", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH), getSpellIdForLanguage(SKILL_LANG_TAURAHE), getSpellIdForLanguage(SKILL_LANG_TROLL), getSpellIdForLanguage(SKILL_LANG_GUTTERSPEAK), getSpellIdForLanguage(SKILL_LANG_THALASSIAN), getSpellIdForLanguage(SKILL_LANG_COMMON), getSpellIdForLanguage(SKILL_LANG_DARNASSIAN), getSpellIdForLanguage(SKILL_LANG_DWARVEN), getSpellIdForLanguage(SKILL_LANG_GNOMISH));
-#elif VERSION_STRING < Cata
-    CharacterDatabase.Execute("DELETE FROM `playerspells` WHERE GUID = '%u' AND SpellID IN ('%u', '%u', '%u', '%u', '%u','%u', '%u', '%u', '%u', '%u');", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH), getSpellIdForLanguage(SKILL_LANG_TAURAHE), getSpellIdForLanguage(SKILL_LANG_TROLL), getSpellIdForLanguage(SKILL_LANG_GUTTERSPEAK), getSpellIdForLanguage(SKILL_LANG_THALASSIAN), getSpellIdForLanguage(SKILL_LANG_COMMON), getSpellIdForLanguage(SKILL_LANG_DARNASSIAN), getSpellIdForLanguage(SKILL_LANG_DRAENEI), getSpellIdForLanguage(SKILL_LANG_DWARVEN), getSpellIdForLanguage(SKILL_LANG_GNOMISH));
-#elif VERSION_STRING == Cata
-    CharacterDatabase.Execute("DELETE FROM `playerspells` WHERE GUID = '%u' AND SpellID IN ('%u', '%u', '%u', '%u', '%u','%u', '%u', '%u', '%u', '%u');", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH), getSpellIdForLanguage(SKILL_LANG_TAURAHE), getSpellIdForLanguage(SKILL_LANG_TROLL), getSpellIdForLanguage(SKILL_LANG_GUTTERSPEAK), getSpellIdForLanguage(SKILL_LANG_THALASSIAN), getSpellIdForLanguage(SKILL_LANG_COMMON), getSpellIdForLanguage(SKILL_LANG_DARNASSIAN), getSpellIdForLanguage(SKILL_LANG_DRAENEI), getSpellIdForLanguage(SKILL_LANG_DWARVEN), getSpellIdForLanguage(SKILL_LANG_GNOMISH), getSpellIdForLanguage(SKILL_LANG_GILNEAN), getSpellIdForLanguage(SKILL_LANG_GOBLIN));
-#elif VERSION_STRING == Mop
-    CharacterDatabase.Execute("DELETE FROM `playerspells` WHERE GUID = '%u' AND SpellID IN ('%u', '%u', '%u', '%u', '%u','%u', '%u', '%u', '%u', '%u');", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH), getSpellIdForLanguage(SKILL_LANG_TAURAHE), getSpellIdForLanguage(SKILL_LANG_TROLL), getSpellIdForLanguage(SKILL_LANG_GUTTERSPEAK), getSpellIdForLanguage(SKILL_LANG_THALASSIAN), getSpellIdForLanguage(SKILL_LANG_COMMON), getSpellIdForLanguage(SKILL_LANG_DARNASSIAN), getSpellIdForLanguage(SKILL_LANG_DRAENEI), getSpellIdForLanguage(SKILL_LANG_DWARVEN), getSpellIdForLanguage(SKILL_LANG_GNOMISH), getSpellIdForLanguage(SKILL_LANG_GILNEAN), getSpellIdForLanguage(SKILL_LANG_GOBLIN), getSpellIdForLanguage(SKILL_LANG_PANDAREN_NEUTRAL), getSpellIdForLanguage(SKILL_LANG_PANDAREN_ALLIANCE), getSpellIdForLanguage(SKILL_LANG_PANDAREN_HORDE));
+    std::vector<uint32_t> languageSpells = 
+    {
+    getSpellIdForLanguage(SKILL_LANG_ORCISH),
+    getSpellIdForLanguage(SKILL_LANG_TAURAHE),
+    getSpellIdForLanguage(SKILL_LANG_TROLL),
+    getSpellIdForLanguage(SKILL_LANG_GUTTERSPEAK),
+    getSpellIdForLanguage(SKILL_LANG_THALASSIAN),
+    getSpellIdForLanguage(SKILL_LANG_COMMON),
+    getSpellIdForLanguage(SKILL_LANG_DARNASSIAN),
+    getSpellIdForLanguage(SKILL_LANG_DRAENEI),
+    getSpellIdForLanguage(SKILL_LANG_DWARVEN),
+    getSpellIdForLanguage(SKILL_LANG_GNOMISH),
+
+#if VERSION_STRING >= Cata
+    getSpellIdForLanguage(SKILL_LANG_GILNEAN),
+    getSpellIdForLanguage(SKILL_LANG_GOBLIN),
 #endif
+
+#if VERSION_STRING >= Mop
+    getSpellIdForLanguage(SKILL_LANG_PANDAREN_NEUTRAL),
+    getSpellIdForLanguage(SKILL_LANG_PANDAREN_ALLIANCE),
+    getSpellIdForLanguage(SKILL_LANG_PANDAREN_HORDE),
+#endif
+    };
+
+    for (uint32_t spellId : languageSpells)
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_LANG_SPELL);
+        stmt->Bind(0, static_cast<uint32_t>(guid));
+        stmt->Bind(1, spellId);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
+    auto addLanguageSpellSQL = [](uint32_t guid, uint32_t spellId)
+        {
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_ADD_LANGUAGE_SPELL);
+            stmt->Bind(0, guid);
+            stmt->Bind(1, spellId);
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
+        };
+    
     switch (race)
     {
         case RACE_DWARF:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_DWARVEN));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_DWARVEN));
             break;
 #if VERSION_STRING > Classic
         case RACE_DRAENEI:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_DRAENEI));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_DRAENEI));
             break;
 #endif
         case RACE_GNOME:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_GNOMISH));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_GNOMISH));
             break;
         case RACE_NIGHTELF:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_DARNASSIAN));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_DARNASSIAN));
             break;
         case RACE_UNDEAD:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_GUTTERSPEAK));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_GUTTERSPEAK));
             break;
         case RACE_TAUREN:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_TAURAHE));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_TAURAHE));
             break;
         case RACE_TROLL:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_TROLL));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_TROLL));
             break;
 #if VERSION_STRING > Classic
         case RACE_BLOODELF:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_THALASSIAN));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_THALASSIAN));
             break;
 #endif
 #if VERSION_STRING >= Cata
         case RACE_WORGEN:
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage());
             CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
             CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_GILNEAN));
             break;
         case RACE_GOBLIN:
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_GOBLIN));
             CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
             CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_GOBLIN));
             break;
 #endif
 #if VERSION_STRING >= Mop
         case RACE_PANDAREN_NEUTRAL:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_NEUTRAL));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_NEUTRAL));
             break;
         case RACE_PANDAREN_ALLIANCE:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_ALLIANCE));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_ALLIANCE));
             break;
         case RACE_PANDAREN_HORDE:
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
-            CharacterDatabase.Execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_HORDE));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            addLanguageSpellSQL(static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_HORDE));
             break;
 #endif
     }
@@ -4673,20 +4719,21 @@ void Player::_loadPlayerCooldowns(QueryResult* result)
     } while (result->NextRow());
 }
 
-void Player::_savePlayerCooldowns(QueryBuffer* buf)
+void Player::_savePlayerCooldowns()
 {
     uint32_t mstime = Util::getMSTime();
 
-    if (buf != nullptr)
-        buf->AddQuery("DELETE FROM playercooldowns WHERE player_guid = %u", getGuidLow());
-    else
-        CharacterDatabase.Execute("DELETE FROM playercooldowns WHERE player_guid = %u", getGuidLow());
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_PLAYER_COOLDOWNS);
+        stmt->Bind(0, getGuidLow());
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     for (uint32_t index = 0; index < NUM_COOLDOWN_TYPES; ++index)
     {
-        for (PlayerCooldownMap::iterator cooldownItr = m_cooldownMap[index].begin(); cooldownItr != m_cooldownMap[index].end();)
+        for (auto cooldownItr = m_cooldownMap[index].begin(); cooldownItr != m_cooldownMap[index].end(); )
         {
-            PlayerCooldownMap::iterator nextCooldownItr = cooldownItr++;
+            auto nextCooldownItr = cooldownItr++;
 
             if (mstime >= nextCooldownItr->second.ExpireTime)
             {
@@ -4698,17 +4745,17 @@ void Player::_savePlayerCooldowns(QueryBuffer* buf)
                 continue;
 
             uint32_t seconds = (nextCooldownItr->second.ExpireTime - mstime) / 1000;
+            uint32_t expireTimestamp = seconds + static_cast<uint32_t>(UNIXTIME);
 
-            if (buf != nullptr)
-            {
-                buf->AddQuery("INSERT INTO playercooldowns VALUES(%u, %u, %u, %u, %u, %u)", getGuidLow(),
-                    index, nextCooldownItr->first, seconds + (uint32_t)UNIXTIME, nextCooldownItr->second.SpellId, nextCooldownItr->second.ItemId);
-            }
-            else
-            {
-                CharacterDatabase.Execute("INSERT INTO playercooldowns VALUES(%u, %u, %u, %u, %u, %u)", getGuidLow(),
-                    index, nextCooldownItr->first, seconds + (uint32_t)UNIXTIME, nextCooldownItr->second.SpellId, nextCooldownItr->second.ItemId);
-            }
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_ADD_PLAYER_COOLDOWN);
+            stmt->Bind(0, getGuidLow());
+            stmt->Bind(1, index);
+            stmt->Bind(2, nextCooldownItr->first);
+            stmt->Bind(3, expireTimestamp);
+            stmt->Bind(4, nextCooldownItr->second.SpellId);
+            stmt->Bind(5, nextCooldownItr->second.ItemId);
+
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
     }
 }
@@ -6369,11 +6416,14 @@ void Player::setTutorialValueForId(uint8_t id, uint32_t value)
 
 void Player::loadTutorials()
 {
-    if (auto result = CharacterDatabase.Query("SELECT * FROM tutorials WHERE playerId = %u", getGuidLow()))
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_TUTORIALS);
+    stmt->Bind(0, getGuidLow());
+
+    if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
     {
         auto* const fields = result->Fetch();
         for (uint8_t id = 0; id < 8; ++id)
-            m_tutorials[id] = fields[id + 1].asUint32();
+            m_tutorials[id] = fields[id].asUint32();
     }
     m_tutorialsDirty = false;
 }
@@ -6382,9 +6432,12 @@ void Player::saveTutorials()
 {
     if (m_tutorialsDirty)
     {
-        CharacterDatabase.Execute("DELETE FROM tutorials WHERE playerid = %u;", getGuidLow());
-        CharacterDatabase.Execute("INSERT INTO tutorials VALUES('%u','%u','%u','%u','%u','%u','%u','%u','%u');", getGuidLow(), m_tutorials[0], m_tutorials[1], m_tutorials[2], m_tutorials[3], m_tutorials[4], m_tutorials[5], m_tutorials[6], m_tutorials[7]);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_REP_TUTORIALS);
+        stmt->Bind(0, getGuidLow());
+        for (uint8_t i = 0; i < 8; ++i)
+            stmt->Bind(i + 1, m_tutorials[i]);
 
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
         m_tutorialsDirty = false;
     }
 }
@@ -6632,7 +6685,7 @@ void Player::unEquipOffHandIfRequired()
         // Player has no free slots in inventory, send it by mail
         offHandWeapon->removeFromWorld();
         offHandWeapon->setOwner(nullptr);
-        offHandWeapon->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true, nullptr);
+        offHandWeapon->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true);
         sMailSystem.SendAutomatedMessage(MAIL_TYPE_NORMAL, getGuid(), getGuid(), "There were troubles with your item.", "There were troubles storing your item into your inventory.", 0, 0, offHandWeapon->getGuidLow(), MAIL_STATIONERY_GM);
     }
     else
@@ -7880,7 +7933,11 @@ bool Player::isInGuild() { return getGuild() != nullptr; }
 
 uint32_t Player::getGuildRankFromDB()
 {
-    if (auto result = CharacterDatabase.Query("SELECT playerid, guildRank FROM guild_members WHERE playerid = %u", WoWGuid::getGuidLowPartFromUInt64(getGuid())))
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_SELECT_RANK);
+    stmt->Bind(0, WoWGuid::getGuidLowPartFromUInt64(getGuid()));
+
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+    if (result)
     {
         Field* fields = result->Fetch();
         return fields[1].asUint32();
@@ -9084,15 +9141,18 @@ std::set<uint32_t> Player::getFinishedQuests() const { return m_finishedQuests; 
 // Social
 void Player::loadFriendList()
 {
-    if (auto result = CharacterDatabase.Query("SELECT * FROM social_friends WHERE character_guid = %u", getGuidLow()))
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_SOCIAL_FRIENDS);
+    stmt->Bind(0, getGuidLow());
+
+    if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
     {
         do
         {
             SocialFriends socialFriend;
 
             auto* const socialField = result->Fetch();
-            socialFriend.friendGuid = socialField[1].asUint32();
-            socialFriend.note = socialField[2].asCString();
+            socialFriend.friendGuid = socialField[0].asUint32();
+            socialFriend.note = socialField[1].asCString();
 
             m_socialIFriends.push_back(socialFriend);
 
@@ -9102,12 +9162,15 @@ void Player::loadFriendList()
 
 void Player::loadFriendedByOthersList()
 {
-    if (auto result = CharacterDatabase.Query("SELECT character_guid FROM social_friends WHERE friend_guid = %u", getGuidLow()))
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_SOCIAL_FRIENDED_BY);
+    stmt->Bind(0, getGuidLow());
+
+    if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
     {
         do
         {
             auto* const socialField = result->Fetch();
-            uint32_t friendedByGuid= socialField[0].asUint32();
+            uint32_t friendedByGuid = socialField[0].asUint32();
 
             m_socialFriendedByGuids.push_back(friendedByGuid);
 
@@ -9117,12 +9180,15 @@ void Player::loadFriendedByOthersList()
 
 void Player::loadIgnoreList()
 {
-    if (auto result = CharacterDatabase.Query("SELECT * FROM social_ignores WHERE character_guid = %u", getGuidLow()))
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_SOCIAL_IGNORES);
+    stmt->Bind(0, getGuidLow());
+
+    if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
     {
         do
         {
             auto* const ignoreField = result->Fetch();
-            uint32_t ignoreGuid = ignoreField[1].asUint32();
+            uint32_t ignoreGuid = ignoreField[0].asUint32();
 
             m_socialIgnoring.push_back(ignoreGuid);
 
@@ -9171,8 +9237,12 @@ void Player::addToFriendList(std::string name, std::string note)
 
         // todo: missing FRIEND_LIST_FULL when friend list is full
 
-        CharacterDatabase.Execute("INSERT INTO social_friends VALUES(%u, %u, \'%s\')",
-            getGuidLow(), targetPlayer->getGuidLow(), !note.empty() ? CharacterDatabase.EscapeString(std::string(note)).c_str() : "");
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_SOCIAL_FRIEND);
+        stmt->Bind(0, getGuidLow());
+        stmt->Bind(1, targetPlayer->getGuidLow());
+        stmt->Bind(2, note.empty() ? "" : note);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
 
         SocialFriends socialFriend;
         socialFriend.friendGuid = targetPlayer->getGuidLow();
@@ -9193,7 +9263,11 @@ void Player::removeFromFriendList(uint32_t guid)
     {
         m_session->SendPacket(SmsgFriendStatus(FRIEND_REMOVED, guid).serialise().get());
 
-        CharacterDatabase.Execute("DELETE FROM social_friends WHERE character_guid = %u AND friend_guid = %u", getGuidLow(), guid);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_SOCIAL_FRIEND);
+        stmt->Bind(0, getGuidLow());
+        stmt->Bind(1, guid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
 
         std::lock_guard<std::mutex> guard(m_mutexFriendList);
         m_socialIFriends.erase(std::remove_if(m_socialIFriends.begin(), m_socialIFriends.end(), [&](SocialFriends const& friends) {
@@ -9215,8 +9289,13 @@ void Player::addNoteToFriend(uint32_t guid, std::string note)
         if (friends.friendGuid == guid)
         {
             friends.note = note;
-            CharacterDatabase.Execute("UPDATE social_friends SET note = \'%s\' WHERE character_guid = %u AND friend_guid = %u",
-                !note.empty() ? CharacterDatabase.EscapeString(note).c_str() : "", getGuidLow(), guid);
+
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_UPDATE_SOCIAL_FRIEND_NOTE);
+            stmt->Bind(0, note);
+            stmt->Bind(1, getGuidLow());
+            stmt->Bind(2, guid);
+
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
     }
 }
@@ -9338,7 +9417,11 @@ void Player::addToIgnoreList(std::string name)
 
         // todo: missing FRIEND_IGNORE_FULL when ignore list is full
 
-        CharacterDatabase.Execute("INSERT INTO social_ignores VALUES(%u, %u)", getGuidLow(), targetPlayer->getGuidLow());
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_ADD_SOCIAL_IGNORE);
+        stmt->Bind(0, getGuidLow());
+        stmt->Bind(1, targetPlayer->getGuidLow());
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
 
         std::lock_guard<std::mutex> guard(m_mutexIgnoreList);
         m_socialIgnoring.push_back(targetPlayer->getGuidLow());
@@ -9355,7 +9438,11 @@ void Player::removeFromIgnoreList(uint32_t guid)
 {
     if (isIgnored(guid))
     {
-        CharacterDatabase.Execute("DELETE FROM social_ignores WHERE character_guid = %u AND ignore_guid = %u", getGuidLow(), guid);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_SOCIAL_IGNORE);
+        stmt->Bind(0, getGuidLow());
+        stmt->Bind(1, guid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
 
         std::lock_guard<std::mutex> guard(m_mutexIgnoreList);
         m_socialIgnoring.erase(std::remove(m_socialIgnoring.begin(), m_socialIgnoring.end(), guid), m_socialIgnoring.end());
@@ -12327,7 +12414,11 @@ void Player::removePetCache(uint8_t petId)
     }
 
     // Pet will be deleted from playerpets table when player is saved
-    CharacterDatabase.Execute("DELETE FROM playerpetspells WHERE ownerguid=%u AND petnumber=%u", getGuidLow(), petId);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_PLAYER_PET_SPELLS);
+    stmt->Bind(0, getGuidLow());
+    stmt->Bind(1, petId);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 uint8_t Player::getPetCount() const { return static_cast<uint8_t>(m_cachedPets.size()); }
@@ -12532,13 +12623,23 @@ bool Player::tryPutPetToSlot(uint8_t petId, uint8_t newSlot, bool sendErrors/* =
 
     if (requiresPetSave)
     {
-        // Save only slot and active fields
-        CharacterDatabase.Execute("UPDATE playerpets SET slot = %u, active = %u WHERE ownerguid = %u AND petnumber = %u",
-            oldSlotPet->slot, oldSlotPet->active, getGuidLow(), oldSlotPet->number);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_PLAYER_PET_SLOT_ACTIVE);
+        stmt->Bind(0, oldSlotPet->slot);
+        stmt->Bind(1, oldSlotPet->active);
+        stmt->Bind(2, getGuidLow());
+        stmt->Bind(3, oldSlotPet->number);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+
         if (newSlotPet != nullptr)
         {
-            CharacterDatabase.Execute("UPDATE playerpets SET slot = %u, active = %u WHERE ownerguid = %u AND petnumber = %u",
-                newSlotPet->slot, newSlotPet->active, getGuidLow(), newSlotPet->number);
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_PLAYER_PET_SLOT_ACTIVE);
+            stmt->Bind(0, newSlotPet->slot);
+            stmt->Bind(1, newSlotPet->active);
+            stmt->Bind(2, getGuidLow());
+            stmt->Bind(3, newSlotPet->number);
+
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
     }
 
@@ -12743,8 +12844,10 @@ void Player::loadBoundInstances()
 
     auto group = getGroup();
 
-    //                                             0          1    2           3            4          5
-    auto result = CharacterDatabase.Query("SELECT id, permanent, map, difficulty, extendState, resettime FROM character_instance LEFT JOIN instance ON instance = id WHERE guid =  %u", getGuidLow());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_CHARACTER_INSTANCE);
+    stmt->Bind(0, getGuidLow());
+
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
     if (result)
     {
         do
@@ -12798,7 +12901,12 @@ void Player::loadBoundInstances()
 
             if (deleteInstance)
             {
-                CharacterDatabase.Execute("DELETE FROM character_instance WHERE guid = %u AND instance = %u", getGuidLow(), instanceId);
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_CHARACTER_INSTANCE);
+                stmt->Bind(0, getGuidLow());
+                stmt->Bind(1, instanceId);
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
+
                 continue;
             }
 
@@ -12850,7 +12958,11 @@ void Player::unbindInstance(BoundInstancesMap::iterator& itr, InstanceDifficulty
     {
         if (!unload)
         {
-            CharacterDatabase.Execute("DELETE FROM character_instance WHERE guid = %u AND instance = %u", getGuidLow(), itr->second.save->getInstanceId());
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_CHARACTER_INSTANCE);
+            stmt->Bind(0, getGuidLow());
+            stmt->Bind(1, itr->second.save->getInstanceId());
+
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
 
 #if VERSION_STRING > TBC
@@ -12881,12 +12993,25 @@ InstancePlayerBind* Player::bindToInstance(InstanceSaved* save, bool permanent, 
                 // update the save when the group kills a boss
                 if (permanent != bind.perm || save != bind.save || extendState != bind.extendState)
                 {
-                    CharacterDatabase.Execute("UPDATE character_instance SET instance = %u, permanent = %u, extendState = %u WHERE guid = %u AND instance = %u", save->getInstanceId(), permanent, extendState, getGuidLow(), bind.save->getInstanceId());
+                    auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_CHARACTER_INSTANCE);
+                    stmt->Bind(0, save->getInstanceId());
+                    stmt->Bind(1, permanent);
+                    stmt->Bind(2, extendState);
+                    stmt->Bind(3, getGuidLow());
+                    stmt->Bind(4, bind.save->getInstanceId());
+
+                    CharacterDatabase.ExecuteStatement(std::move(stmt));
                 }
             }
             else
             {
-                CharacterDatabase.Execute("INSERT INTO character_instance (guid, instance, permanent, extendState) VALUES (%u, %u, %u, %u)", getGuidLow(), save->getInstanceId(), permanent, extendState);
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_CHARACTER_INSTANCE);
+                stmt->Bind(0, getGuidLow());
+                stmt->Bind(1, save->getInstanceId());
+                stmt->Bind(2, permanent);
+                stmt->Bind(3, extendState);
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
             }
         }
 
@@ -13115,15 +13240,18 @@ void Player::sendResetInstanceFailed(uint32_t reason, uint32_t MapId)
 
 void Player::loadInstanceTimeRestrictions()
 {
-    auto result = CharacterDatabase.Query("SELECT instanceId, releaseTime FROM account_instance_times WHERE accountId = %u", getSession()->GetAccountId());
-    if (!result)
-        return;
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_ACCOUNT_INSTANCE_TIMES);
+    stmt->Bind(0, getSession()->GetAccountId());
 
-    do
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+    if (result)
     {
-        Field* fields = result->Fetch();
-        m_instanceResetTimes.insert(InstanceTimeMap::value_type(fields[0].asUint32(), fields[1].asUint64()));
-    } while (result->NextRow());
+        do
+        {
+            Field* fields = result->Fetch();
+            m_instanceResetTimes.insert(InstanceTimeMap::value_type(fields[0].asUint32(), fields[1].asUint64()));
+        } while (result->NextRow());
+    }
 }
 
 bool Player::checkInstanceCount(uint32_t instanceId) const
@@ -13146,11 +13274,23 @@ void Player::saveInstanceTimeRestrictions()
     if (m_instanceResetTimes.empty())
         return;
 
-    CharacterDatabase.Execute("DELETE FROM account_instance_times WHERE accountId = %u", getSession()->GetAccountId());
-
-    for (InstanceTimeMap::const_iterator itr = m_instanceResetTimes.begin(); itr != m_instanceResetTimes.end(); ++itr)
+    // Delete existing entries
     {
-        CharacterDatabase.Execute("INSERT INTO account_instance_times (accountId, instanceId, releaseTime) VALUES (%u, %u, %u)", getSession()->GetAccountId(), itr->first, itr->second);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_ACCOUNT_INSTANCE_TIMES);
+        stmt->Bind(0, getSession()->GetAccountId());
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
+    // Insert updated instance times
+    for (const auto& itr : m_instanceResetTimes)
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_ACCOUNT_INSTANCE_TIMES);
+        stmt->Bind(0, getSession()->GetAccountId());
+        stmt->Bind(1, itr.first);
+        stmt->Bind(2, itr.second);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 }
 
@@ -13363,72 +13503,54 @@ void Player::applyFeralAttackPower(bool apply, Item* item)
     modifyBonuses(ITEM_MOD_FERAL_ATTACK_POWER, static_cast<int32_t>(feralAttackPower), apply);
 }
 
-bool Player::saveReputations(bool newCharacter, QueryBuffer* buf)
+bool Player::saveReputations(bool newCharacter)
 {
-    if (!newCharacter && (buf == nullptr))
+    if (!newCharacter)
         return false;
 
-    std::stringstream ds;
     uint32_t guid = getGuidLow();
 
-    ds << "DELETE FROM playerreputations WHERE guid = '";
-    ds << guid;
-    ds << "';";
-
-    if (!newCharacter)
-        buf->AddQueryStr(ds.str());
-    else
-        CharacterDatabase.ExecuteNA(ds.str().c_str());
-
-    for (ReputationMap::iterator itr = m_reputation.begin(); itr != m_reputation.end(); ++itr)
     {
-        std::stringstream ss;
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_REPUTATIONS);
+        stmt->Bind(0, guid);
 
-        ss << "INSERT INTO playerreputations VALUES('";
-        ss << getGuidLow() << "','";
-        ss << itr->first << "','";
-        ss << uint32_t(itr->second->flag) << "','";
-        ss << itr->second->baseStanding << "','";
-        ss << itr->second->standing << "');";
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 
-        if (!newCharacter)
-            buf->AddQueryStr(ss.str());
-        else
-            CharacterDatabase.ExecuteNA(ss.str().c_str());
+    for (const auto& [faction, rep] : m_reputation)
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_REPUTATION);
+        stmt->Bind(0, guid);
+        stmt->Bind(1, faction);
+        stmt->Bind(2, static_cast<uint32_t>(rep->flag));
+        stmt->Bind(3, rep->baseStanding);
+        stmt->Bind(4, rep->standing);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     return true;
 }
 
-bool Player::saveSpells(bool newCharacter, QueryBuffer* buf)
+bool Player::saveSpells(bool newCharacter)
 {
-    if (!newCharacter && buf == nullptr)
+    if (!newCharacter)
         return false;
 
-    std::stringstream ds;
     uint32_t guid = getGuidLow();
 
-    ds << "DELETE FROM playerspells WHERE GUID = '";
-    ds << guid;
-    ds << "';";
-
-    if (!newCharacter)
-        buf->AddQueryStr(ds.str());
-    else
-        CharacterDatabase.ExecuteNA(ds.str().c_str());
-
-    for (const auto& spellid : m_spellSet)
     {
-        std::stringstream ss;
+        auto delStmt = CharacterDatabase.CreateStatement(CHAR_DEL_PLAYER_SPELLS);
+        delStmt->Bind(0, guid);
+        CharacterDatabase.ExecuteStatement(std::move(delStmt));
+    }
 
-        ss << "INSERT INTO playerspells VALUES('";
-        ss << guid << "','";
-        ss << spellid << "');";
-
-        if (!newCharacter)
-            buf->AddQueryStr(ss.str());
-        else
-            CharacterDatabase.ExecuteNA(ss.str().c_str());
+    for (const auto& spellId : m_spellSet)
+    {
+        auto insStmt = CharacterDatabase.CreateStatement(CHAR_INS_PLAYER_SPELL);
+        insStmt->Bind(0, guid);
+        insStmt->Bind(1, spellId);
+        CharacterDatabase.ExecuteStatement(std::move(insStmt));
     }
 
     return true;
@@ -13457,79 +13579,61 @@ bool Player::loadDeletedSpells(QueryResult* result)
     return true;
 }
 
-bool Player::saveDeletedSpells(bool newCharacter, QueryBuffer* buf)
+bool Player::saveDeletedSpells(bool newCharacter)
 {
-    if (!newCharacter && buf == nullptr)
+    if (!newCharacter)
         return false;
 
-    std::stringstream ds;
     uint32_t guid = getGuidLow();
 
-    ds << "DELETE FROM playerdeletedspells WHERE GUID = '";
-    ds << guid;
-    ds << "';";
-
-    if (!newCharacter)
-        buf->AddQueryStr(ds.str());
-    else
-        CharacterDatabase.ExecuteNA(ds.str().c_str());
-
-    for (const auto& spellid : m_deletedSpellSet)
     {
-        std::stringstream ss;
+        auto deleteStmt = CharacterDatabase.CreateStatement(CHAR_DEL_DELETED_SPELLS);
+        deleteStmt->Bind(0, guid);
 
-        ss << "INSERT INTO playerdeletedspells VALUES('";
-        ss << guid << "','";
-        ss << spellid << "');";
+        CharacterDatabase.ExecuteStatement(std::move(deleteStmt));
+    }
 
-        if (!newCharacter)
-            buf->AddQueryStr(ss.str());
-        else
-            CharacterDatabase.ExecuteNA(ss.str().c_str());
+    for (const auto& spellId : m_deletedSpellSet)
+    {
+        auto insertStmt = CharacterDatabase.CreateStatement(CHAR_INS_DELETED_SPELLS);
+        insertStmt->Bind(0, guid);
+        insertStmt->Bind(1, spellId);
+
+        CharacterDatabase.ExecuteStatement(std::move(insertStmt));
     }
 
     return true;
 }
 
-bool Player::saveSkills(bool newCharacter, QueryBuffer* buf)
+bool Player::saveSkills(bool newCharacter)
 {
-    if (!newCharacter && buf == nullptr)
+    if (!newCharacter)
         return false;
 
-    std::stringstream ds;
     uint32_t guid = getGuidLow();
 
-    ds << "DELETE FROM playerskills WHERE GUID = '";
-    ds << guid;
-    ds << "';";
-
-    if (!newCharacter)
-        buf->AddQueryStr(ds.str());
-    else
-        CharacterDatabase.ExecuteNA(ds.str().c_str());
-
-    for (SkillMap::iterator itr = m_skills.begin(); itr != m_skills.end(); ++itr)
     {
-        uint32_t skillid = itr->first;
-        uint32_t currval = itr->second.CurrentValue;
-        uint32_t maxval = itr->second.MaximumValue;
+        auto deleteStmt = CharacterDatabase.CreateStatement(CHAR_DEL_SKILLS);
+        deleteStmt->Bind(0, guid);
+        CharacterDatabase.ExecuteStatement(std::move(deleteStmt));
+    }
 
-        // Skip only initialized values
+    for (const auto& itr : m_skills)
+    {
+        uint32_t skillid = itr.first;
+        uint32_t currval = itr.second.CurrentValue;
+        uint32_t maxval = itr.second.MaximumValue;
+
         if (currval == 0)
             continue;
 
-        std::stringstream ss;
+        auto insertStmt = CharacterDatabase.CreateStatement(CHAR_INS_SKILLS);
+        insertStmt->Bind(0, guid);
+        insertStmt->Bind(1, skillid);
+        insertStmt->Bind(2, currval);
+        insertStmt->Bind(3, maxval);
 
-        ss << "INSERT INTO playerskills VALUES('";
-        ss << guid << "','";
-        ss << skillid << "','";
-        ss << currval << "','";
-        ss << maxval << "');";
-
-        if (!newCharacter)
-            buf->AddQueryStr(ss.str());
-        else
-            CharacterDatabase.ExecuteNA(ss.str().c_str());
+        CharacterDatabase.ExecuteStatement(std::move(insertStmt));
     }
 
     return true;
@@ -13806,13 +13910,14 @@ void Player::eventDeath()
     setServersideDrunkValue(0);
 }
 
-void Player::_savePet(QueryBuffer* buf, bool updateCurrentPetCache/* = false*/, Pet* currentPet/* = nullptr*/)
+void Player::_savePet(bool updateCurrentPetCache/* = false*/, Pet* currentPet/* = nullptr*/)
 {
     // Remove any existing m_playerCreateInfo
-    if (buf == nullptr)
-        CharacterDatabase.Execute("DELETE FROM playerpets WHERE ownerguid = %u", getGuidLow());
-    else
-        buf->AddQuery("DELETE FROM playerpets WHERE ownerguid = %u", getGuidLow());
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_PLAYERPETS);
+        stmt->Bind(0, getGuidLow());
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     const auto* summon = currentPet != nullptr ? currentPet : getPet();
     if (summon && summon->IsInWorld())    // update PlayerPets array with current pet's m_playerCreateInfo
@@ -13830,24 +13935,26 @@ void Player::_savePet(QueryBuffer* buf, bool updateCurrentPetCache/* = false*/, 
         {
             // save pet spellz
             auto pn = summon->getPetId();
-            if (buf == nullptr)
-                CharacterDatabase.Execute("DELETE FROM playerpetspells WHERE ownerguid=%u AND petnumber=%u", getGuidLow(), pn);
-            else
-                buf->AddQuery("DELETE FROM playerpetspells WHERE ownerguid=%u AND petnumber=%u", getGuidLow(), pn);
+
+            {
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_PLAYERPETSPELLS);
+                stmt->Bind(0, getGuidLow());
+                stmt->Bind(1, pn);
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
+            }
 
             for (const auto& [spell, state] : summon->getSpellMap())
             {
-                if (buf == nullptr)
-                    CharacterDatabase.Execute("INSERT INTO playerpetspells VALUES(%u, %u, %u, %u)", getGuidLow(), pn, spell->getId(), state);
-                else
-                    buf->AddQuery("INSERT INTO playerpetspells VALUES(%u, %u, %u, %u)", getGuidLow(), pn, spell->getId(), state);
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_PLAYERPETSPELL);
+                stmt->Bind(0, getGuidLow());
+                stmt->Bind(1, pn);
+                stmt->Bind(2, spell->getId());
+                stmt->Bind(3, state);
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
             }
         }
     }
-
-    std::stringstream ss;
-
-    ss.rdbuf()->str("");
 
     std::optional<uint8_t> currentPetId = std::nullopt;
     if (getPet() != nullptr && getPet()->isPermanentSummon())
@@ -13904,79 +14011,82 @@ void Player::_savePet(QueryBuffer* buf, bool updateCurrentPetCache/* = false*/, 
             }
         }
 
-        ss.rdbuf()->str("");
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_REPLACE_PLAYER_PET);
+        stmt->Bind(0, getGuidLow());
+        stmt->Bind(1, petCache->number);
+        stmt->Bind(2, petCache->type);
+        stmt->Bind(3, petCache->name);
+        stmt->Bind(4, petCache->entry);
+        stmt->Bind(5, petCache->model);
+        stmt->Bind(6, petCache->level);
+        stmt->Bind(7, petCache->xp);
+        stmt->Bind(8, petCache->slot);
+        stmt->Bind(9, petCache->active);
+        stmt->Bind(10, petCache->alive);
+        stmt->Bind(11, petCache->actionbar);
+        stmt->Bind(12, static_cast<int32_t>(petCache->reset_time));
+        stmt->Bind(13, petCache->reset_cost);
+        stmt->Bind(14, petCache->spellid);
+        stmt->Bind(15, petCache->petstate);
+        stmt->Bind(16, petCache->talentpoints);
+        stmt->Bind(17, petCache->current_power);
+        stmt->Bind(18, petCache->current_hp);
+        stmt->Bind(19, petCache->current_happiness);
+        stmt->Bind(20, petCache->renamable);
 
-        ss << "REPLACE INTO playerpets VALUES('"
-            << getGuidLow() << "','"
-            << std::to_string(petCache->number) << "','"
-            << std::to_string(petCache->type) << "','"
-            << petCache->name << "','"
-            << petCache->entry << "','"
-            << petCache->model << "','"
-            << petCache->level << "','"
-            << petCache->xp << "','"
-            << std::to_string(petCache->slot) << "','"
-            << petCache->active << "','"
-            << petCache->alive << "','"
-            << petCache->actionbar << "','"
-            << static_cast<long>(petCache->reset_time) << "','"
-            << petCache->reset_cost << "','"
-            << petCache->spellid << "','"
-            << std::to_string(petCache->petstate) << "','"
-            << petCache->talentpoints << "','"
-            << petCache->current_power << "','"
-            << petCache->current_hp << "','"
-            << petCache->current_happiness << "','"
-            << petCache->renamable << "')";
-
-        if (buf == nullptr)
-            CharacterDatabase.ExecuteNA(ss.str().c_str());
-        else
-            buf->AddQueryStr(ss.str());
-
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+        
         savedPetIds.push_back(petCache->number);
         ++itr;
     }
 
     // Cleanup as well pet spell table by removing spells from non existant pets
-    ss.rdbuf()->str("");
-    ss << "DELETE FROM playerpetspells WHERE ownerguid=" << getGuidLow();
-    if (!savedPetIds.empty())
-    {
-        ss << " AND petnumber NOT IN (";
-        for (auto itr = savedPetIds.cbegin(); itr != savedPetIds.cend();)
-        {
-            ss << std::to_string(*itr);
-            if (++itr != savedPetIds.cend())
-                ss << ", ";
-            else
-                ss << ")";
-        }
-    }
+    std::unordered_set<uint8_t> keepIds(savedPetIds.begin(), savedPetIds.end());
 
-    if (buf == nullptr)
-        CharacterDatabase.ExecuteNA(ss.str().c_str());
-    else
-        buf->AddQueryStr(ss.str());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_PET_SPELL_PETNUMBERS);
+    stmt->Bind(0, getGuidLow());
+
+    if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
+    {
+        do
+        {
+            Field* row = result->Fetch();
+            uint8_t petnumber = row[0].asUint8();
+
+            if (keepIds.find(petnumber) == keepIds.end())
+            {
+                auto deleteStmt = CharacterDatabase.CreateStatement(CHAR_DEL_PLAYER_PET_SPELLS);
+                deleteStmt->Bind(0, getGuidLow());
+                deleteStmt->Bind(1, petnumber);
+
+                CharacterDatabase.ExecuteStatement(std::move(deleteStmt));
+            }
+
+        } while (result->NextRow());
+    }
 }
 
-void Player::_savePetSpells(QueryBuffer* buf)
+void Player::_savePetSpells()
 {
-    // Remove any existing
-    if (buf == nullptr)
-        CharacterDatabase.Execute("DELETE FROM playersummonspells WHERE ownerguid=%u", getGuidLow());
-    else
-        buf->AddQuery("DELETE FROM playersummonspells WHERE ownerguid=%u", getGuidLow());
+    // Remove any existing entries
+    {
+        auto delStmt = CharacterDatabase.CreateStatement(CHAR_DEL_SUMMON_SPELLS);
+        delStmt->Bind(0, getGuidLow());
+
+        CharacterDatabase.ExecuteStatement(std::move(delStmt));
+    }
 
     // Save summon spells
-    for (std::map<uint32_t, std::set<uint32_t> >::iterator itr = m_summonSpells.begin(); itr != m_summonSpells.end(); ++itr)
+    for (const auto& [entry, spells] : m_summonSpells)
     {
-        for (std::set<uint32_t>::iterator it = itr->second.begin(); it != itr->second.end(); ++it)
+        for (uint32_t spellId : spells)
         {
-            if (buf == nullptr)
-                CharacterDatabase.Execute("INSERT INTO playersummonspells VALUES(%u, %u, %u)", getGuidLow(), itr->first, (*it));
-            else
-                buf->AddQuery("INSERT INTO playersummonspells VALUES(%u, %u, %u)", getGuidLow(), itr->first, (*it));
+            auto insStmt = CharacterDatabase.CreateStatement(CHAR_INS_SUMMON_SPELL);
+            insStmt->Bind(0, getGuidLow());
+            insStmt->Bind(1, entry);
+            insStmt->Bind(2, spellId);
+
+            CharacterDatabase.ExecuteStatement(std::move(insStmt));
         }
     }
 }
@@ -14147,14 +14257,6 @@ void Player::_loadPetSpells(QueryResult* result)
 void Player::saveToDB(bool newCharacter /* =false */)
 {
     bool in_arena = false;
-    std::unique_ptr<QueryBuffer> bufPtr = nullptr;
-    QueryBuffer* buf = nullptr;
-    if (!newCharacter)
-    {
-        bufPtr = std::make_unique<QueryBuffer>();
-        buf = bufPtr.get();
-    }
-
     if (m_bg != nullptr && m_bg->isArena())
         in_arena = true;
 
@@ -14185,53 +14287,24 @@ void Player::saveToDB(bool newCharacter /* =false */)
     if (m_cheats.hasTaxiCheat)
         active_cheats |= PLAYER_CHEAT_TAXI;
 
-    std::stringstream ss;
+    auto getExploredZoneAsString = [this]() -> std::string {
+        std::ostringstream oss;
+        for (uint8_t i = 0; i < WOWPLAYER_EXPLORED_ZONES_COUNT; ++i)
+        {
+            if (i != 0)
+                oss << ',';
+            oss << static_cast<uint32_t>(getExploredZone(i));
+        }
+        return oss.str();
+        };
 
-    ss << "REPLACE INTO characters VALUES (" << getGuidLow() << ", " << getSession()->GetAccountId() << ", " << "'" << m_name << "', "
-        << uint32_t(getRace()) << ", " << uint32_t(getClass()) << ", " << uint32_t(getGender()) << ", " << getFactionTemplate() << ", ";
-
-    ss << uint32_t(getLevel()) << ", " << getXp() << ", " << active_cheats << ", ";
-
-    // exploration data
-    ss << "'";
-    for (uint8_t i = 0; i < WOWPLAYER_EXPLORED_ZONES_COUNT; ++i)
-        ss << getExploredZone(i) << ",";
-    ss << "', ";
-
-    saveSkills(newCharacter, buf);
-
-    ss << getWatchedFaction() << ", "
-#if VERSION_STRING > Classic
-        << getChosenTitle() << ", "
-#else
-        << uint32_t(0) << ", "
-#endif
-
-#if VERSION_STRING > Classic
-        << getKnownTitles(0) << ", "
-#else
-        << uint32_t(0) << ", "
-#endif
-
-#if VERSION_STRING < WotLK
-        << uint32_t(0) << ", " << uint32_t(0) << ", "
-#else
-        << getKnownTitles(1) << ", " << getKnownTitles(2) << ", "
-#endif
-        << getCoinage() << ", ";
-
-    if (getClass() == MAGE || getClass() == PRIEST || (getClass() == WARLOCK))
-        ss << uint32_t(0) << ", "; // make sure ammo slot is 0 for these classes, otherwise it can mess up wand shoot
-    else
-#if VERSION_STRING < Cata
-        ss << getAmmoId() << ", ";
-#else
-        ss << uint32_t(0) << ", ";
-#endif
-
-    ss << getFreePrimaryProfessionPoints() << ", ";
-
-    ss << m_loadHealth << ", " << m_loadMana << ", " << uint32_t(getPvpRank()) << ", " << getPlayerBytes() << ", " << getPlayerBytes2() << ", ";
+    auto getPlayedTimeAsString = [this]() -> std::string {
+        std::ostringstream oss;
+        oss << static_cast<uint32_t>(m_playedTime[0]) << ' '
+            << static_cast<uint32_t>(m_playedTime[1]) << ' '
+            << static_cast<uint32_t>(m_playedTime[2]);
+        return oss.str();
+        };
 
     // Remove un-needed and problematic player flags from being saved :p
     if (hasPlayerFlags(PLAYER_FLAG_PARTY_LEADER))
@@ -14264,204 +14337,261 @@ void Player::saveToDB(bool newCharacter /* =false */)
         removePlayerFlags(PLAYER_FLAG_SANCTUARY);
 #endif
 
-    ss << getPlayerFlags() << ", " << std::to_string(getEnabledActionBars()) << ", ";
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_REP_CHARACTER);
+    stmt->Bind(0, getGuidLow());
+    stmt->Bind(1, getSession()->GetAccountId());
+    stmt->Bind(2, m_name);
+    stmt->Bind(3, getRace());
+    stmt->Bind(4, getClass());
+    stmt->Bind(5, getGender());
+    stmt->Bind(6, getFactionTemplate());
+    stmt->Bind(7, getLevel());
+    stmt->Bind(8, getXp());
+    stmt->Bind(9, active_cheats);
+
+    stmt->Bind(10, getExploredZoneAsString());
+    stmt->Bind(11, getWatchedFaction());
+
+#if VERSION_STRING > Classic
+    stmt->Bind(12, getChosenTitle());
+#else
+    stmt->Bind(12, 0);
+#endif
+
+#if VERSION_STRING > Classic
+    stmt->Bind(13, getKnownTitles(0));
+#else
+    stmt->Bind(13, 0);
+#endif
+
+#if VERSION_STRING > TBC
+    stmt->Bind(14, getKnownTitles(1));
+    stmt->Bind(15, getKnownTitles(2));
+#else
+    stmt->Bind(14, 0);
+    tmt->Bind(15, 0);
+#endif
+
+    stmt->Bind(16, getCoinage());
+
+    if (getClass() == MAGE || getClass() == PRIEST || (getClass() == WARLOCK))
+        stmt->Bind(17, 0);
+    else
+#if VERSION_STRING < Cata
+        stmt->Bind(17, getAmmoId());
+#else
+        stmt->Bind(17, 0);
+#endif
+
+    stmt->Bind(18, getFreePrimaryProfessionPoints());
+    stmt->Bind(19, m_loadHealth);
+    stmt->Bind(20, m_loadMana);
+    stmt->Bind(21, getPvpRank());
+    stmt->Bind(22, getPlayerBytes());
+    stmt->Bind(23, getPlayerBytes2());
+    stmt->Bind(24, getPlayerFlags());
+    stmt->Bind(25, getEnabledActionBars());
 
     // if its an arena, save the entry coords instead of the normal position
     if (in_arena)
-        ss << getBGEntryPosition().x << ", " << getBGEntryPosition().y << ", " << getBGEntryPosition().z << ", " << getBGEntryPosition().o << ", " << getBGEntryMapId() << ", ";
+    {
+        stmt->Bind(26, getBGEntryPosition().x);
+        stmt->Bind(27, getBGEntryPosition().y);
+        stmt->Bind(28, getBGEntryPosition().z);
+        stmt->Bind(29, getBGEntryPosition().o);
+        stmt->Bind(30, getBGEntryMapId());
+    }
     else
-        ss << m_position.x << ", " << m_position.y << ", " << m_position.z << ", " << m_position.o << ", " << m_mapId << ", ";
+    {
+        stmt->Bind(26, m_position.x);
+        stmt->Bind(27, m_position.y);
+        stmt->Bind(28, m_position.z);
+        stmt->Bind(29, m_position.o);
+        stmt->Bind(30, m_mapId);
+    }
 
-    ss << m_zoneId << ", ";
+    stmt->Bind(31, m_zoneId);
+    stmt->Bind(32, m_taxi->saveTaximaskNodeToString());
+    stmt->Bind(33, m_banned);
+    stmt->Bind(34, m_banreason);
+    stmt->Bind(35, uint32_t(UNIXTIME));
+    stmt->Bind(36, getSession()->_loggingOut || newCharacter ? 0 : 1);
+    stmt->Bind(37, getBindPosition().x);
+    stmt->Bind(38, getBindPosition().y);
+    stmt->Bind(39, getBindPosition().z);
+    stmt->Bind(40, getBindPosition().o);
+    stmt->Bind(41, getBindMapId());
+    stmt->Bind(42, getBindZoneId());
+    stmt->Bind(43, uint32_t(m_isResting));
+    stmt->Bind(44, uint32_t(m_restState));
+    stmt->Bind(45, uint32_t(m_restAmount));
+    stmt->Bind(46, getPlayedTimeAsString());
+    stmt->Bind(47, uint32_t(m_deathState));
+    stmt->Bind(48, m_talentResetsCount);
+    stmt->Bind(49, m_firstLogin);
+    stmt->Bind(50, m_loginFlag);
+    stmt->Bind(51, m_arenaPoints);
+    stmt->Bind(52, m_stableSlotCount);
+    stmt->Bind(53, in_arena ? getBGEntryInstanceId() : m_instanceId);
+    stmt->Bind(54, getBGEntryMapId());
+    stmt->Bind(55, getBGEntryPosition().x);
+    stmt->Bind(56, getBGEntryPosition().y);
+    stmt->Bind(57, getBGEntryPosition().z);
+    stmt->Bind(58, getBGEntryPosition().o);
+    stmt->Bind(59, getBGEntryInstanceId());
 
-    // taxi mask
-    ss << "'";
+    stmt->Bind(60, m_taxi->saveTaxiDestinationsToString());
 
-    ss << m_taxi->saveTaximaskNodeToString();
-
-    ss << "', ";
-
-    ss << m_banned << ", '" << CharacterDatabase.EscapeString(m_banreason) << "', " << uint32_t(UNIXTIME) << ", ";
-
-    //online state
-    if (getSession()->_loggingOut || newCharacter)
-        ss << "0, ";
-    else
-        ss << "1, ";
-
-    ss << getBindPosition().x << ", " << getBindPosition().y << ", " << getBindPosition().z << ", " << getBindPosition().o << ", " << getBindMapId() << ", " << getBindZoneId() << ", ";
-
-    ss << uint32_t(m_isResting) << ", " << uint32_t(m_restState) << ", " << uint32_t(m_restAmount) << ", ";
-
-    ss << "'" << uint32_t(m_playedTime[0]) << " " << uint32_t(m_playedTime[1]) << " " << uint32_t(playedt) << "', ";
-
-    ss << uint32_t(m_deathState) << ", " << m_talentResetsCount << ", " << m_firstLogin << ", " << m_loginFlag << ", " << m_arenaPoints << ", " << (uint32_t)m_stableSlotCount << ", ";
-
-    // instances
-    if (in_arena)
-        ss << getBGEntryInstanceId() << ", ";
-    else
-        ss << m_instanceId << ", ";
-
-    ss << getBGEntryMapId() << ", " << getBGEntryPosition().x << ", " << getBGEntryPosition().y << ", " << getBGEntryPosition().z << ", " << getBGEntryPosition().o << ", " << getBGEntryInstanceId() << ", ";
-
-    // taxi destination
-    ss << "'";
-    ss << m_taxi->saveTaxiDestinationsToString();
-    ss << "', ";
-
-    // last node
     if (FlightPathMovementGenerator* flight = dynamic_cast<FlightPathMovementGenerator*>(getMovementManager()->getCurrentMovementGenerator()))
-        ss << flight->getCurrentNode() << ", ";
+        stmt->Bind(61, flight->getCurrentNode());
     else
-        ss << uint32_t(0) << ", ";
+        stmt->Bind(61, 0);
 
     const auto transport = this->GetTransport();
-    if (!transport)
-        ss << uint32_t(0) << ",'0','0','0','0'" << ", ";
-    else
-        ss << transport->getEntry() << ",'" << GetTransOffsetX() << "','" << GetTransOffsetY() << "','" << GetTransOffsetZ() << "','" << GetTransOffsetO() << "'" << ", ";
 
-    saveSpells(newCharacter, buf);
+    stmt->Bind(62, transport ? transport->getEntry() : 0);
+    stmt->Bind(63, transport ? GetTransOffsetX() : 0);
+    stmt->Bind(64, transport ? GetTransOffsetY() : 0);
+    stmt->Bind(65, transport ? GetTransOffsetZ() : 0);
+    stmt->Bind(66, transport ? GetTransOffsetO() : 0);
 
-    saveDeletedSpells(newCharacter, buf);
-
-    saveReputations(newCharacter, buf);
-
-    // Add player action bars
-#ifdef FT_DUAL_SPEC
-    for (uint8_t s = 0; s < MAX_SPEC_COUNT; ++s)
-    {
-        ss << "'";
+    auto getActionBarsString = [this](uint8_t specIndex) -> std::string {
+        std::ostringstream oss;
         for (uint8_t i = 0; i < PLAYER_ACTION_BUTTON_COUNT; ++i)
         {
-            ss << uint32_t(m_specs[s].getActionButton(i).Action) << ","
-                << uint32_t(m_specs[s].getActionButton(i).Type) << ","
-                << uint32_t(m_specs[s].getActionButton(i).Misc) << ",";
+            const auto& btn =
+#ifdef FT_DUAL_SPEC
+                m_specs[specIndex]
+#else
+                m_spec
+#endif
+                .getActionButton(i);
+
+            oss << static_cast<uint32_t>(btn.Action) << ","
+                << static_cast<uint32_t>(btn.Type) << ","
+                << static_cast<uint32_t>(btn.Misc) << ",";
         }
-        ss << "'" << ", ";
-    }
-#else
-    ss << "'";
-    for (uint8_t i = 0; i < PLAYER_ACTION_BUTTON_COUNT; ++i)
-    {
-        ss << uint32_t(m_spec.getActionButton(i).Action) << ","
-            << uint32_t(m_spec.getActionButton(i).Type) << ","
-            << uint32_t(m_spec.getActionButton(i).Misc) << ",";
-    }
-    ss << "'" << ", " << "''" << ", ";
-#endif
+        return oss.str();
+        };
 
-    if (!newCharacter)
-    {
-        saveAuras(ss);
-        ss << ", ";
-    }
-    else
-    {
-        ss << "''" << ", ";
-    }
 
-    // Add player finished quests
-    ss << "'";
-    for (auto finishedQuests = m_finishedQuests.begin(); finishedQuests != m_finishedQuests.end(); ++finishedQuests)
-        ss << (*finishedQuests) << ",";
-    ss << "'" << ", ";
+    stmt->Bind(67, getActionBarsString(0));
+    stmt->Bind(68, getActionBarsString(1));
 
-    // add finished dailies
-    ss << "'";
-    for (auto finishedDailies : getFinishedDailies())
-        ss << finishedDailies << ",";
-    ss << "'" << ", ";
 
-    ss << m_honorRolloverTime << ", " << m_killsToday << ", " << m_killsYesterday << ", " << m_killsLifetime << ", " << m_honorToday << ", " << m_honorYesterday << ", " << m_honorPoints << ", ";
+    std::stringstream ss;
+    saveAuras(ss);
+    stmt->Bind(69, newCharacter ? "" : ss.str());
 
-    ss << uint32_t(getDrunkValue()) << ", ";
+    auto getFinishedQuestsAsString = [this]() -> std::string {
+        std::ostringstream oss;
+        for (auto const& questId : m_finishedQuests)
+            oss << questId << ",";
+        return oss.str();
+        };
 
-    // TODO Remove
+    auto getFinishedDailiesAsString = [this]() -> std::string {
+        std::ostringstream oss;
+        for (auto const& dailyId : getFinishedDailies())
+            oss << dailyId << ",";
+        return oss.str();
+        };
+
+    stmt->Bind(70, getFinishedQuestsAsString());
+    stmt->Bind(71, getFinishedDailiesAsString());
+
+    stmt->Bind(72, m_honorRolloverTime);
+    stmt->Bind(73, m_killsToday);
+    stmt->Bind(74, m_killsYesterday);
+    stmt->Bind(75, m_killsLifetime);
+    stmt->Bind(76, m_honorToday);
+    stmt->Bind(77, m_honorYesterday);
+    stmt->Bind(78, m_honorPoints);
+
+    stmt->Bind(79, getDrunkValue());
+
+    auto getGlyphString = [](PlayerSpec& spec) -> std::string
+        {
+            std::ostringstream oss;
+            for (uint8_t i = 0; i < GLYPHS_COUNT; ++i)
+                oss << uint32_t(spec.getGlyph(i)) << ",";
+            return oss.str();
+        };
+
+    auto getTalentString = [](PlayerSpec& spec) -> std::string
+        {
+            std::ostringstream oss;
+            for (const auto& [talentId, rank] : spec.getTalents())
+                oss << uint32_t(talentId) << "," << uint32_t(rank) << ",";
+            return oss.str();
+        };
+
 #ifdef FT_DUAL_SPEC
-    for (uint8_t s = 0; s < MAX_SPEC_COUNT; ++s)
-    {
-        ss << "'";
-        for (uint8_t i = 0; i < GLYPHS_COUNT; ++i)
-            ss << uint32_t(m_specs[s].getGlyph(i)) << ",";
+    stmt->Bind(80, getGlyphString(m_specs[0]));
+    stmt->Bind(81, getTalentString(m_specs[0]));
 
-        ss << "', '";
-        for (const auto& [talentId, rank] : m_specs[s].getTalents())
-            ss << uint32_t(talentId) << "," << uint32_t(rank) << ",";
-
-        ss << "'" << ", ";
-    }
+    stmt->Bind(82, getGlyphString(m_specs[1]));
+    stmt->Bind(83, getTalentString(m_specs[1]));
 #else
-    ss << "'', '";
-    for (const auto& [talentId, rank] : m_spec.getTalents())
-        ss << talentId << "," << rank << ",";
+    stmt->Bind(80, getGlyphString(m_spec));
+    stmt->Bind(81, getTalentString(m_spec));
 
-    ss << "', '', '', ";
+    stmt->Bind(82, "");
+    stmt->Bind(83, "");
+    stmt->Bind(84, "");
 #endif
 
-    ss << uint32_t(m_talentSpecsCount) << ", " << uint32_t(m_talentActiveSpec) << ", ";
+    stmt->Bind(84, m_talentSpecsCount);
+    stmt->Bind(85, m_talentActiveSpec);
 
-    ss << "'";
+    auto getTalentPointsString = [this]() -> std::string {
 #ifdef FT_DUAL_SPEC
-    ss << uint32_t(m_specs[SPEC_PRIMARY].getTalentPoints()) << " " << uint32_t(m_specs[SPEC_SECONDARY].getTalentPoints());
+        return std::to_string(m_specs[SPEC_PRIMARY].getTalentPoints()) + " " +
+            std::to_string(m_specs[SPEC_SECONDARY].getTalentPoints());
 #else
-    ss << uint32_t(m_spec.getTalentPoints()) << " 0";
+        return std::to_string(m_spec.getTalentPoints()) + " 0";
 #endif
-    ss << "'" << ", ";
+        };
+
+    stmt->Bind(86, getTalentPointsString());
 
 #if VERSION_STRING < Cata
-    ss << "'" << uint32_t(0) << "', ";
+    stmt->Bind(87, 0);
 #else
-    ss << "'" << uint32_t(m_FirstTalentTreeLock) << "', ";
+    stmt->Bind(87, int32_t(m_FirstTalentTreeLock));
 #endif
 
-    ss << "'" << m_phase << "', ";
+    stmt->Bind(88, m_phase);
+    stmt->Bind(89, m_isXpGainAllowed ? 1 : 0);
 
-    uint32_t xpfield = 0;
+    auto getExtendedDataString = [this]() -> std::string {
+        std::stringstream ss;
+        for (uint32_t offset = getSizeOfStructure(WoWObject); offset < getSizeOfStructure(WoWPlayer); ++offset)
+            ss << m_uint32Values[offset] << ";";
+        return ss.str();
+        };
 
-    if (m_isXpGainAllowed)
-        xpfield = 1;
+    stmt->Bind(90, worldConfig.server.saveExtendedCharData ? getExtendedDataString() : "");
+    stmt->Bind(91, m_resetTalents ? 1 : 0);
+    stmt->Bind(92, this->hasWonRbgToday() ? 1 : 0);
+    stmt->Bind(93, m_dungeonDifficulty);
+    stmt->Bind(94, m_raidDifficulty);
 
-    ss << "'" << xpfield << "'" << ", ";
-
-    const bool saveData = worldConfig.server.saveExtendedCharData;
-    if (saveData)
-    {
-        ss << "'";
-        for (uint32_t offset = getSizeOfStructure(WoWObject); offset < getSizeOfStructure(WoWPlayer); offset++)
-            ss << uint32_t(m_uint32Values[offset]) << ";";
-        ss << "'" << ", ";
-    }
-    else
-    {
-        ss << "'', ";
-    }
-
-    if (m_resetTalents)
-        ss << uint32_t(1);
-    else
-        ss << uint32_t(0);
-
-    ss << ", ";
-
-    ss << uint32_t(this->hasWonRbgToday()) << ", " << uint32_t(m_dungeonDifficulty) << ", " << uint32_t(m_raidDifficulty);
-    ss << ")";
-
-    if (newCharacter)
-        CharacterDatabase.WaitExecuteNA(ss.str().c_str());
-    else
-        buf->AddQueryNA(ss.str().c_str());
-
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
+    
     // Save Other related player stuff
+    saveSkills(newCharacter);
+    saveSpells(newCharacter);
+    saveDeletedSpells(newCharacter);
+    saveReputations(newCharacter);
 
     // Inventory
-    getItemInterface()->mSaveItemsToDatabase(newCharacter, buf);
+    getItemInterface()->mSaveItemsToDatabase(newCharacter);
 
-    getItemInterface()->m_EquipmentSets.SavetoDB(buf);
+    getItemInterface()->m_EquipmentSets.SavetoDB();
 
     // save quest progress
-    _saveQuestLogEntry(buf);
+    _saveQuestLogEntry();
 
     // Tutorials
     saveTutorials();
@@ -14470,10 +14600,10 @@ void Player::saveToDB(bool newCharacter /* =false */)
     //\todo Is this really necessary? Tickets will always be saved on creation, update and so on...
     GM_Ticket* ticket = sTicketMgr.getGMTicketByPlayer(getGuid());
     if (ticket != nullptr)
-        sTicketMgr.saveGMTicket(ticket, buf);
+        sTicketMgr.saveGMTicket(ticket);
 
     // Cooldown Items
-    _savePlayerCooldowns(buf);
+    _savePlayerCooldowns();
 
     // Instance Timed Lockout
     saveInstanceTimeRestrictions();
@@ -14481,26 +14611,25 @@ void Player::saveToDB(bool newCharacter /* =false */)
     // Pets
     if (getClass() == HUNTER || getClass() == WARLOCK)
     {
-        _savePet(buf, true);
-        _savePetSpells(buf);
+        _savePet(true);
+        _savePetSpells();
     }
+
     m_nextSave = Util::getMSTime() + worldConfig.getIntRate(INTRATE_SAVE);
 #if VERSION_STRING > TBC
-    m_achievementMgr->saveToDb(buf);
+    m_achievementMgr->saveToDb();
 #endif
-
-    if (buf)
-        CharacterDatabase.AddQueryBuffer(std::move(bufPtr));
 }
 
-void Player::_saveQuestLogEntry(QueryBuffer* buf)
+void Player::_saveQuestLogEntry()
 {
     for (uint32_t removeableQuestId : m_removequests)
     {
-        if (buf == nullptr)
-            CharacterDatabase.Execute("DELETE FROM questlog WHERE player_guid=%u AND quest_id=%u", getGuidLow(), removeableQuestId);
-        else
-            buf->AddQuery("DELETE FROM questlog WHERE player_guid=%u AND quest_id=%u", getGuidLow(), removeableQuestId);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_QUEST_LOG);
+        stmt->Bind(0, getGuidLow());
+        stmt->Bind(1, removeableQuestId);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     m_removequests.clear();
@@ -14508,7 +14637,7 @@ void Player::_saveQuestLogEntry(QueryBuffer* buf)
     for (auto& questlogEntry : m_questlog)
     {
         if (questlogEntry != nullptr)
-            questlogEntry->saveToDB(buf);
+            questlogEntry->saveToDB();
     }
 }
 
@@ -14539,39 +14668,76 @@ namespace PlayerQuery
 
 bool Player::loadFromDB(uint32_t guid)
 {
-    auto q = std::make_unique<AsyncQuery>(std::make_unique<SQLClassCallbackP0<Player>>(this, &Player::loadFromDBProc));
-
-    q->AddQuery("SELECT * FROM characters WHERE guid = %u AND login_flags = %u", guid, (uint32_t)LOGIN_NO_FLAG); // 0
-    q->AddQuery("SELECT * FROM tutorials WHERE playerId = %u", guid); // 1
-    q->AddQuery("SELECT cooldown_type, cooldown_misc, cooldown_expire_time, cooldown_spellid, cooldown_itemid FROM playercooldowns WHERE player_guid = %u", guid); // 2
-    q->AddQuery("SELECT * FROM questlog WHERE player_guid = %u", guid); // 3
-    q->AddQuery("SELECT * FROM playeritems WHERE ownerguid = %u ORDER BY containerslot ASC", guid); // 4
-    q->AddQuery("SELECT * FROM playerpets WHERE ownerguid = %u ORDER BY petnumber", guid); // 5
-    q->AddQuery("SELECT * FROM playersummonspells where ownerguid = %u ORDER BY entryid", guid); // 6
-    q->AddQuery("SELECT * FROM mailbox WHERE player_guid = %u", guid); // 7
-
-    // social
-    q->AddQuery("SELECT friend_guid, note FROM social_friends WHERE character_guid = %u", guid); // 8
-    q->AddQuery("SELECT character_guid FROM social_friends WHERE friend_guid = %u", guid); // 9
-    q->AddQuery("SELECT ignore_guid FROM social_ignores WHERE character_guid = %u", guid); // 10
-
-
-    q->AddQuery("SELECT * FROM equipmentsets WHERE ownerguid = %u", guid);  // 11
-    q->AddQuery("SELECT faction, flag, basestanding, standing FROM playerreputations WHERE guid = %u", guid); //12
-    q->AddQuery("SELECT SpellID FROM playerspells WHERE GUID = %u", guid);  // 13
-    q->AddQuery("SELECT SpellID FROM playerdeletedspells WHERE GUID = %u", guid);  // 14
-    q->AddQuery("SELECT SkillID, CurrentValue, MaximumValue FROM playerskills WHERE GUID = %u", guid);  // 15
-
-    //Achievements
-    q->AddQuery("SELECT achievement, date FROM character_achievement WHERE guid = '%u'", guid); // 16
-    q->AddQuery("SELECT criteria, counter, date FROM character_achievement_progress WHERE guid = '%u'", guid); // 17
-
-    // queue it!
     setGuidLow(guid);
-    CharacterDatabase.QueueAsyncQuery(std::move(q));
+
+    std::vector<std::shared_ptr<PreparedStatement>> stmts;
+
+    stmts.clear();
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_CHARACTER));
+    stmts[0]->Bind(0, guid);
+    stmts[0]->Bind(1, static_cast<uint32_t>(LOGIN_NO_FLAG));
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_TUTORIALS));
+    stmts[1]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_COOLDOWNS));
+    stmts[2]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_QUESTLOG));
+    stmts[3]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_PLAYER_ITEMS));
+    stmts[4]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_PLAYER_PETS));
+    stmts[5]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_SUMMON_SPELLS));
+    stmts[6]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_MAILBOX));
+    stmts[7]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_SOCIAL_FRIENDS));
+    stmts[8]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_SOCIAL_FRIENDED_BY));
+    stmts[9]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_SOCIAL_IGNORES));
+    stmts[10]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_EQUIPMENT_SETS));
+    stmts[11]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_REPUTATION));
+    stmts[12]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_SPELLS));
+    stmts[13]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_DELETED_SPELLS));
+    stmts[14]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_SKILLS));
+    stmts[15]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_ACHIEVEMENTS));
+    stmts[16]->Bind(0, guid);
+
+    stmts.push_back(CharacterDatabase.CreateStatement(CHAR_SEL_ACHIEVEMENT_PROGRESS));
+    stmts[17]->Bind(0, guid);
+
+    CharacterDatabase.AsyncMultiQueryStatement(std::move(stmts),
+        [this](std::vector<std::unique_ptr<QueryResult>> results)
+        {
+            loadFromDBProc(std::move(results));
+        });
+
     return true;
 }
 
+/*
 void Player::loadFromDBProc(QueryResultVector& results)
 {
     auto startTime = Util::TimeNow();
@@ -15307,6 +15473,102 @@ void Player::loadFromDBProc(QueryResultVector& results)
 
     auto timeToNow = Util::GetTimeDifferenceToNow(startTime);
     sLogger.info("Time for playerloading: {} ms", static_cast<uint32_t>(timeToNow));
+}
+*/
+
+void Player::loadFromDBProc(std::vector<std::unique_ptr<QueryResult>> results)
+{
+    loadBasicCharacterDataFromDB(std::move(results[PlayerQuery::LoginFlags]));
+    loadTutorialsFromDB(std::move(results[PlayerQuery::Tutorials]));
+    loadCooldownsFromDB(std::move(results[PlayerQuery::Cooldowns]));
+    loadQuestLogFromDB(std::move(results[PlayerQuery::Questlog]));
+    loadItemsFromDB(std::move(results[PlayerQuery::Items]));
+    loadPetsFromDB(std::move(results[PlayerQuery::Pets]));
+    loadSummonSpellsFromDB(std::move(results[PlayerQuery::SummonSpells]));
+    loadMailboxFromDB(std::move(results[PlayerQuery::Mailbox]));
+    loadSocialFriendsFromDB(std::move(results[PlayerQuery::Friends]));
+    loadSocialFriendsForFromDB(std::move(results[PlayerQuery::FriendsFor]));
+    loadSocialIgnoresFromDB(std::move(results[PlayerQuery::Ignoring]));
+    loadEquipmentSetsFromDB(std::move(results[PlayerQuery::EquipmentSets]));
+    loadReputationsFromDB(std::move(results[PlayerQuery::Reputation]));
+    loadSpellsFromDB(std::move(results[PlayerQuery::Spells]));
+    loadDeletedSpellsFromDB(std::move(results[PlayerQuery::DeletedSpells]));
+    loadSkillsFromDB(std::move(results[PlayerQuery::Skills]));
+    loadAchievementsFromDB(std::move(results[PlayerQuery::Achievements]));
+    loadAchievementProgressFromDB(std::move(results[PlayerQuery::AchievementProgress]));
+}
+
+void Player::loadBasicCharacterDataFromDB(std::unique_ptr<QueryResult> result)
+{
+
+}
+
+void Player::loadTutorialsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadCooldownsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadQuestLogFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadItemsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadPetsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadSummonSpellsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadMailboxFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadSocialFriendsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadSocialFriendsForFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadSocialIgnoresFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadEquipmentSetsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadReputationsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadSpellsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadDeletedSpellsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadSkillsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadAchievementsFromDB(std::unique_ptr<QueryResult> result)
+{
+}
+
+void Player::loadAchievementProgressFromDB(std::unique_ptr<QueryResult> result)
+{
 }
 
 void Player::_loadQuestLogEntry(QueryResult* result)

@@ -20,92 +20,6 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Storage/WDB/WDBStores.hpp"
 #include "Storage/WDB/WDBStructures.hpp"
 
-//.npc addagent
-bool ChatHandler::HandleNpcAddAgentCommand(const char* args, WorldSession* m_session)
-{
-    //new
-    auto creature_target = GetSelectedCreature(m_session, true);
-    if (creature_target == nullptr)
-        return true;
-
-    uint32_t ai_type;
-    uint32_t procEvent;
-    uint32_t procChance;
-    uint32_t maxcount;
-    uint32_t spellId;
-    uint32_t spellType;
-    uint32_t spelltargetType;
-    uint32_t spellCooldown;
-    float floatMisc1;
-    uint32_t Misc2;
-
-    if (sscanf(args, "%u %u %u %u %u %u %u %u %f %u", &ai_type, &procEvent, &procChance, &maxcount, &spellId, &spellType, &spelltargetType, &spellCooldown, &floatMisc1, &Misc2) != 10)
-    {
-        RedSystemMessage(m_session, "Command must be in format: .npc add trainerspell <ai_type> <procEvent> <procChance> <maxcount> <spellId> <spellType> <spelltarget_overwrite> <spellCooldown> <floatMisc1> <Misc2>.");
-        return true;
-    }
-
-    auto spell_entry = sSpellMgr.getSpellInfo(spellId);
-    if (spell_entry == nullptr)
-    {
-        RedSystemMessage(m_session, "Spell %u is not invalid!", spellId);
-        return true;
-    }
-
-    SystemMessage(m_session, "Added agent_type %u for spell %u to creature %s (%u).", ai_type, spellId, creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getEntry());
-    sGMLog.writefromsession(m_session, "added agent_type %u for spell %u to creature %s (%u).", ai_type, spellId, creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getEntry());
-    WorldDatabase.Execute("INSERT INTO ai_agents VALUES(%u, 4, %u, %u, %u, %u, %u, %u, %u, %u, %f, %u",
-        creature_target->getEntry(), ai_type, procEvent, procChance, maxcount, spellId, spellType, spelltargetType, spellCooldown, floatMisc1, Misc2);
-
-    auto ai_spell = std::make_unique<AI_Spell>();
-    ai_spell->agent = static_cast<uint16_t>(ai_type);
-    ai_spell->procChance = procChance;
-    ai_spell->procCount = maxcount;
-    ai_spell->spell = spell_entry;
-    ai_spell->spellType = static_cast<uint8_t>(spellType);
-    ai_spell->spelltargetType = static_cast<uint8_t>(spelltargetType);
-    ai_spell->floatMisc1 = floatMisc1;
-    ai_spell->Misc2 = Misc2;
-    ai_spell->cooldown = spellCooldown;
-    ai_spell->procCounter = 0;
-    ai_spell->cooldowntime = 0;
-    ai_spell->minrange = spell_entry->getMinRange();
-    ai_spell->maxrange = spell_entry->getMaxRange();
-
-    if (auto* creatureProperties = const_cast<CreatureProperties*>(creature_target->GetCreatureProperties()))
-    {
-        if (!spell_entry->isPassive())
-            creatureProperties->castable_spells.emplace_back(spell_entry->getId());
-        else
-            creatureProperties->start_auras.emplace(spell_entry->getId());
-    }
-
-    switch (ai_type)
-    {
-        case AGENT_MELEE:
-            creature_target->getAIInterface()->setMeleeDisabled(false);
-            break;
-        case AGENT_RANGED:
-            creature_target->getAIInterface()->m_canRangedAttack = true;
-            break;
-        case AGENT_FLEE:
-            creature_target->getAIInterface()->m_canFlee = true;
-            break;
-        case AGENT_SPELL:
-            creature_target->getAIInterface()->addSpellToList(std::move(ai_spell));
-            break;
-        case AGENT_CALLFORHELP:
-            creature_target->getAIInterface()->m_canCallForHelp = true;
-            break;
-        default:
-        {
-            RedSystemMessage(m_session, "Invalid ai_type %u", ai_type);
-            break;
-        }
-    }
-    return true;
-}
-
 bool ChatHandler::HandleNpcAppearCommand(const char* /*_*/, WorldSession* session)
 {
     const auto target = GetSelectedCreature(session);
@@ -567,29 +481,6 @@ bool ChatHandler::HandleNpcInfoCommand(const char* /*args*/, WorldSession* m_ses
     return true;
 }
 
-//.npc listagent
-bool ChatHandler::HandleNpcListAIAgentCommand(const char* /*args*/, WorldSession* m_session)
-{
-    auto creature_target = GetSelectedCreature(m_session, true);
-    if (creature_target == nullptr)
-        return true;
-
-    auto result = WorldDatabase.Query("SELECT * FROM ai_agents where entry=%u", creature_target->getEntry());
-    if (result == nullptr)
-    {
-        RedSystemMessage(m_session, "Selected Creature %s (%u) has no entries in ai_agents table!", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getEntry());
-        return true;
-    }
-    SystemMessage(m_session, "Agent list for Creature %s (%u)", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getEntry());
-    do
-    {
-        Field* fields = result->Fetch();
-        SystemMessage(m_session, "-- agent: %u | spellId: %u | event: %u | chance: %u | maxcount: %u", fields[1].asUint32(), fields[5].asUint32(), fields[2].asUint32(), fields[3].asUint32(), fields[4].asUint32());
-    } while (result->NextRow());
-
-    return true;
-}
-
 //.npc listloot
 bool ChatHandler::HandleNpcListLootCommand(const char* args, WorldSession* m_session)
 {
@@ -597,44 +488,49 @@ bool ChatHandler::HandleNpcListLootCommand(const char* args, WorldSession* m_ses
     if (creature_target == nullptr)
         return true;
 
-    auto loot_result = WorldDatabase.Query("SELECT itemid, normal10percentchance, heroic10percentchance, normal25percentchance, heroic25percentchance, mincount, maxcount FROM loot_creatures WHERE entryid=%u;", creature_target->getEntry());
-    if (loot_result != nullptr)
+    auto stmt = WorldDatabase.CreateStatement(WORLD_LOOT_CREATURES_BY_ENTRY);
+    stmt->Bind(0, creature_target->getEntry());
+    auto loot_result = WorldDatabase.QueryStatement(std::move(stmt));
+
+    if (!loot_result)
     {
-        uint8_t numFound = 0;
+        RedSystemMessage(m_session, "No loot in loot_creatures table for %s (%u).", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getEntry());
+        return true;
+    }
 
-        uint32_t minQuality = 0;
-        if (*args)
-            minQuality = std::stoul(args);
+    uint8_t numFound = 0;
 
-        SystemMessage(m_session, "Listing loot for Creature %s (%u)", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getEntry());
+    uint32_t minQuality = 0;
+    if (*args)
+        minQuality = std::stoul(args);
 
-        do
-        {
-            Field* field = loot_result->Fetch();
+    SystemMessage(m_session, "Listing loot for Creature %s (%u)", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getEntry());
 
-            auto item_proto = sMySQLStore.getItemProperties(field[0].asUint32());
-            if (item_proto == nullptr || item_proto->Quality < minQuality)
-                continue;
+    do
+    {
+        Field* field = loot_result->Fetch();
 
-            RedSystemMessage(m_session, "ItemID: %u %s", item_proto->ItemId, sMySQLStore.getItemLinkByProto(item_proto, m_session->language).c_str());
-            SystemMessage(m_session, "-- N10 (%3.2lf) N25 (%3.2lf) H10 (%3.2lf) H25 (%3.2lf) min/max (%u/%u)", field[1].asFloat(), field[3].asFloat(), field[2].asFloat(), field[4].asFloat(), field[5].asUint32(), field[6].asUint32());
+        auto item_proto = sMySQLStore.getItemProperties(field[0].asUint32());
+        if (item_proto == nullptr || item_proto->Quality < minQuality)
+            continue;
 
-            ++numFound;
-        } while (loot_result->NextRow() && (numFound <= 25));
+        RedSystemMessage(m_session, "ItemID: %u %s", item_proto->ItemId, sMySQLStore.getItemLinkByProto(item_proto, m_session->language).c_str());
+        SystemMessage(m_session, "-- N10 (%3.2lf) N25 (%3.2lf) H10 (%3.2lf) H25 (%3.2lf) min/max (%u/%u)",
+            field[1].asFloat(), field[3].asFloat(), field[2].asFloat(), field[4].asFloat(),
+            field[5].asUint32(), field[6].asUint32());
 
-        if (numFound > 25)
-        {
-            RedSystemMessage(m_session, "More than 25 results found. Use .npc listloot <min quality> to increase the results.");
-        }
-        else
-        {
-            SystemMessage(m_session, "%hhu results found.", numFound);
-        }
+        ++numFound;
+    } while (loot_result->NextRow() && numFound <= 25);
+
+    if (numFound > 25)
+    {
+        RedSystemMessage(m_session, "More than 25 results found. Use .npc listloot <min quality> to increase the results.");
     }
     else
     {
-        RedSystemMessage(m_session, "No loot in loot_creatures table for %s (%u).", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getEntry());
+        SystemMessage(m_session, "%hhu results found.", numFound);
     }
+
     return true;
 }
 
@@ -919,7 +815,13 @@ bool ChatHandler::HandleNpcVendorAddItemCommand(const char* args, WorldSession* 
     ItemProperties const* tmpItem = sMySQLStore.getItemProperties(item);
     if (tmpItem)
     {
-        WorldDatabase.Execute("INSERT INTO vendors VALUES (%u, %u, %u, 0, 0, %u", selected_creature->getEntry(), item, amount, costid);
+        auto stmt = WorldDatabase.CreateStatement(WORLD_VENDOR_INSERT);
+        stmt->Bind(0, selected_creature->getEntry());
+        stmt->Bind(1, item);
+        stmt->Bind(2, amount);
+        stmt->Bind(3, costid);
+
+        WorldDatabase.ExecuteStatement(std::move(stmt));
 
         selected_creature->AddVendorItem(item, amount, item_extended_cost);
 
@@ -977,7 +879,11 @@ bool ChatHandler::HandleNpcVendorRemoveItemCommand(const char* args, WorldSessio
     {
         uint32_t creatureId = selected_creature->getEntry();
 
-        WorldDatabase.Execute("DELETE FROM vendors WHERE entry = %u AND item = %u", creatureId, itemguid);
+        auto stmt = WorldDatabase.CreateStatement(WORLD_VENDOR_DELETE);
+        stmt->Bind(0, creatureId);
+        stmt->Bind(1, itemguid);
+
+        WorldDatabase.ExecuteStatement(std::move(stmt));
 
         selected_creature->RemoveVendorItem(itemguid);
         ItemProperties const* tmpItem = sMySQLStore.getItemProperties(itemguid);
@@ -1050,26 +956,26 @@ bool ChatHandler::HandleNpcSetCanFlyCommand(const char* /*args*/, WorldSession* 
     if (creature_target == nullptr)
         return true;
 
-    if (creature_target->IsFlying())
+    const bool wasFlying = creature_target->IsFlying();
+    creature_target->setMoveCanFly(!wasFlying);
+
+    if (creature_target->m_spawn != nullptr)
     {
-        creature_target->setMoveCanFly(false);
+        auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_CANFLY_UPDATE);
+        stmt->Bind(0, static_cast<uint8_t>(wasFlying ? 1 : 0));
+        stmt->Bind(1, creature_target->spawnid);
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
 
-        if (creature_target->m_spawn != nullptr)
-            WorldDatabase.Execute("UPDATE %s SET CanFly = 1 WHERE id = %u AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), creature_target->spawnid, VERSION_STRING, VERSION_STRING);
-
-        GreenSystemMessage(m_session, "CanFly permanent set from 0 to 1 for Creature %s (%u).", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid);
-        sGMLog.writefromsession(m_session, "changed npc CanFly for creature_spawns ID: %u [%s] from 0 to 1", creature_target->spawnid, creature_target->GetCreatureProperties()->Name.c_str());
+        WorldDatabase.ExecuteStatement(std::move(stmt));
     }
-    else
-    {
-        creature_target->setMoveCanFly(true);
 
-        if (creature_target->m_spawn != nullptr)
-            WorldDatabase.Execute("UPDATE %s SET CanFly = 0 WHERE id = %u AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+    GreenSystemMessage(m_session, "CanFly permanent set from %d to %d for Creature %s (%u).", wasFlying ? 0 : 1, wasFlying ? 1 : 0,
+        creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid);
 
-        GreenSystemMessage(m_session, "CanFly permanent set from 1 to 0 for Creature %s (%u).", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid);
-        sGMLog.writefromsession(m_session, "changed npc CanFly for creature_spawns ID: %u [%s] from 1 to 0", creature_target->spawnid, creature_target->GetCreatureProperties()->Name.c_str());
-    }
+    sGMLog.writefromsession(m_session, "changed npc CanFly for creature_spawns ID: %u [%s] from %d to %d",
+        creature_target->spawnid, creature_target->GetCreatureProperties()->Name.c_str(), wasFlying ? 0 : 1, wasFlying ? 1 : 0);
+
     return true;
 }
 
@@ -1146,7 +1052,6 @@ bool ChatHandler::HandleNpcSetEquipCommand(const char* args, WorldSession* m_ses
 bool ChatHandler::HandleNpcSetEmoteCommand(const char* args, WorldSession* m_session)
 {
     uint32_t emote;
-
     if (sscanf(args, "%u", &emote) != 1)
     {
         RedSystemMessage(m_session, "Command must be at least in format: .npc set emote <emote>.");
@@ -1162,10 +1067,20 @@ bool ChatHandler::HandleNpcSetEmoteCommand(const char* args, WorldSession* m_ses
     creature_target->setEmoteState(emote);
 
     if (creature_target->m_spawn != nullptr)
-        WorldDatabase.Execute("UPDATE %s SET emote_state = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), emote, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+    {
+        auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_EMOTE_STATE_UPDATE);
+        stmt->Bind(0, emote);
+        stmt->Bind(1, creature_target->spawnid);
+        stmt->Bind(2, VERSION_STRING);
+        stmt->Bind(3, VERSION_STRING);
+
+        WorldDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     GreenSystemMessage(m_session, "Emote permanent set from %u to %u for spawn ID: %u.", old_emote, emote, creature_target->spawnid);
-    sGMLog.writefromsession(m_session, "changed npc emote of %s ID: %u from %u to %u", creature_target->spawnid, creature_target->GetCreatureProperties()->Name.c_str(), old_emote, emote);
+    sGMLog.writefromsession(m_session, "changed npc emote of %u [%s] from %u to %u", creature_target->spawnid,
+        creature_target->GetCreatureProperties()->Name.c_str(), old_emote, emote);
+
     return true;
 }
 
@@ -1212,7 +1127,15 @@ bool ChatHandler::HandleNpcSetFlagsCommand(const char* args, WorldSession* m_ses
     creature_target->addNpcFlags(npc_flags);
 
     if (creature_target->m_spawn != nullptr)
-        WorldDatabase.Execute("UPDATE %s SET flags = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), npc_flags, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+    {
+        auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_FLAGS_UPDATE);
+        stmt->Bind(0, npc_flags);
+        stmt->Bind(1, creature_target->spawnid);
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+        WorldDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     GreenSystemMessage(m_session, "Flags changed in spawns table from %u to %u for spawn ID: %u. You may need to clean your client cache.", old_npc_flags, npc_flags, creature_target->spawnid);
     sGMLog.writefromsession(m_session, "changed npc flags of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid, old_npc_flags, npc_flags);
@@ -1240,8 +1163,15 @@ bool ChatHandler::HandleNpcSetPhaseCommand(const char* args, WorldSession* m_ses
     creature_target->setPhase(PHASE_SET, npc_phase);
 
     if (creature_target->m_spawn != nullptr)
-        WorldDatabase.Execute("UPDATE %s SET phase = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), npc_phase, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+    {
+        auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_SPAWN_PHASE_UPDATE);
+        stmt->Bind(0, npc_phase);
+        stmt->Bind(1, creature_target->spawnid);
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
 
+        WorldDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     GreenSystemMessage(m_session, "Phase changed in spawns table from %u to %u for spawn ID: %u.", old_npc_phase, npc_phase, creature_target->spawnid);
     sGMLog.writefromsession(m_session, "changed npc phase of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid, old_npc_phase, npc_phase);
@@ -1269,13 +1199,22 @@ bool ChatHandler::HandleNpcSetStandstateCommand(const char* args, WorldSession* 
     creature_target->setStandState(standstate);
 
     if (creature_target->m_spawn != nullptr)
-        WorldDatabase.Execute("UPDATE %s SET standstate = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), standstate, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+    {
+        auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_SPAWN_STANDSTATE_UPDATE);
+        stmt->Bind(0, standstate);
+        stmt->Bind(1, creature_target->spawnid);
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+        WorldDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     GreenSystemMessage(m_session, "Standstate changed in spawns table from %u to %u for spawn ID: %u.", old_standstate, standstate, creature_target->spawnid);
     sGMLog.writefromsession(m_session, "changed npc standstate of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid, old_standstate, standstate);
-    
+
     return true;
 }
+
 
 //.npc set entry
 bool ChatHandler::HandleNpcChangeEntry(const char* args, WorldSession* m_session)

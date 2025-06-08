@@ -34,12 +34,31 @@ bool GuildBankEventLogEntry::isMoneyEvent() const
 
 void GuildBankEventLogEntry::saveGuildLogToDB() const
 {
-    CharacterDatabase.Execute("DELETE FROM guild_bank_logs WHERE guildId = %u AND logGuid = %u AND tabId = %u",
-        mGuildId, mGuid, mBankTabId);
+    // DELETE
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_LOG_DELETE);
+        stmt->Bind(0, mGuildId);
+        stmt->Bind(1, mGuid);
+        stmt->Bind(2, mBankTabId);
 
-    CharacterDatabase.Execute("INSERT INTO guild_bank_logs VALUES('%u', '%u', '%u', '%u', '%u', '%llu', '%u', '%u', '%llu')",
-        mGuildId, mGuid, mBankTabId, (uint32_t)mEventType, mPlayerGuid, mItemOrMoney, (uint32_t)mItemStackCount,
-        (uint32_t)mDestTabId, mTimestamp);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
+    // INSERT
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_LOG_INSERT);
+        stmt->Bind(0, mGuildId);
+        stmt->Bind(1, mGuid);
+        stmt->Bind(2, mBankTabId);
+        stmt->Bind(3, static_cast<uint32_t>(mEventType));
+        stmt->Bind(4, mPlayerGuid);
+        stmt->Bind(5, mItemOrMoney);
+        stmt->Bind(6, static_cast<uint32_t>(mItemStackCount));
+        stmt->Bind(7, static_cast<uint32_t>(mDestTabId));
+        stmt->Bind(8, mTimestamp);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 }
 
 #if VERSION_STRING >= Cata

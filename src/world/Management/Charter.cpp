@@ -41,30 +41,36 @@ Charter::~Charter() = default;
 
 void Charter::saveToDB()
 {
-    CharacterDatabase.Execute("DELETE FROM charters WHERE charterId = %u;", m_charterId);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_CHARTER_REPLACE);
+    stmt->Bind(0, m_charterId);
+    stmt->Bind(1, m_charterType);
+    stmt->Bind(2, m_leaderGuid);
+    stmt->Bind(3, m_guildName);
+    stmt->Bind(4, m_itemGuid);
 
-    std::stringstream ss;
-    ss << "INSERT INTO charters VALUES(" << m_charterId << "," << m_charterType << "," << m_leaderGuid << ",'" << m_guildName << "'," << m_itemGuid;
+    size_t i = 5;
+    for (const auto& guid : m_signatures)
+        stmt->Bind(i++, guid);
 
-    for (const auto playerGuid : m_signatures)
-        ss << "," << playerGuid;
+    for (; i < 14; ++i)
+        stmt->Bind(i, uint64_t(0));
 
-    for (uint8_t i = getSignatureCount(); i < 9; ++i)
-        ss << ",0";
-
-    ss << ")";
-    CharacterDatabase.Execute(ss.str().c_str());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Charter::destroy()
 {
-    CharacterDatabase.Execute("DELETE FROM charters WHERE charterId = %u", m_charterId);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_CHARTER_DELETE);
+    stmt->Bind(0, m_charterId);
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 
     for (const auto playerGuid : m_signatures)
     {
         if (Player* player = sObjectMgr.getPlayer(playerGuid))
             player->unsetCharter(m_charterType);
     }
+
+    sObjectMgr.removeCharter(this);
 
     sObjectMgr.removeCharter(this);
 }

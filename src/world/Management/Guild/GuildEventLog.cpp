@@ -24,9 +24,16 @@ GuildEventLogEntry::~GuildEventLogEntry()
 
 void GuildEventLogEntry::saveGuildLogToDB() const
 {
-    CharacterDatabase.Execute("DELETE FROM guild_logs WHERE guildId = %u AND logGuid = %u", mGuildId, mGuid);
-    CharacterDatabase.Execute("INSERT INTO guild_logs VALUES(%u, %u, %u, %u, %u, %u, %llu)",
-        mGuildId, mGuid, uint8_t(mEventType), mPlayerGuid1, mPlayerGuid2, (uint32_t)mNewRank, mTimestamp);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_LOG_REPLACE);
+    stmt->Bind(0, mGuildId);
+    stmt->Bind(1, mGuid);
+    stmt->Bind(2, uint8_t(mEventType));
+    stmt->Bind(3, mPlayerGuid1);
+    stmt->Bind(4, mPlayerGuid2);
+    stmt->Bind(5, static_cast<uint32_t>(mNewRank));
+    stmt->Bind(6, mTimestamp);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 #if VERSION_STRING >= Cata

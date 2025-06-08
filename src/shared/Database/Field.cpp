@@ -8,11 +8,14 @@ This file is released under the MIT license. See README-MIT for more information
 #include <cstdint>
 
 bool Field::isSet() const { return m_value ? true : false; }
-void Field::setValue(char* value) { m_value = value; }
+void Field::setValue(const char* value) { m_value = value; }
 
-const char* Field::asCString() const { return m_value; }
+const char* Field::asCString() const { return m_value ? m_value : ""; }
 
 float Field::asFloat() const { return m_value ? Util::stringToFloat(m_value) : 0.0f; }
+
+double Field::asDouble() const { return m_value ? Util::stringToDouble(m_value) : 0.0; }
+
 bool Field::asBool() const { return m_value ? Util::stringToBool(m_value) : false; }
 
 uint8_t Field::asUint8(bool _silencedError) const { return m_value ? Util::stringToUint8(m_value, _silencedError) : 0U; }

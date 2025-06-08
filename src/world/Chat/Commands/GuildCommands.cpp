@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
@@ -181,7 +181,13 @@ bool ChatHandler::HandleRenameGuildCommand(const char* args, WorldSession* m_ses
         return true;
     }
     GreenSystemMessage(m_session, "Changed guild name of %s to %s. This will take effect next restart.", selected_player->getGuild()->getName().c_str(), args);
-    CharacterDatabase.Execute("UPDATE guilds SET `guildName` = \'%s\' WHERE `guildId` = '%u'", CharacterDatabase.EscapeString(std::string(args)).c_str(), selected_player->getGuild()->getId());
+
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_NAME_UPDATE_BY_ID);
+    stmt->Bind(0, std::string(args));
+    stmt->Bind(1, selected_player->getGuild()->getId());
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
+    
     sGMLog.writefromsession(m_session, "Changed guild name of '%s' to '%s'", selected_player->getGuild()->getName().c_str(), args);
 
     return true;

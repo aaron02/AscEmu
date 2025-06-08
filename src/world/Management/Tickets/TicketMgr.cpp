@@ -53,7 +53,10 @@ TicketMgr& TicketMgr::getInstance()
 void TicketMgr::initialize()
 {
     m_nextTicketId = 0;
-    auto result = CharacterDatabase.Query("SELECT MAX(ticketid) FROM gm_tickets");
+
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GM_TICKET_MAX_ID);
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+
     if (result)
     {
         m_nextTicketId = result->Fetch()[0].asUint32();
@@ -75,7 +78,7 @@ uint32_t TicketMgr::generateNextTicketId()
 GM_Ticket* TicketMgr::createGMTicket(Player const* player, AscEmu::Packets::CmsgGmTicketCreate const& srlPacket)
 {
     auto* ticket = m_ticketList.emplace_back(std::make_unique<GM_Ticket>(player, srlPacket)).get();
-    saveGMTicket(ticket, nullptr);
+    saveGMTicket(ticket);
     return ticket;
 }
 
@@ -86,8 +89,10 @@ GM_Ticket* TicketMgr::createGMTicket(Field const* fields)
 
 void TicketMgr::loadGMTickets()
 {
-    auto result = CharacterDatabase.Query("SELECT ticketid, playerGuid, name, level, map, posX, posY, posZ, message, timestamp, deleted, assignedto, comment FROM gm_tickets");
-    if (result == nullptr)
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GM_TICKET_SELECT_ALL);
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+
+    if (!result)
     {
         sLogger.info("TicketMgr : 0 active GM Tickets loaded.");
         return;
@@ -102,85 +107,49 @@ void TicketMgr::loadGMTickets()
     sLogger.info("ObjectMgr : {} active GM Tickets loaded.", result->GetRowCount());
 }
 
-void TicketMgr::saveGMTicket(GM_Ticket* ticket, QueryBuffer* buf)
+void TicketMgr::saveGMTicket(GM_Ticket* ticket)
 {
-    std::stringstream ss;
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GM_TICKET_REPLACE);
 
-    ss << "DELETE FROM gm_tickets WHERE ticketid = ";
-    ss << ticket->guid;
-    ss << ";";
+    stmt->Bind(0, ticket->guid);
+    stmt->Bind(1, ticket->playerGuid);
+    stmt->Bind(2, ticket->name);
+    stmt->Bind(3, ticket->level);
+    stmt->Bind(4, ticket->map);
+    stmt->Bind(5, ticket->posX);
+    stmt->Bind(6, ticket->posY);
+    stmt->Bind(7, ticket->posZ);
+    stmt->Bind(8, ticket->message);
+    stmt->Bind(9, ticket->timestamp);
+    stmt->Bind(10, static_cast<uint32_t>(ticket->deleted ? 1 : 0));
+    stmt->Bind(11, ticket->assignedToPlayer);
+    stmt->Bind(12, ticket->comment);
 
-    if (buf == nullptr)
-        CharacterDatabase.ExecuteNA(ss.str().c_str());
-    else
-        buf->AddQueryStr(ss.str());
-
-    ss.rdbuf()->str("");
-
-    ss << "INSERT INTO gm_tickets (ticketid, playerguid, name, level, map, posX, posY, posZ, message, timestamp, deleted, assignedto, comment) VALUES(";
-    ss << ticket->guid << ", ";
-    ss << ticket->playerGuid << ", '";
-    ss << CharacterDatabase.EscapeString(ticket->name) << "', ";
-    ss << ticket->level << ", ";
-    ss << ticket->map << ", ";
-    ss << ticket->posX << ", ";
-    ss << ticket->posY << ", ";
-    ss << ticket->posZ << ", '";
-    ss << CharacterDatabase.EscapeString(ticket->message) << "', ";
-    ss << ticket->timestamp << ", ";
-
-    if (ticket->deleted)
-        ss << uint32_t(1);
-    else
-        ss << uint32_t(0);
-    ss << ",";
-
-    ss << ticket->assignedToPlayer << ", '";
-    ss << CharacterDatabase.EscapeString(ticket->comment) << "');";
-
-    if (buf == nullptr)
-        CharacterDatabase.ExecuteNA(ss.str().c_str());
-    else
-        buf->AddQueryStr(ss.str());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void TicketMgr::updateGMTicket(GM_Ticket* ticket)
 {
-    saveGMTicket(ticket, nullptr);
+    saveGMTicket(ticket);
 }
 
 void TicketMgr::deleteGMTicketPermanently(uint64_t ticketGuid)
 {
-    for (GmTicketList::iterator i = m_ticketList.begin(); i != m_ticketList.end();)
-    {
-        if ((*i)->guid == ticketGuid)
-        {
-            i = m_ticketList.erase(i);
-        }
-        else
-        {
-            ++i;
-        }
-    }
+    std::erase_if(m_ticketList, [ticketGuid](const auto& t) { return t->guid == ticketGuid; });
 
-    CharacterDatabase.Execute("DELETE FROM gm_tickets WHERE guid=%u", ticketGuid);      // kill from db
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GM_TICKET_DELETE_BY_ID);
+    stmt->Bind(0, ticketGuid);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void TicketMgr::deleteAllRemovedGMTickets()
 {
-    for (GmTicketList::iterator i = m_ticketList.begin(); i != m_ticketList.end(); ++i)
-    {
-        if ((*i)->deleted)
-        {
-            i = m_ticketList.erase(i);
-        }
-        else
-        {
-            ++i;
-        }
-    }
+    std::erase_if(m_ticketList, [](const auto& ticket) { return ticket->deleted; });
 
-    CharacterDatabase.Execute("DELETE FROM gm_tickets WHERE deleted=1");
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GM_TICKET_DELETE_DELETED);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void TicketMgr::removeGMTicketByPlayer(uint64_t playerGuid)
@@ -190,7 +159,7 @@ void TicketMgr::removeGMTicketByPlayer(uint64_t playerGuid)
         if ((*i)->playerGuid == playerGuid && !(*i)->deleted)
         {
             (*i)->deleted = true;
-            saveGMTicket((*i).get(), nullptr);
+            saveGMTicket((*i).get());
             break;
         }
     }
@@ -203,7 +172,7 @@ void TicketMgr::removeGMTicket(uint64_t ticketGuid)
         if ((*i)->guid == ticketGuid && !(*i)->deleted)
         {
             (*i)->deleted = true;
-            saveGMTicket((*i).get(), nullptr);
+            saveGMTicket((*i).get());
             break;
         }
     }

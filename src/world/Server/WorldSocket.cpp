@@ -744,9 +744,16 @@ void WorldSocket::InformationRetreiveCallback(WorldPacket & recvData, uint32_t r
 
     if (worldConfig.server.useAccountData)
     {
-        auto pResult = CharacterDatabase.Query("SELECT * FROM account_data WHERE acct = %u", AccountID);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_ACCOUNT_DATA);
+        stmt->Bind(0, AccountID);
+        auto pResult = CharacterDatabase.QueryStatement(std::move(stmt));
+
         if (pResult == nullptr)
-            CharacterDatabase.Execute("INSERT INTO account_data VALUES(%u, '', '', '', '', '', '', '', '', '')", AccountID);
+        {
+            auto insertStmt = CharacterDatabase.CreateStatement(CHAR_INS_ACCOUNT_DATA);
+            insertStmt->Bind(0, AccountID);
+            CharacterDatabase.ExecuteStatement(std::move(insertStmt));
+        }
         else
         {
             for (uint8_t i = 0; i < 8; ++i)

@@ -112,38 +112,34 @@ void Corpse::setCorpseDataFromDbString(std::string dbString)
 
 void Corpse::saveToDB()
 {
-    std::stringstream ss;
-    ss.rdbuf()->str("");
-    ss << "REPLACE INTO corpses (guid, positionx, positiony, positionz, orientation, zoneId, mapId, data, instanceid) VALUES ("
-        << getGuidLow()
-        << ", '"
-        << GetPositionX()
-        << "', '" << GetPositionY()
-        << "', '" << GetPositionZ()
-        << "', '" << GetOrientation()
-        << "', '" << getZoneId()
-        << "', '" << GetMapId()
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_REP_CORPSE);
+    stmt->Bind(0, getGuidLow());
+    stmt->Bind(1, GetPositionX());
+    stmt->Bind(2, GetPositionY());
+    stmt->Bind(3, GetPositionZ());
+    stmt->Bind(4, GetOrientation());
+    stmt->Bind(5, getZoneId());
+    stmt->Bind(6, GetMapId());
 
-        << "', '";
-    ss << getGuid() << " " << getOType() << " " << getEntry() << " " << getScale() << " ";
-    ss << getOwnerGuid() << " " << getDisplayId() << " ";
-
+    std::ostringstream dataStream;
+    dataStream << getGuid() << " " << getOType() << " " << getEntry() << " " << getScale() << " ";
+    dataStream << getOwnerGuid() << " " << getDisplayId() << " ";
     for (uint8_t i = 0; i < WOWCORPSE_ITEM_COUNT; ++i)
-        ss << getItem(i) << " ";
+        dataStream << getItem(i) << " ";
+    dataStream << getBytes1() << " " << getBytes2() << " " << getFlags() << " " << getDynamicFlags();
 
-    ss << getBytes1() << " " << getBytes2() << " " << getFlags() << " " << getDynamicFlags() << " ";
+    stmt->Bind(7, dataStream.str());
+    stmt->Bind(8, GetInstanceID());
 
-    ss << "', " << GetInstanceID() << ")";
-
-    CharacterDatabase.Execute(ss.str().c_str());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Corpse::deleteFromDB()
 {
-    std::stringstream ss;
-    ss << "DELETE FROM corpses WHERE guid=" << getGuidLow();
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_CORPSE);
+    stmt->Bind(0, getGuidLow());
 
-    CharacterDatabase.Execute(ss.str().c_str());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Corpse::setLoadedFromDB(bool value) { _loadedfromdb = value; }

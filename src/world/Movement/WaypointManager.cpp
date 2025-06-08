@@ -15,8 +15,8 @@ void WaypointMgr::load()
     auto oldMSTime = Util::TimeNow();
     _waypointStore.clear();
 
-    //                                                 0    1         2           3          4            5           6        7      8           9
-    auto result = sMySQLStore.getWorldDBQuery("SELECT id, point, position_x, position_y, position_z, orientation, move_type, delay, action, action_chance FROM creature_waypoints ORDER BY id, point");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_WAYPOINTS);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (!result)
     {
@@ -70,8 +70,8 @@ void WaypointMgr::loadCustomWaypoints()
 {
     auto oldMSTime = Util::TimeNow();
 
-    //                                         0    1         2           3          4            5           6        7      8           9
-    auto result = WorldDatabase.Query("SELECT id, point, position_x, position_y, position_z, orientation, move_type, delay, action, action_chance FROM creature_script_waypoints ORDER BY id, point");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_SELECT_WAYPOINTS);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (!result)
     {
@@ -146,7 +146,9 @@ WaypointPath* WaypointMgr::getCustomScriptWaypointPath(uint32_t id)
 
 uint32_t WaypointMgr::generateWaypointPathId()
 {
-    auto result = sMySQLStore.getWorldDBQuery("SELECT MAX(id) FROM creature_waypoints");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_MAX_CREATURE_WAYPOINT_ID);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result)
     {
         uint32_t maxPathId = result->Fetch()[0].asUint32();
@@ -168,18 +170,41 @@ void WaypointMgr::addWayPoint(uint32_t pathid, WaypointNode waypoint, bool saveT
     path.nodes.push_back(std::move(waypoint));
 
     if (saveToDB)
-        WorldDatabase.Execute("INSERT INTO creature_waypoints VALUES(%u, %u, %f, %f, %f, %f, %u, %u, %u, %u, %u)", pathid, waypoint.id, waypoint.x, waypoint.y, waypoint.z, waypoint.orientation, waypoint.delay, waypoint.moveType, waypoint.eventId, waypoint.eventChance, 0);
+    {
+        auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_INSERT_WAYPOINT);
+        stmt->Bind(0, pathid);
+        stmt->Bind(1, waypoint.id);
+        stmt->Bind(2, waypoint.x);
+        stmt->Bind(3, waypoint.y);
+        stmt->Bind(4, waypoint.z);
+        stmt->Bind(5, waypoint.orientation);
+        stmt->Bind(6, waypoint.delay);
+        stmt->Bind(7, waypoint.moveType);
+        stmt->Bind(8, waypoint.eventId);
+        stmt->Bind(9, waypoint.eventChance);
+        stmt->Bind(10, uint32_t(0));
+
+        WorldDatabase.ExecuteStatement(std::move(stmt));
+    }
 }
 
 void WaypointMgr::deleteWayPointById(uint32_t pathid, uint32_t waypointId)
 {
-    WorldDatabase.Execute("DELETE FROM creature_waypoints WHERE id = %u AND point = %u", pathid, waypointId);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_DELETE_WAYPOINT);
+    stmt->Bind(0, pathid);
+    stmt->Bind(1, waypointId);
+
+    WorldDatabase.ExecuteStatement(std::move(stmt));
+
     load();
 }
 
 void WaypointMgr::deleteAllWayPoints(uint32_t pathid)
 {
-    WorldDatabase.Execute("DELETE FROM creature_waypoints WHERE id = %u", pathid);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_DELETE_ALL_WAYPOINTS_BY_ID);
+    stmt->Bind(0, pathid);
+
+    WorldDatabase.ExecuteStatement(std::move(stmt));
 
     auto itr = _waypointStore.find(pathid);
     if (itr != _waypointStore.end())

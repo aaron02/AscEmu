@@ -97,27 +97,36 @@ void WeatherMgr::finalize()
 void WeatherMgr::loadFromDB()
 {
     sLogger.info("Loading Weather...");
-    auto result = WorldDatabase.Query("SELECT zoneId,high_chance,high_type,med_chance,med_type,low_chance,low_type FROM weather");
-    if (!result)
+
+    bool success = false;
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SELECT_WEATHER_DATA);
+    auto result = WorldDatabase.QueryStatement(&success, std::move(stmt));
+
+    if (!success || !result)
+    {
+        sLogger.warning("WeatherMgr: Failed to load weather data or table is empty.");
         return;
+    }
 
     do
     {
         Field* fields = result->Fetch();
         auto weatherInfo = std::make_unique<WeatherInfo>();
-        weatherInfo->m_zoneId = fields[0].asUint32();
-        weatherInfo->m_effectValues[0] = fields[1].asUint32();  // high_chance
-        weatherInfo->m_effectValues[1] = fields[2].asUint32();  // high_type
-        weatherInfo->m_effectValues[2] = fields[3].asUint32();  // med_chance
-        weatherInfo->m_effectValues[3] = fields[4].asUint32();  // med_type
-        weatherInfo->m_effectValues[4] = fields[5].asUint32();  // low_chance
-        weatherInfo->m_effectValues[5] = fields[6].asUint32();  // low_type
-        const auto [itr, _] = m_zoneWeathers.try_emplace(fields[0].asUint32(), std::move(weatherInfo));
 
+        weatherInfo->m_zoneId = fields[0].asUint32();
+        weatherInfo->m_effectValues[0] = fields[1].asUint32(); // high_chance
+        weatherInfo->m_effectValues[1] = fields[2].asUint32(); // high_type
+        weatherInfo->m_effectValues[2] = fields[3].asUint32(); // med_chance
+        weatherInfo->m_effectValues[3] = fields[4].asUint32(); // med_type
+        weatherInfo->m_effectValues[4] = fields[5].asUint32(); // low_chance
+        weatherInfo->m_effectValues[5] = fields[6].asUint32(); // low_type
+
+        const auto [itr, _] = m_zoneWeathers.try_emplace(weatherInfo->m_zoneId, std::move(weatherInfo));
         itr->second->_generateWeather();
-    }
-    while (result->NextRow());
-    sLogger.info("WeatherMgr : Loaded weather information for {} zones.", result->GetRowCount());
+
+    } while (result->NextRow());
+
+    sLogger.info("WeatherMgr: Loaded weather information for {} zones.", result->GetRowCount());
 }
 
 void WeatherMgr::sendWeather(Player* plr)

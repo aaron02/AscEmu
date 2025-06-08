@@ -291,14 +291,17 @@ void InstanceMap::createInstanceData(bool load)
 
     if (load)
     {
-        auto result = CharacterDatabase.Query("SELECT data, completedEncounters FROM instance WHERE map = %u AND id = %u", getBaseMap()->getMapId(), getInstanceId());
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_INSTANCE_DATA_AND_ENCOUNTERS);
+        stmt->Bind(0, getBaseMap()->getMapId());
+        stmt->Bind(1, getInstanceId());
 
-        if (result)
+        if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
         {
-            Field* fields = result->Fetch();
+            const auto* fields = result->Fetch();
             std::string data = fields[0].asCString();
 
             getScript()->setCompletedEncountersMask(fields[1].asUint32());
+
             if (!data.empty())
             {
                 sLogger.debug("Loading instance data for `{}` with id {}", getBaseMap()->getMapName(), getInstanceId());
@@ -360,11 +363,12 @@ bool InstanceMap::reset(uint8_t method)
 
 bool InstanceMap::hasPermBoundPlayers()
 {
-    auto result = CharacterDatabase.Query("SELECT guid FROM character_instance WHERE instance = %u and permanent = 1", getInstanceId());
-    if (result)
-    {
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_PERMANENT_CHARACTER_INSTANCE_BY_ID);
+    stmt->Bind(0, getInstanceId());
+
+    if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
         return true;
-    }
+
     return false;
 }
 

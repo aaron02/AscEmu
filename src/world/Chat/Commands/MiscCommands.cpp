@@ -892,11 +892,20 @@ bool ChatHandler::HandleSummonCommand(const char* args, WorldSession* m_session)
             return true;
         }
         Player* pPlayer = m_session->GetPlayer();
-        char query[512];
-        snprintf((char*)&query, 512, "UPDATE characters SET mapId = %u, positionX = %f, positionY = %f, positionZ = %f, zoneId = %u WHERE guid = %u;", pPlayer->GetMapId(), pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), pPlayer->getZoneId(), pinfo->guid);
-        CharacterDatabase.Execute(query);
+
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_CHARACTER_POSITION_UPDATE_BY_GUID);
+        stmt->Bind(0, pPlayer->GetMapId());
+        stmt->Bind(1, pPlayer->GetPositionX());
+        stmt->Bind(2, pPlayer->GetPositionY());
+        stmt->Bind(3, pPlayer->GetPositionZ());
+        stmt->Bind(4, pPlayer->getZoneId());
+        stmt->Bind(5, pinfo->guid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+        
         char buf[256];
         snprintf((char*)buf, 256, "(Offline) %s has been summoned.", pinfo->name.c_str());
+
         SystemMessage(m_session, buf);
         return true;
     }
@@ -1113,7 +1122,11 @@ bool ChatHandler::HandleUnBanCharacterCommand(const char* args, WorldSession* m_
         GreenSystemMessage(m_session, "Player %s not found ingame.", Character);
     }
 
-    CharacterDatabase.Execute("UPDATE characters SET banned = 0 WHERE name = '%s'", CharacterDatabase.EscapeString(std::string(Character)).c_str());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_CHARACTER_UNBAN_BY_NAME);
+    stmt->Bind(0, std::string(Character));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
+
 
     SystemMessage(m_session, "Unbanned character %s in database.", Character);
     sGMLog.writefromsession(m_session, "unbanned %s", Character);
@@ -1229,9 +1242,13 @@ bool ChatHandler::HandleBanCharacterCommand(const char* args, WorldSession* m_se
             return true;
         }
         SystemMessage(m_session, "Banning player '%s' in database for '%s'.", pCharacter, (pReason == nullptr) ? "No reason." : pReason);
-        std::string escaped_reason = (pReason == nullptr) ? "No reason." : CharacterDatabase.EscapeString(std::string(pReason));
-        CharacterDatabase.Execute("UPDATE characters SET banned = %u, banReason = '%s' WHERE guid = %u",
-            BanTime ? BanTime + (uint32_t)UNIXTIME : 1, escaped_reason.c_str(), pInfo->guid);
+
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_CHARACTER_BAN_BY_GUID);
+        stmt->Bind(0, BanTime ? BanTime + (uint32_t)UNIXTIME : 1);
+        stmt->Bind(1, (pReason == nullptr) ? "No reason." : std::string(pReason));
+        stmt->Bind(2, pInfo->guid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
     else
     {
@@ -1252,7 +1269,14 @@ bool ChatHandler::HandleBanCharacterCommand(const char* args, WorldSession* m_se
 
     if (sWorld.settings.logger.enableSqlBanLog && pInfo)
     {
-        CharacterDatabase.Execute("INSERT INTO `banned_char_log` VALUES('%s', '%s', %u, %u, '%s')", m_session->GetPlayer()->getName().c_str(), pInfo->name.c_str(), (uint32_t)UNIXTIME, (uint32_t)UNIXTIME + BanTime, (pReason == nullptr) ? "No reason." : CharacterDatabase.EscapeString(std::string(pReason)).c_str());
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_BANNED_CHAR_LOG_INSERT);
+        stmt->Bind(0, m_session->GetPlayer()->getName());
+        stmt->Bind(1, pInfo->name);
+        stmt->Bind(2, static_cast<uint32_t>(UNIXTIME));
+        stmt->Bind(3, static_cast<uint32_t>(UNIXTIME) + BanTime);
+        stmt->Bind(4, (pReason == nullptr) ? "No reason." : std::string(pReason));
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     if (pPlayer)

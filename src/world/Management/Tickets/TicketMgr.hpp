@@ -13,7 +13,6 @@ This file is released under the MIT license. See README-MIT for more information
 
 class Field;
 class Player;
-class QueryBuffer;
 
 namespace AscEmu::Packets
 {
@@ -77,7 +76,7 @@ public:
     GM_Ticket* createGMTicket(Player const* player, AscEmu::Packets::CmsgGmTicketCreate const& srlPacket);
     GM_Ticket* createGMTicket(Field const* fields);
     void loadGMTickets();
-    void saveGMTicket(GM_Ticket* ticket, QueryBuffer* buf);
+    void saveGMTicket(GM_Ticket* ticket);
     void updateGMTicket(GM_Ticket* ticket);
 
     void removeGMTicketByPlayer(uint64_t playerGuid);

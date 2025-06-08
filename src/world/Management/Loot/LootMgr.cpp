@@ -133,68 +133,86 @@ void LootMgr::loadLoot()
 
 void LootMgr::loadLootProp()
 {
-    auto result = WorldDatabase.Query("SELECT * FROM item_randomprop_groups");
-    if (result != nullptr)
     {
-        do
-        {
-            uint32_t id = result->Fetch()[0].asUint32();
-            uint32_t eid = result->Fetch()[1].asUint32();
-            float ch = result->Fetch()[2].asFloat();
-            auto item_random_properties = sItemRandomPropertiesStore.lookupEntry(eid);
-            if (item_random_properties == nullptr)
-            {
-                sLogger.failure("LootMgr::loadLootProp : RandomProperty group {} references non-existent randomproperty {}.", id, eid);
-                continue;
-            }
+        auto stmt = WorldDatabase.CreateStatement(WORLD_ITEM_RANDOMPROP_GROUPS_SELECT);
+        auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
-            const auto itr = _randomprops.find(id);
-            if (itr == _randomprops.cend())
+        if (result)
+        {
+            do
             {
-                RandomPropertyVector v;
-                v.push_back(std::make_pair(item_random_properties, ch));
-                _randomprops.insert(std::make_pair(id, v));
-            }
-            else
-            {
-                itr->second.push_back(std::make_pair(item_random_properties, ch));
-            }
-        } while (result->NextRow());
+                Field* fields = result->Fetch();
+
+                uint32_t id = fields[0].asUint32();
+                uint32_t eid = fields[1].asUint32();
+                float ch = fields[2].asFloat();
+
+                auto item_random_properties = sItemRandomPropertiesStore.lookupEntry(eid);
+                if (!item_random_properties)
+                {
+                    sLogger.failure("LootMgr::loadLootProp : RandomProperty group {} references non-existent randomproperty {}.", id, eid);
+                    continue;
+                }
+
+                auto itr = _randomprops.find(id);
+                if (itr == _randomprops.cend())
+                {
+                    RandomPropertyVector v;
+                    v.emplace_back(item_random_properties, ch);
+                    _randomprops.emplace(id, std::move(v));
+                }
+                else
+                {
+                    itr->second.emplace_back(item_random_properties, ch);
+                }
+
+            } while (result->NextRow());
+        }
     }
 
-    result = WorldDatabase.Query("SELECT * FROM item_randomsuffix_groups");
-    if (result != nullptr)
     {
-        do
-        {
-            uint32_t id = result->Fetch()[0].asUint32();
-            uint32_t eid = result->Fetch()[1].asUint32();
-            float ch = result->Fetch()[2].asFloat();
-            auto item_random_suffix = sItemRandomSuffixStore.lookupEntry(eid);
-            if (item_random_suffix == nullptr)
-            {
-                sLogger.debugFlag(AscEmu::Logging::LF_DB_TABLES, "LootMgr::loadLootProp : RandomSuffix group {} references non-existent randomsuffix {}.", id, eid);
-                continue;
-            }
+        auto stmt = WorldDatabase.CreateStatement(WORLD_ITEM_RANDOMSUFFIX_GROUPS_SELECT);
+        auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
-            auto itr = _randomsuffix.find(id);
-            if (itr == _randomsuffix.cend())
+        if (result)
+        {
+            do
             {
-                RandomSuffixVector v;
-                v.push_back(std::make_pair(item_random_suffix, ch));
-                _randomsuffix.insert(std::make_pair(id, v));
-            }
-            else
-            {
-                itr->second.push_back(std::make_pair(item_random_suffix, ch));
-            }
-        } while (result->NextRow());
+                Field* fields = result->Fetch();
+
+                uint32_t id = fields[0].asUint32();
+                uint32_t eid = fields[1].asUint32();
+                float ch = fields[2].asFloat();
+
+                auto item_random_suffix = sItemRandomSuffixStore.lookupEntry(eid);
+                if (!item_random_suffix)
+                {
+                    sLogger.debugFlag(AscEmu::Logging::LF_DB_TABLES, "LootMgr::loadLootProp : RandomSuffix group {} references non-existent randomsuffix {}.", id, eid);
+                    continue;
+                }
+
+                auto itr = _randomsuffix.find(id);
+                if (itr == _randomsuffix.cend())
+                {
+                    RandomSuffixVector v;
+                    v.emplace_back(item_random_suffix, ch);
+                    _randomsuffix.emplace(id, std::move(v));
+                }
+                else
+                {
+                    itr->second.emplace_back(item_random_suffix, ch);
+                }
+
+            } while (result->NextRow());
+        }
     }
 }
 
-void LootMgr::loadLootTables(std::string const& szTableName, LootTemplateMap* LootTable)
+void LootMgr::loadLootTables(uint32_t const statementID, LootTemplateMap* LootTable, std::string const szTableName)
 {
-    auto result = sMySQLStore.getWorldDBQuery("SELECT * FROM %s ORDER BY entryid ASC", szTableName.c_str());
+    auto stmt = WorldDatabase.CreateStatement(statementID);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.failure("LootMgr::loadLootTables : Loading loot from table {} failed.", szTableName);
@@ -251,22 +269,22 @@ void LootMgr::loadAndGenerateLoot(uint8_t type)
     switch (type)
     {
         case 0:
-            loadLootTables("loot_creatures", &CreatureLoot);
+            loadLootTables(WORLD_SEL_LOOT_CREATURES, &CreatureLoot, "loot_creatures");
             break;
         case 1:
-            loadLootTables("loot_gameobjects", &GOLoot);
+            loadLootTables(WORLD_SEL_LOOT_GAMEOBJECTS, &GOLoot, "loot_gameobjects");
             break;
         case 2:
-            loadLootTables("loot_skinning", &SkinningLoot);
+            loadLootTables(WORLD_SEL_LOOT_SKINNING, &SkinningLoot, "loot_skinning");
             break;
         case 3:
-            loadLootTables("loot_fishing", &FishingLoot);
+            loadLootTables(WORLD_SEL_LOOT_FISHING, &FishingLoot, "loot_fishing");
             break;
         case 4:
-            loadLootTables("loot_items", &ItemLoot);
+            loadLootTables(WORLD_SEL_LOOT_ITEMS, &ItemLoot, "loot_items");
             break;
         case 5:
-            loadLootTables("loot_pickpocketing", &PickpocketingLoot);
+            loadLootTables(WORLD_SEL_LOOT_PICKPOCKETING, &PickpocketingLoot, "loot_pickpocketing");
             break;
     }
 }

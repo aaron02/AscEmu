@@ -1339,7 +1339,7 @@ void Item::loadFromDB(Field* fields, Player* plr, bool light)
     }
 }
 
-void Item::saveToDB(int8_t containerslot, int8_t slot, bool firstsave, QueryBuffer* buf)
+void Item::saveToDB(int8_t containerslot, int8_t slot, bool firstsave)
 {
     if (!m_isDirty && !firstsave)
         return;
@@ -1347,94 +1347,62 @@ void Item::saveToDB(int8_t containerslot, int8_t slot, bool firstsave, QueryBuff
     const uint64_t GiftCreatorGUID = getGiftCreatorGuid();
     const uint64_t CreatorGUID = getCreatorGuid();
 
-    std::stringstream ss;
-    ss << "DELETE FROM `playeritems` WHERE guid = " << getGuidLow() << ";";
+    auto delStmt = CharacterDatabase.CreateStatement(CHAR_DEL_PLAYERITEM);
+    delStmt->Bind(0, getGuidLow());
 
-    if (firstsave)
+    CharacterDatabase.ExecuteStatement(std::move(delStmt));
+
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_PLAYERITEM_FULL);
+    stmt->Bind(0, getOwnerGuidLow());
+    stmt->Bind(1, getGuidLow());
+    stmt->Bind(2, getEntry());
+    stmt->Bind(3, m_wrappedItemId);
+    stmt->Bind(4, WoWGuid::getGuidLowPartFromUInt64(GiftCreatorGUID));
+    stmt->Bind(5, WoWGuid::getGuidLowPartFromUInt64(CreatorGUID));
+    stmt->Bind(6, getStackCount());
+    stmt->Bind(7, static_cast<int32_t>(getChargesLeft()));
+    stmt->Bind(8, getFlags());
+    stmt->Bind(9, m_randomProperties);
+    stmt->Bind(10, m_randomSuffix);
+    stmt->Bind(11, m_text); // itemtext
+    stmt->Bind(12, getDurability());
+    stmt->Bind(13, static_cast<int>(containerslot));
+    stmt->Bind(14, static_cast<int>(slot));
+
+    // Enchantments
+    std::stringstream ench;
+    for (const auto& Enchantment : m_enchantments)
     {
-        CharacterDatabase.WaitExecute(ss.str().c_str());
-    }
-    else
-    {
-        if (buf == nullptr)
-            CharacterDatabase.Execute(ss.str().c_str());
-        else
-            buf->AddQueryNA(ss.str().c_str());
-    }
+        if (Enchantment.second.RemoveAtLogout)
+            continue;
 
+        if (getEnchantmentId(Enchantment.second.Slot) != Enchantment.second.Enchantment->Id)
+            continue;
 
-    ss.rdbuf()->str("");
-
-    ss << "INSERT INTO `playeritems` VALUES(";
-
-    ss << getOwnerGuidLow() << ",";
-    ss << getGuidLow() << ",";
-    ss << getEntry() << ",";
-    ss << m_wrappedItemId << ",";
-    ss << WoWGuid::getGuidLowPartFromUInt64(GiftCreatorGUID) << ",";
-    ss << WoWGuid::getGuidLowPartFromUInt64(CreatorGUID) << ",";
-
-    ss << getStackCount() << ",";
-    ss << static_cast<int32_t>(getChargesLeft()) << ",";
-    ss << getFlags() << ",";
-    ss << m_randomProperties << ", " << m_randomSuffix << ", ";
-    ss << 0 << ",";
-    ss << getDurability() << ",";
-    ss << static_cast<int>(containerslot) << ",";
-    ss << static_cast<int>(slot) << ",'";
-
-    if (!m_enchantments.empty())
-    {
-        for (const auto& Enchantment : m_enchantments)
+        const auto timeLeft = getEnchantmentDuration(Enchantment.second.Slot);
+        if (Enchantment.second.Enchantment && (timeLeft > 5000 || timeLeft == 0))
         {
-            if (Enchantment.second.RemoveAtLogout)
-                continue;
-
-            if (getEnchantmentId(Enchantment.second.Slot) != Enchantment.second.Enchantment->Id)
-                continue;
-
-            const auto timeLeft = getEnchantmentDuration(Enchantment.second.Slot);
-            if (Enchantment.second.Enchantment && (timeLeft > 5000 || timeLeft == 0))
-            {
-                ss << Enchantment.second.Enchantment->Id << ",";
-                ss << timeLeft << ",";
-                ss << static_cast<int>(Enchantment.second.Slot) << ";";
-            }
+            ench << Enchantment.second.Enchantment->Id << ","
+                << timeLeft << ","
+                << static_cast<int>(Enchantment.second.Slot) << ";";
         }
     }
-    ss << "','";
-    ss << m_expiresOnTime << "','";
+    stmt->Bind(15, ench.str());
+    stmt->Bind(16, static_cast<uint64_t>(m_expiresOnTime));
 
-    // Refund stuff
-    if (this->getOwner() != nullptr)
+    // Refund info
+    uint32_t refundDate = 0;
+    uint32_t refundAmount = 0;
+    if (const auto owner = getOwner())
     {
-        std::pair<time_t, uint32_t> refundentry = this->getOwner()->getItemInterface()->LookupRefundable(this->getGuid());
-
-        ss << static_cast<uint32_t>(refundentry.first) << "','";
-        ss << static_cast<uint32_t>(refundentry.second);
+        const auto [time, amount] = owner->getItemInterface()->LookupRefundable(getGuid());
+        refundDate = static_cast<uint32_t>(time);
+        refundAmount = amount;
     }
-    else
-    {
-        ss << static_cast<uint32_t>(0) << "','";
-        ss << static_cast<uint32_t>(0);
-    }
+    stmt->Bind(17, refundDate);
+    stmt->Bind(18, refundAmount);
 
-    ss << "','";
-    ss << m_text;
-    ss << "')";
-
-    if (firstsave)
-    {
-        CharacterDatabase.WaitExecute(ss.str().c_str());
-    }
-    else
-    {
-        if (buf == nullptr)
-            CharacterDatabase.Execute(ss.str().c_str());
-        else
-            buf->AddQueryNA(ss.str().c_str());
-    }
-
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
     m_isDirty = false;
 }
 
@@ -1449,7 +1417,10 @@ void Item::deleteFromDB()
         }
     }
 
-    CharacterDatabase.Execute("DELETE FROM playeritems WHERE guid = %u", getGuidLow());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_PLAYERITEM);
+    stmt->Bind(0, getGuidLow());
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 const static uint16_t arm_skills[7] =

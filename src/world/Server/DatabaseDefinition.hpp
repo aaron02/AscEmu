@@ -6,7 +6,11 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "CommonTypes.hpp"
-#include "Database/Database.h"
+#include "Database/Database.hpp"
+#include "Database/PreparedStatement.hpp"
+
+#include "Database/CharacterDatabaseConnection.hpp"
+#include "Database/WorldDatabaseConnection.hpp"
 
 class Database;
 

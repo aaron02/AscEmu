@@ -272,7 +272,13 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
             if (auto* questLog = plr->getQuestLogByQuestId(quest_id))
             {
                 uint32_t giver_id = 0;
-                auto creatureResult = sMySQLStore.getWorldDBQuery("SELECT id FROM creature_quest_starter WHERE quest = %u AND min_build <= %u AND max_build >= %u", quest_id, VERSION_STRING, VERSION_STRING);
+
+                auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_QUEST_STARTER);
+                stmt->Bind(0, static_cast<uint32_t>(quest_id));
+                stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+                stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+                auto creatureResult = WorldDatabase.QueryStatement(std::move(stmt));
 
                 if (creatureResult)
                 {
@@ -281,7 +287,13 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
                 }
                 else
                 {
-                    auto objectResult = sMySQLStore.getWorldDBQuery("SELECT id FROM gameobject_quest_starter WHERE quest = %u AND min_build <= %u AND max_build >= %u", quest_id, VERSION_STRING, VERSION_STRING);
+                    auto stmt2 = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_QUEST_STARTER);
+                    stmt2->Bind(0, static_cast<uint32_t>(quest_id));
+                    stmt2->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+                    stmt2->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+                    auto objectResult = WorldDatabase.QueryStatement(std::move(stmt2));
+
                     if (objectResult)
                     {
                         Field* objectFields = objectResult->Fetch();
@@ -498,9 +510,13 @@ bool ChatHandler::HandleQuestItemCommand(const char* args, WorldSession* m_sessi
     if (!*args)
         return false;
 
-    std::string my_item_lookup = "SELECT item, item_count FROM gameobject_quest_item_binding WHERE quest = " + std::string(args);
+    uint32_t questId = std::stoul(args);
 
-    auto result = WorldDatabase.Query(my_item_lookup.c_str());
+    auto stmt = WorldDatabase.CreateStatement(WORLD_QUEST_ITEM_BINDING_BY_QUEST);
+    stmt->Bind(0, questId);
+
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     std::string recout;
     if (!result)
     {
@@ -508,6 +524,7 @@ bool ChatHandler::HandleQuestItemCommand(const char* args, WorldSession* m_sessi
         SendMultilineMessage(m_session, recout.c_str());
         return true;
     }
+
     recout = "|cff00ff00Quest item matches: itemid: count -> Name\n\n";
     SendMultilineMessage(m_session, recout.c_str());
 
@@ -519,31 +536,26 @@ bool ChatHandler::HandleQuestItemCommand(const char* args, WorldSession* m_sessi
         std::string itemid = MyConvertIntToString(id);
         std::string itemcnt = MyConvertIntToString(fields[1].asUint32());
         auto tmpItem = sMySQLStore.getItemProperties(id);
+
         if (tmpItem != nullptr)
         {
-            recout = "|cff00ccff";
-            recout += itemid;
-            recout += ": ";
-            recout += itemcnt;
-            recout += " -> ";
-            recout += tmpItem->Name;
-            recout += "\n";
+            recout = "|cff00ccff" + itemid + ": " + itemcnt + " -> " + tmpItem->Name + "\n";
         }
         else
+        {
             recout = "|cffff0000Invalid Item!\n";
-
+        }
 
         SendMultilineMessage(m_session, recout.c_str());
 
         ++count;
-
         if (count == 25)
         {
-            RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+            RedSystemMessage(m_session, "More than 25 results returned. Aborting.");
             break;
         }
-    }
-    while (result->NextRow());
+
+    } while (result->NextRow());
 
     return true;
 }
@@ -553,107 +565,105 @@ bool ChatHandler::HandleQuestGiverCommand(const char* args, WorldSession* m_sess
     if (!*args)
         return false;
 
+    uint32_t questId = std::stoul(args);
     std::string recout;
 
-    std::string my_query1 = "SELECT id FROM creature_quest_starter WHERE quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto objectResult1 = WorldDatabase.Query(my_query1.c_str(), VERSION_STRING, VERSION_STRING);
-
-    if (objectResult1)
+    // --- Creature quest starter ---
     {
-        Field* fields = objectResult1->Fetch();
-        std::string creatureId1 = MyConvertIntToString(fields[0].asUint32());
+        auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_STARTER_BY_QUEST);
+        stmt->Bind(0, questId);
+        stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
 
-        std::string creatureName1 = "N/A";
-        CreatureProperties const* creatureResult1 = sMySQLStore.getCreatureProperties(std::stoul(creatureId1.c_str()));
-        if (creatureResult1)
+        auto objectResult1 = WorldDatabase.QueryStatement(std::move(stmt));
+
+        if (objectResult1)
         {
-            creatureName1 = creatureResult1->Name;
+            Field* fields = objectResult1->Fetch();
+            uint32_t creatureId = fields[0].asUint32();
+            std::string creatureName = "N/A";
 
-            my_query1 = "SELECT id FROM creature_spawns WHERE entry = " + creatureId1 + " AND min_build <= %u AND max_build >= %u";
-            auto spawnResult1 = WorldDatabase.Query(my_query1.c_str(), VERSION_STRING, VERSION_STRING);
-
-            std::string spawnId1;
-            if (spawnResult1)
+            if (const auto* creatureProps = sMySQLStore.getCreatureProperties(creatureId))
             {
-                fields = spawnResult1->Fetch();
-                spawnId1 = fields[0].asCString();
+                creatureName = creatureProps->Name;
+
+                auto stmt2 = WorldDatabase.CreateStatement(WORLD_CREATURE_SPAWN_BY_ENTRY);
+                stmt2->Bind(0, creatureId);
+                stmt2->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+                stmt2->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+                auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt2));
+
+                std::string spawnId = "N/A";
+                if (spawnResult)
+                    spawnId = spawnResult->Fetch()[0].asCString();
+
+                recout = "|cff00ccffQuest Starter found: creature id, spawnid, name\n\n";
+                SendMultilineMessage(m_session, recout.c_str());
+
+                recout = "|cff00ccff" + MyConvertIntToString(creatureId) + ", " + spawnId + ", " + creatureName + "\n\n";
+                SendMultilineMessage(m_session, recout.c_str());
             }
             else
-                spawnId1 = "N/A";
-
-            recout = "|cff00ccffQuest Starter found: creature id, spawnid, name\n\n";
-            SendMultilineMessage(m_session, recout.c_str());
-
-            recout = "|cff00ccff";
-            recout += creatureId1;
-            recout += ", ";
-            recout += spawnId1;
-            recout += ", ";
-            recout += creatureName1;
-            recout += "\n\n";
-            SendMultilineMessage(m_session, recout.c_str());
+            {
+                recout = "|cff00ccffNo creature quest starter info found.\n\n";
+                SendMultilineMessage(m_session, recout.c_str());
+            }
         }
         else
         {
-            recout = "|cff00ccffNo creature quest starter info found.\n\n";
+            recout = "|cff00ccffNo creature quest starters found.\n\n";
             SendMultilineMessage(m_session, recout.c_str());
         }
-
-    }
-    else
-    {
-        recout = "|cff00ccffNo creature quest starters found.\n\n";
-        SendMultilineMessage(m_session, recout.c_str());
     }
 
-    std::string my_query2 = "SELECT id FROM gameobject_quest_starter WHERE quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto objectResult2 = WorldDatabase.Query(my_query2.c_str(), VERSION_STRING, VERSION_STRING);
-
-    if (objectResult2)
+    // --- GameObject quest starter ---
     {
-        Field* fields = objectResult2->Fetch();
-        std::string itemId2 = MyConvertIntToString(fields[0].asUint32());
+        auto stmt = WorldDatabase.CreateStatement(WORLD_GO_QUEST_STARTER_BY_QUEST);
+        stmt->Bind(0, questId);
+        stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
 
-        std::string itemName2 = "N/A";
-        ItemProperties const* itemResult2 = sMySQLStore.getItemProperties(std::stoul(itemId2.c_str()));
-        if (itemResult2)
+        auto objectResult2 = WorldDatabase.QueryStatement(std::move(stmt));
+
+        if (objectResult2)
         {
-            itemName2 = itemResult2->Name;
+            Field* fields = objectResult2->Fetch();
+            uint32_t goEntry = fields[0].asUint32();
+            std::string goName = "N/A";
 
-            my_query2 = "SELECT id FROM gameobject_spawns WHERE entry = " + itemId2 + " min_build <= %u AND max_build >= %u";
-            auto spawnResult2 = WorldDatabase.Query(my_query2.c_str(), VERSION_STRING, VERSION_STRING);
-
-            std::string spawnId2;
-            if (spawnResult2)
+            if (const auto* goProps = sMySQLStore.getItemProperties(goEntry))
             {
-                fields = spawnResult2->Fetch();
-                spawnId2 = fields[0].asCString();
+                goName = goProps->Name;
+
+                auto stmt2 = WorldDatabase.CreateStatement(WORLD_GO_SPAWN_BY_ENTRY);
+                stmt2->Bind(0, goEntry);
+                stmt2->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+                stmt2->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+                auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt2));
+
+                std::string spawnId = "N/A";
+                if (spawnResult)
+                    spawnId = spawnResult->Fetch()[0].asCString();
+
+                recout = "|cff00ccffQuest starter found: object id, spawnid, name\n\n";
+                SendMultilineMessage(m_session, recout.c_str());
+
+                recout = "|cff00ccff" + MyConvertIntToString(goEntry) + ", " + spawnId + ", " + goName + "\n\n";
+                SendMultilineMessage(m_session, recout.c_str());
             }
             else
-                spawnId2 = "N/A";
-
-            recout = "|cff00ccffQuest starter found: object id, spawnid, name\n\n";
-            SendMultilineMessage(m_session, recout.c_str());
-
-            recout = "|cff00ccff";
-            recout += itemId2;
-            recout += ", ";
-            recout += spawnId2;
-            recout += ", ";
-            recout += itemName2;
-            recout += "\n\n";
-            SendMultilineMessage(m_session, recout.c_str());
+            {
+                recout = "|cff00ccffNo object quest starter info found.\n\n";
+                SendMultilineMessage(m_session, recout.c_str());
+            }
         }
         else
         {
-            recout = "|cff00ccffNo object quest starter info found.\n\n";
+            recout = "|cff00ccffNo object quest starters found.\n\n";
             SendMultilineMessage(m_session, recout.c_str());
         }
-    }
-    else
-    {
-        recout = "|cff00ccffNo object quest starters found.\n\n";
-        SendMultilineMessage(m_session, recout.c_str());
     }
 
     return true;
@@ -662,6 +672,7 @@ bool ChatHandler::HandleQuestGiverCommand(const char* args, WorldSession* m_sess
 bool ChatHandler::HandleQuestListCommand(const char* args, WorldSession* m_session)
 {
     uint32_t quest_giver = 0;
+
     if (*args)
         quest_giver = std::stoul(args);
     else
@@ -675,35 +686,34 @@ bool ChatHandler::HandleQuestListCommand(const char* args, WorldSession* m_sessi
         }
 
         Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
-        if (unit)
+        if (!unit || !unit->isQuestGiver())
         {
-            if (!unit->isQuestGiver())
-            {
-                SystemMessage(m_session, "Unit is not a valid quest giver.");
-                return true;
-            }
-
-            if (!unit->HasQuests())
-            {
-                SystemMessage(m_session, "NPC does not have any quests.");
-                return true;
-            }
-
-            quest_giver = unit->getEntry();
+            SystemMessage(m_session, "Unit is not a valid quest giver.");
+            return true;
         }
+
+        if (!unit->HasQuests())
+        {
+            SystemMessage(m_session, "NPC does not have any quests.");
+            return true;
+        }
+
+        quest_giver = unit->getEntry();
     }
 
     std::string recout = "|cff00ff00Quest matches: id: title\n\n";
     SendMultilineMessage(m_session, recout.c_str());
 
     uint32_t count = 0;
-    uint32_t quest_id = 0;
-    QuestProperties const* qst;
-    Field* fields;
 
     if (quest_giver != 0)
     {
-        auto creatureResult = WorldDatabase.Query("SELECT quest FROM creature_quest_starter WHERE id = %u AND min_build <= %u AND max_build >= %u", quest_giver, VERSION_STRING, VERSION_STRING);
+        auto stmt = WorldDatabase.CreateStatement(WORLD_QUEST_LIST_BY_CREATURE);
+        stmt->Bind(0, quest_giver);
+        stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+        auto creatureResult = WorldDatabase.QueryStatement(std::move(stmt));
 
         if (!creatureResult)
         {
@@ -714,33 +724,22 @@ bool ChatHandler::HandleQuestListCommand(const char* args, WorldSession* m_sessi
 
         do
         {
-            fields = creatureResult->Fetch();
-            quest_id = fields[0].asUint32();
-
-            qst = sMySQLStore.getQuestProperties(quest_id);
-            if (qst == nullptr)
+            Field* fields = creatureResult->Fetch();
+            uint32_t quest_id = fields[0].asUint32();
+            const QuestProperties* qst = sMySQLStore.getQuestProperties(quest_id);
+            if (!qst)
                 continue;
 
-            std::string qid = MyConvertIntToString(quest_id);
-            std::string qname = qst->title;
-
-            recout = "|cff00ccff";
-            recout += qid;
-            recout += ": ";
-            recout += qname;
-            recout += "\n";
-
+            recout = "|cff00ccff" + MyConvertIntToString(quest_id) + ": " + qst->title + "\n";
             SendMultilineMessage(m_session, recout.c_str());
 
             ++count;
-
             if (count == 25)
             {
-                RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+                RedSystemMessage(m_session, "More than 25 results returned. Aborting.");
                 break;
             }
-        }
-        while (creatureResult->NextRow());
+        } while (creatureResult->NextRow());
     }
 
     if (count == 0)
@@ -767,15 +766,9 @@ bool ChatHandler::HandleQuestAddStartCommand(const char* args, WorldSession* m_s
     }
 
     Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
-    if (!unit)
+    if (!unit || !unit->isQuestGiver())
     {
-        SystemMessage(m_session, "You must target an npc.");
-        return false;
-    }
-
-    if (!unit->isQuestGiver())
-    {
-        SystemMessage(m_session, "Unit is not a valid quest giver.");
+        SystemMessage(m_session, "You must target a valid quest-giving npc.");
         return false;
     }
 
@@ -787,27 +780,37 @@ bool ChatHandler::HandleQuestAddStartCommand(const char* args, WorldSession* m_s
             return false;
     }
 
-    QuestProperties const* qst = sMySQLStore.getQuestProperties(quest_id);
-    if (qst == nullptr)
+    const QuestProperties* qst = sMySQLStore.getQuestProperties(quest_id);
+    if (!qst)
     {
         SystemMessage(m_session, "Invalid quest selected, unable to add quest to the specified NPC.");
         return false;
     }
 
-    std::string quest_giver = MyConvertIntToString(unit->getEntry());
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_STARTER_EXISTS);
+    stmt->Bind(0, unit->getEntry());
+    stmt->Bind(1, quest_id);
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
 
-    std::string my_query1 = "SELECT id FROM creature_quest_starter WHERE id = " + quest_giver + " AND quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto selectResult1 = WorldDatabase.Query(my_query1.c_str(), VERSION_STRING, VERSION_STRING);
-    if (selectResult1)
+    auto selectResult = WorldDatabase.QueryStatement(std::move(stmt));
+
+    if (selectResult)
     {
         SystemMessage(m_session, "Quest was already found for the specified NPC.");
     }
     else
     {
-        std::string my_insert1 = "INSERT INTO creature_quest_starter (id, quest, min_build, max_build) VALUES (" + quest_giver + "," + std::string(args) + " %u, %u)";
-        WorldDatabase.Query(my_insert1.c_str(), VERSION_STRING, VERSION_STRING);
+        auto insertStmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_STARTER_INSERT);
+        insertStmt->Bind(0, unit->getEntry());
+        insertStmt->Bind(1, quest_id);
+        insertStmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        insertStmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+        WorldDatabase.ExecuteStatement(std::move(insertStmt));
     }
 
+    // Rebuild Quests
     sQuestMgr.LoadExtraQuestStuff();
 
     QuestRelation* qstrel = nullptr;
@@ -823,14 +826,11 @@ bool ChatHandler::HandleQuestAddStartCommand(const char* args, WorldSession* m_s
 
     unit->_LoadQuests();
 
-    std::string qname = qst->title;
-
-    std::string recout = "|cff00ff00Added Quest to NPC as starter: ";
-    recout += "|cff00ccff";
-    recout += qname;
-    recout += "\n\n";
+    std::string recout = "|cff00ff00Added Quest to NPC as starter: |cff00ccff" + qst->title + "\n\n";
     SendMultilineMessage(m_session, recout.c_str());
-    sGMLog.writefromsession(m_session, "added starter of quest %u [%s] to NPC %u [%s]", qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
+
+    sGMLog.writefromsession(m_session, "added starter of quest %u [%s] to NPC %u [%s]",
+        qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
 
     return true;
 }
@@ -850,15 +850,9 @@ bool ChatHandler::HandleQuestAddFinishCommand(const char* args, WorldSession* m_
     }
 
     Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
-    if (!unit)
+    if (!unit || !unit->isQuestGiver())
     {
-        SystemMessage(m_session, "You must target an npc.");
-        return false;
-    }
-
-    if (!unit->isQuestGiver())
-    {
-        SystemMessage(m_session, "Unit is not a valid quest giver.");
+        SystemMessage(m_session, "You must target a valid quest-giving npc.");
         return false;
     }
 
@@ -870,25 +864,34 @@ bool ChatHandler::HandleQuestAddFinishCommand(const char* args, WorldSession* m_
             return false;
     }
 
-    QuestProperties const* qst = sMySQLStore.getQuestProperties(quest_id);
-    if (qst == nullptr)
+    const QuestProperties* qst = sMySQLStore.getQuestProperties(quest_id);
+    if (!qst)
     {
         SystemMessage(m_session, "Invalid quest selected, unable to add quest to the specified NPC.");
         return false;
     }
 
-    std::string quest_giver = MyConvertIntToString(unit->getEntry());
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_FINISHER_EXISTS);
+    stmt->Bind(0, unit->getEntry());
+    stmt->Bind(1, quest_id);
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
 
-    std::string my_query1 = "SELECT id FROM creature_quest_finisher WHERE id = " + quest_giver + " AND quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto selectResult1 = WorldDatabase.Query(my_query1.c_str(), VERSION_STRING, VERSION_STRING);
-    if (selectResult1)
+    auto selectResult = WorldDatabase.QueryStatement(std::move(stmt));
+
+    if (selectResult)
     {
         SystemMessage(m_session, "Quest was already found for the specified NPC.");
     }
     else
     {
-        std::string my_insert1 = "INSERT INTO creature_quest_finisher (id, quest, min_build, max_build) VALUES (" + quest_giver + "," + std::string(args) + ", %u, %u)";
-        WorldDatabase.Query(my_insert1.c_str(), VERSION_STRING, VERSION_STRING);
+        auto insertStmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_FINISHER_INSERT);
+        insertStmt->Bind(0, unit->getEntry());
+        insertStmt->Bind(1, quest_id);
+        insertStmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        insertStmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+        WorldDatabase.ExecuteStatement(std::move(insertStmt));
     }
 
     sQuestMgr.LoadExtraQuestStuff();
@@ -906,14 +909,11 @@ bool ChatHandler::HandleQuestAddFinishCommand(const char* args, WorldSession* m_
 
     unit->_LoadQuests();
 
-    std::string qname = qst->title;
-
-    std::string recout = "|cff00ff00Added Quest to NPC as finisher: ";
-    recout += "|cff00ccff";
-    recout += qname;
-    recout += "\n\n";
+    std::string recout = "|cff00ff00Added Quest to NPC as finisher: |cff00ccff" + qst->title + "\n\n";
     SendMultilineMessage(m_session, recout.c_str());
-    sGMLog.writefromsession(m_session, "added finisher of quest %u [%s] to NPC %u [%s]", qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
+
+    sGMLog.writefromsession(m_session, "added finisher of quest %u [%s] to NPC %u [%s]",
+        qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
 
     return true;
 }
@@ -946,15 +946,9 @@ bool ChatHandler::HandleQuestDelStartCommand(const char* args, WorldSession* m_s
     }
 
     Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
-    if (!unit)
+    if (!unit || !unit->isQuestGiver())
     {
-        SystemMessage(m_session, "You must target an npc.");
-        return false;
-    }
-
-    if (!unit->isQuestGiver())
-    {
-        SystemMessage(m_session, "Unit is not a valid quest giver.");
+        SystemMessage(m_session, "You must target a valid quest-giving npc.");
         return false;
     }
 
@@ -966,25 +960,34 @@ bool ChatHandler::HandleQuestDelStartCommand(const char* args, WorldSession* m_s
             return false;
     }
 
-    QuestProperties const* qst = sMySQLStore.getQuestProperties(quest_id);
-    if (qst == nullptr)
+    const QuestProperties* qst = sMySQLStore.getQuestProperties(quest_id);
+    if (!qst)
     {
         SystemMessage(m_session, "Invalid Quest selected.");
         return false;
     }
 
-    std::string quest_giver = MyConvertIntToString(unit->getEntry());
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_STARTER_SELECT);
+    stmt->Bind(0, unit->getEntry());
+    stmt->Bind(1, quest_id);
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
 
-    std::string my_query1 = "SELECT id FROM creature_quest_starter WHERE id = " + quest_giver + " AND quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto selectResult1 = WorldDatabase.Query(my_query1.c_str(), VERSION_STRING, VERSION_STRING);
-    if (selectResult1 == nullptr)
+    auto selectResult = WorldDatabase.QueryStatement(std::move(stmt));
+
+    if (!selectResult)
     {
         SystemMessage(m_session, "Quest was NOT found for the specified NPC.");
         return false;
     }
 
-    std::string my_delete1 = "DELETE FROM creature_quest_starter WHERE id = " + quest_giver + " AND quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    WorldDatabase.Query(my_delete1.c_str(), VERSION_STRING, VERSION_STRING);
+    auto delStmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_STARTER_DELETE);
+    delStmt->Bind(0, unit->getEntry());
+    delStmt->Bind(1, quest_id);
+    delStmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    delStmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+    WorldDatabase.ExecuteStatement(std::move(delStmt));
 
     sQuestMgr.LoadExtraQuestStuff();
 
@@ -998,16 +1001,14 @@ bool ChatHandler::HandleQuestDelStartCommand(const char* args, WorldSession* m_s
         qstrelid = (uint8_t)unit->GetQuestRelation(quest_id);
         unit->DeleteQuest(qstrel);
     }
+
     unit->_LoadQuests();
 
-    std::string qname = qst->title;
-
-    std::string recout = "|cff00ff00Deleted Quest from NPC: ";
-    recout += "|cff00ccff";
-    recout += qname;
-    recout += "\n\n";
+    std::string recout = "|cff00ff00Deleted Quest from NPC: |cff00ccff" + qst->title + "\n\n";
     SendMultilineMessage(m_session, recout.c_str());
-    sGMLog.writefromsession(m_session, "deleted starter of quest %u [%s] to NPC %u [%s]", qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
+
+    sGMLog.writefromsession(m_session, "deleted starter of quest %u [%s] to NPC %u [%s]",
+        qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
 
     return true;
 }
@@ -1026,15 +1027,9 @@ bool ChatHandler::HandleQuestDelFinishCommand(const char* args, WorldSession* m_
     }
 
     Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
-    if (!unit)
+    if (!unit || !unit->isQuestGiver())
     {
-        SystemMessage(m_session, "You must target an npc.");
-        return false;
-    }
-
-    if (!unit->isQuestGiver())
-    {
-        SystemMessage(m_session, "Unit is not a valid quest giver.");
+        SystemMessage(m_session, "You must target a valid quest-giving npc.");
         return false;
     }
 
@@ -1046,25 +1041,34 @@ bool ChatHandler::HandleQuestDelFinishCommand(const char* args, WorldSession* m_
             return false;
     }
 
-    QuestProperties const* qst = sMySQLStore.getQuestProperties(quest_id);
-    if (qst == nullptr)
+    const QuestProperties* qst = sMySQLStore.getQuestProperties(quest_id);
+    if (!qst)
     {
         SystemMessage(m_session, "Invalid Quest selected.");
         return false;
     }
 
-    std::string quest_giver = MyConvertIntToString(unit->getEntry());
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_FINISHER_SELECT);
+    stmt->Bind(0, unit->getEntry());
+    stmt->Bind(1, quest_id);
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
 
-    std::string my_query1 = "SELECT id FROM creature_quest_finisher WHERE id = " + quest_giver + " AND quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto selectResult1 = WorldDatabase.Query(my_query1.c_str(), VERSION_STRING, VERSION_STRING);
-    if (selectResult1 == nullptr)
+    auto selectResult = WorldDatabase.QueryStatement(std::move(stmt));
+
+    if (!selectResult)
     {
         SystemMessage(m_session, "Quest was NOT found for the specified NPC.");
         return true;
     }
 
-    std::string my_delete1 = "DELETE FROM creature_quest_finisher WHERE id = " + quest_giver + " AND quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    WorldDatabase.Query(my_delete1.c_str(), VERSION_STRING, VERSION_STRING);
+    auto delStmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_FINISHER_DELETE);
+    delStmt->Bind(0, unit->getEntry());
+    delStmt->Bind(1, quest_id);
+    delStmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    delStmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+    WorldDatabase.ExecuteStatement(std::move(delStmt));
 
     sQuestMgr.LoadExtraQuestStuff();
 
@@ -1081,14 +1085,11 @@ bool ChatHandler::HandleQuestDelFinishCommand(const char* args, WorldSession* m_
 
     unit->_LoadQuests();
 
-    std::string qname = qst->title;
-
-    std::string recout = "|cff00ff00Deleted Quest from NPC: ";
-    recout += "|cff00ccff";
-    recout += qname;
-    recout += "\n\n";
+    std::string recout = "|cff00ff00Deleted Quest from NPC: |cff00ccff" + qst->title + "\n\n";
     SendMultilineMessage(m_session, recout.c_str());
-    sGMLog.writefromsession(m_session, "deleted finisher of quest %u [%s] to NPC %u [%s]", qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
+
+    sGMLog.writefromsession(m_session, "deleted finisher of quest %u [%s] to NPC %u [%s]",
+        qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
 
     return true;
 }
@@ -1111,107 +1112,87 @@ bool ChatHandler::HandleQuestFinisherCommand(const char* args, WorldSession* m_s
     if (!*args)
         return false;
 
+    uint32_t questId = std::stoul(args);
     std::string recout;
 
-    std::string my_query1 = "SELECT id FROM creature_quest_finisher WHERE quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto objectResult1 = WorldDatabase.Query(my_query1.c_str(), VERSION_STRING, VERSION_STRING);
-
-    if (objectResult1)
+    // --- Creature Finisher ---
     {
-        Field* fields = objectResult1->Fetch();
-        std::string creatureId1 = MyConvertIntToString(fields[0].asUint32());
+        auto stmt = WorldDatabase.CreateStatement(WORLD_QUEST_FINISHER_CREATURE_SELECT);
+        stmt->Bind(0, questId);
+        stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
 
-        std::string creatureName1 = "N/A";
-        CreatureProperties const* creatureResult1 = sMySQLStore.getCreatureProperties(std::stoul(creatureId1.c_str()));
+        auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
-        if (creatureResult1)
+        if (result)
         {
-            creatureName1 = creatureResult1->Name;
+            Field* fields = result->Fetch();
+            uint32_t creatureId = fields[0].asUint32();
 
-            my_query1 = "SELECT id FROM creature_spawns WHERE entry = " + creatureId1 + " AND min_build <= %u AND max_build >= %u";
-            auto spawnResult1 = WorldDatabase.Query(my_query1.c_str(), VERSION_STRING, VERSION_STRING);
+            std::string name = "N/A";
+            if (const auto* props = sMySQLStore.getCreatureProperties(creatureId))
+                name = props->Name;
 
-            std::string spawnId1;
-            if (spawnResult1)
-            {
-                fields = spawnResult1->Fetch();
-                spawnId1 = fields[0].asCString();
-            }
-            else
-                spawnId1 = "N/A";
+            auto stmt2 = WorldDatabase.CreateStatement(WORLD_QUEST_FINISHER_CREATURE_SPAWNID_SELECT);
+            stmt2->Bind(0, creatureId);
+            stmt2->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+            stmt2->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+            auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt2));
+
+            std::string spawnId = spawnResult ? spawnResult->Fetch()[0].asCString() : "N/A";
 
             recout = "|cff00ccffQuest Finisher found: creature id, spawnid, name\n\n";
             SendMultilineMessage(m_session, recout.c_str());
 
-            recout = "|cff00ccff";
-            recout += creatureId1;
-            recout += ", ";
-            recout += spawnId1;
-            recout += ", ";
-            recout += creatureName1;
-            recout += "\n\n";
+            recout = "|cff00ccff" + std::to_string(creatureId) + ", " + spawnId + ", " + name + "\n\n";
             SendMultilineMessage(m_session, recout.c_str());
         }
         else
         {
-            recout = "|cff00ccffNo creature quest finisher info found.\n\n";
+            recout = "|cff00ccffNo creature quest finishers found.\n\n";
             SendMultilineMessage(m_session, recout.c_str());
         }
     }
-    else
+
+    // --- GameObject Finisher ---
     {
-        recout = "|cff00ccffNo creature quest finishers found.\n\n";
-        SendMultilineMessage(m_session, recout.c_str());
-    }
+        auto stmt = WorldDatabase.CreateStatement(WORLD_QUEST_FINISHER_OBJECT_SELECT);
+        stmt->Bind(0, questId);
+        stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
 
-    std::string my_query2 = "SELECT id FROM gameobject_quest_finisher WHERE quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto objectResult2 = WorldDatabase.Query(my_query2.c_str(), VERSION_STRING, VERSION_STRING);
+        auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
-    if (objectResult2)
-    {
-        Field* fields = objectResult2->Fetch();
-        std::string itemId2 = MyConvertIntToString(fields[0].asUint32());
-
-        std::string itemName2 = "N/A";
-        ItemProperties const* itemResult2 = sMySQLStore.getItemProperties(std::stoul(itemId2.c_str()));
-        if (itemResult2)
+        if (result)
         {
-            itemName2 = itemResult2->Name;
+            Field* fields = result->Fetch();
+            uint32_t objectId = fields[0].asUint32();
 
-            my_query2 = "SELECT id FROM gameobject_spawns WHERE entry = " + itemId2 + " min_build <= %u AND max_build >= %u";
-            auto spawnResult2 = WorldDatabase.Query(my_query2.c_str(), VERSION_STRING, VERSION_STRING);
+            std::string name = "N/A";
+            if (const auto* props = sMySQLStore.getItemProperties(objectId))
+                name = props->Name;
 
-            std::string spawnId2;
-            if (spawnResult2)
-            {
-                fields = spawnResult2->Fetch();
-                spawnId2 = fields[0].asCString();
-            }
-            else
-                spawnId2 = "N/A";
+            auto stmt2 = WorldDatabase.CreateStatement(WORLD_QUEST_FINISHER_OBJECT_SPAWNID_SELECT);
+            stmt2->Bind(0, objectId);
+            stmt2->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+            stmt2->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+            auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt2));
+
+            std::string spawnId = spawnResult ? spawnResult->Fetch()[0].asCString() : "N/A";
 
             recout = "|cff00ccffQuest Finisher found: object id, spawnid, name\n\n";
             SendMultilineMessage(m_session, recout.c_str());
 
-            recout = "|cff00ccff";
-            recout += itemId2;
-            recout += ", ";
-            recout += spawnId2;
-            recout += ", ";
-            recout += itemName2;
-            recout += "\n\n";
+            recout = "|cff00ccff" + std::to_string(objectId) + ", " + spawnId + ", " + name + "\n\n";
             SendMultilineMessage(m_session, recout.c_str());
         }
         else
         {
-            recout = "|cff00ccffNo object quest finisher info found.\n\n";
+            recout = "|cff00ccffNo object quest finishers found.\n\n";
             SendMultilineMessage(m_session, recout.c_str());
         }
-    }
-    else
-    {
-        recout = "|cff00ccffNo object quest finishers found.\n\n";
-        SendMultilineMessage(m_session, recout.c_str());
     }
 
     return true;
@@ -1222,30 +1203,29 @@ bool ChatHandler::HandleQuestStarterSpawnCommand(const char* args, WorldSession*
     if (!*args)
         return false;
 
+    uint32_t questId = std::stoul(args);
     std::string recout;
 
-    std::string my_query = "SELECT id FROM creature_quest_starter WHERE quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto objectResult = WorldDatabase.Query(my_query.c_str(), VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_QUEST_STARTER_CREATURE_SELECT);
+    stmt->Bind(0, questId);
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
 
-    std::string starterId;
-    if (objectResult)
-    {
-        Field* fields = objectResult->Fetch();
-        starterId = MyConvertIntToString(fields[0].asUint32());
-    }
-    else
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
+    if (!result)
     {
         recout = "|cff00ccffNo quest starter NPCs found.\n\n";
         SendMultilineMessage(m_session, recout.c_str());
         return true;
     }
 
+    Field* fields = result->Fetch();
+    uint32_t starterId = fields[0].asUint32();
     std::string starterName = "N/A";
-    CreatureProperties const* creatureResult = sMySQLStore.getCreatureProperties(std::stoul(starterId.c_str()));
-    if (creatureResult)
-    {
-        starterName = creatureResult->Name;
-    }
+
+    if (const auto* creatureProps = sMySQLStore.getCreatureProperties(starterId))
+        starterName = creatureProps->Name;
     else
     {
         recout = "|cff00ccffNo quest starter info found.\n\n";
@@ -1253,8 +1233,12 @@ bool ChatHandler::HandleQuestStarterSpawnCommand(const char* args, WorldSession*
         return true;
     }
 
-    my_query = "SELECT map, position_x, position_y, position_z FROM creature_spawns WHERE entry = " + starterId + " AND min_build <= %u AND max_build >= %u";
-    auto spawnResult = WorldDatabase.Query(my_query.c_str(), VERSION_STRING, VERSION_STRING);
+    auto stmt2 = WorldDatabase.CreateStatement(WORLD_QUEST_STARTER_CREATURE_SPAWN_LOCATION_SELECT);
+    stmt2->Bind(0, starterId);
+    stmt2->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+    stmt2->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+    auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt2));
 
     if (!spawnResult)
     {
@@ -1263,7 +1247,7 @@ bool ChatHandler::HandleQuestStarterSpawnCommand(const char* args, WorldSession*
         return true;
     }
 
-    Field* fields = spawnResult->Fetch();
+    fields = spawnResult->Fetch();
     uint32_t locmap = fields[0].asUint32();
     float x = fields[1].asFloat();
     float y = fields[2].asFloat();
@@ -1272,15 +1256,10 @@ bool ChatHandler::HandleQuestStarterSpawnCommand(const char* args, WorldSession*
     recout = "|cff00ccffPorting to Quest Starter/Giver: id, name\n\n";
     SendMultilineMessage(m_session, recout.c_str());
 
-    recout = "|cff00ccff";
-    recout += starterId;
-    recout += ", ";
-    recout += starterName;
-    recout += "\n\n";
+    recout = "|cff00ccff" + std::to_string(starterId) + ", " + starterName + "\n\n";
     SendMultilineMessage(m_session, recout.c_str());
 
     m_session->GetPlayer()->safeTeleport(locmap, 0, LocationVector(x, y, z));
-
     return true;
 }
 
@@ -1289,30 +1268,29 @@ bool ChatHandler::HandleQuestFinisherSpawnCommand(const char* args, WorldSession
     if (!*args)
         return false;
 
+    uint32_t questId = std::stoul(args);
     std::string recout;
 
-    std::string my_query = "SELECT id FROM creature_quest_finisher WHERE quest = " + std::string(args) + " AND min_build <= %u AND max_build >= %u";
-    auto objectResult = WorldDatabase.Query(my_query.c_str(), VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_QUEST_FINISHER_CREATURE_SELECT);
+    stmt->Bind(0, questId);
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
 
-    std::string finisherId;
-    if (objectResult)
-    {
-        Field* fields = objectResult->Fetch();
-        finisherId = MyConvertIntToString(fields[0].asUint32());
-    }
-    else
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
+    if (!result)
     {
         recout = "|cff00ccffNo quest finisher NPCs found.\n\n";
         SendMultilineMessage(m_session, recout.c_str());
         return true;
     }
 
+    Field* fields = result->Fetch();
+    uint32_t finisherId = fields[0].asUint32();
     std::string finisherName = "N/A";
-    CreatureProperties const* creatureResult = sMySQLStore.getCreatureProperties(std::stoul(finisherId.c_str()));
-    if (creatureResult)
-    {
-        finisherName = creatureResult->Name;
-    }
+
+    if (auto* props = sMySQLStore.getCreatureProperties(finisherId))
+        finisherName = props->Name;
     else
     {
         recout = "|cff00ccffNo quest finisher info found.\n\n";
@@ -1320,8 +1298,12 @@ bool ChatHandler::HandleQuestFinisherSpawnCommand(const char* args, WorldSession
         return true;
     }
 
-    my_query = "SELECT map, position_x, position_y, position_z FROM creature_spawns WHERE entry = " + finisherId + " AND min_build <= %u AND max_build >= %u";
-    auto spawnResult = WorldDatabase.Query(my_query.c_str(), VERSION_STRING, VERSION_STRING);
+    auto stmt2 = WorldDatabase.CreateStatement(WORLD_QUEST_FINISHER_CREATURE_SPAWN_LOCATION_SELECT);
+    stmt2->Bind(0, finisherId);
+    stmt2->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+    stmt2->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+    auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt2));
 
     if (!spawnResult)
     {
@@ -1330,8 +1312,8 @@ bool ChatHandler::HandleQuestFinisherSpawnCommand(const char* args, WorldSession
         return true;
     }
 
-    Field* fields = spawnResult->Fetch();
-    uint32_t locmap = fields[0].asUint32();
+    fields = spawnResult->Fetch();
+    uint32_t mapId = fields[0].asUint32();
     float x = fields[1].asFloat();
     float y = fields[2].asFloat();
     float z = fields[3].asFloat();
@@ -1339,15 +1321,10 @@ bool ChatHandler::HandleQuestFinisherSpawnCommand(const char* args, WorldSession
     recout = "|cff00ccffPorting to Quest Finisher: id, name\n\n";
     SendMultilineMessage(m_session, recout.c_str());
 
-    recout = "|cff00ccff";
-    recout += finisherId;
-    recout += ", ";
-    recout += finisherName;
-    recout += "\n\n";
+    recout = "|cff00ccff" + std::to_string(finisherId) + ", " + finisherName + "\n\n";
     SendMultilineMessage(m_session, recout.c_str());
 
-    m_session->GetPlayer()->safeTeleport(locmap, 0, LocationVector(x, y, z));
-
+    m_session->GetPlayer()->safeTeleport(mapId, 0, LocationVector(x, y, z));
     return true;
 }
 

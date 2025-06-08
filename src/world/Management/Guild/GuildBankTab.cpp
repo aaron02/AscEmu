@@ -40,8 +40,12 @@ bool GuildBankTab::loadGuildBankTabItemFromDB(Field* fields)
     auto pItem = sObjectMgr.loadItem(fields[3].asUint32());
     if (pItem == nullptr)
     {
-        CharacterDatabase.Execute("DELETE FROM guild_bank_items WHERE itemGuid = %u AND guildId = %u AND tabId = %u",
-            fields[3].asUint32(), mGuildId, static_cast<uint32_t>(fields[1].asUint8()));
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_ITEM_DELETE_BY_ITEMGUID);
+        stmt->Bind(0, fields[3].asUint32());                         // itemGuid
+        stmt->Bind(1, mGuildId);                                     // guildId
+        stmt->Bind(2, static_cast<uint32_t>(fields[1].asUint8()));   // tabId
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     mItems[slotId] = std::move(pItem);
@@ -137,8 +141,13 @@ void GuildBankTab::setInfo(std::string const& name, std::string const& icon)
     mName = name;
     mIcon = icon;
 
-    CharacterDatabase.Execute("UPDATE guild_bank_tabs SET tabName = '%s' , tabIcon = '%s' WHERE guildId = '%u' AND tabId = '%u' ",
-        mName.c_str(), mIcon.c_str(), mGuildId, static_cast<uint32_t>(mTabId));
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_TAB_UPDATE_NAME_ICON);
+    stmt->Bind(0, mName);
+    stmt->Bind(1, mIcon);
+    stmt->Bind(2, mGuildId);
+    stmt->Bind(3, static_cast<uint32_t>(mTabId));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void GuildBankTab::setText(std::string const& text)
@@ -148,8 +157,13 @@ void GuildBankTab::setText(std::string const& text)
 
     mText = text;
 
-    CharacterDatabase.Execute("UPDATE guild_bank_tabs SET tabText = '%s' , tabIcon = '%s' WHERE guildId = %u AND tabId = %u ",
-        mText.c_str(), mIcon.c_str(), mGuildId, static_cast<uint32_t>(mTabId));
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_TAB_UPDATE_TEXT_ICON);
+    stmt->Bind(0, mText);
+    stmt->Bind(1, mIcon);
+    stmt->Bind(2, mGuildId);
+    stmt->Bind(3, static_cast<uint32_t>(mTabId));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void GuildBankTab::sendText(Guild const* guild, WorldSession* session) const
@@ -197,7 +211,12 @@ std::unique_ptr<Item> GuildBankTab::getItemHolder(uint8_t slotId)
     if (slotId >= MAX_GUILD_BANK_SLOTS)
         return nullptr;
 
-    CharacterDatabase.Execute("DELETE FROM guild_bank_items WHERE guildId = %u AND tabId = %u AND slotId = %u", mGuildId, static_cast<uint32_t>(mTabId), static_cast<uint32_t>(slotId));
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_ITEM_DELETE);
+    stmt->Bind(0, mGuildId);
+    stmt->Bind(1, static_cast<uint32_t>(mTabId));
+    stmt->Bind(2, static_cast<uint32_t>(slotId));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 
     std::unique_ptr<Item> tmpHolder = std::move(mItems[slotId]);
     return tmpHolder;
@@ -229,12 +248,25 @@ bool GuildBankTab::setItem(uint8_t slotId, std::unique_ptr<Item> item)
         }
 
         mItems[slot_id] = std::move(item);
-        CharacterDatabase.Execute("INSERT INTO guild_bank_items VALUES (%u, %u, %u, %u)", mGuildId, static_cast<uint32_t>(mTabId), slot_id, itemGuid);
+
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_ITEM_INSERT);
+        stmt->Bind(0, mGuildId);
+        stmt->Bind(1, static_cast<uint32_t>(mTabId));
+        stmt->Bind(2, slot_id);
+        stmt->Bind(3, itemGuid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
     else
     {
         mItems[slotId] = nullptr;
-        CharacterDatabase.Execute("DELETE FROM guild_bank_items WHERE guildId = %u AND tabId = %u AND slotId = %u", mGuildId, static_cast<uint32_t>(mTabId), static_cast<uint32_t>(slotId));
+        
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_ITEM_DELETE);
+        stmt->Bind(0, mGuildId);
+        stmt->Bind(1, static_cast<uint32_t>(mTabId));
+        stmt->Bind(2, static_cast<uint32_t>(slotId));
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     return true;

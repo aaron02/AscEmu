@@ -66,7 +66,14 @@ bool ChatHandler::HandleWayPointAddCommand(const char* args, WorldSession* m_ses
         creature_target->setDefaultMovementType(WAYPOINT_MOTION_TYPE);
         creature_target->getMovementManager()->movePath(pathId, true);
 
-        WorldDatabase.Execute("UPDATE creature_spawns SET movetype = %u, waypoint_group = %u WHERE id = %u AND min_build <= %u AND max_build >= %u", WAYPOINT_MOTION_TYPE, pathId, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+        auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_SPAWN_WAYPOINT_UPDATE);
+        stmt->Bind(0, static_cast<uint8_t>(WAYPOINT_MOTION_TYPE));
+        stmt->Bind(1, pathId);
+        stmt->Bind(2, creature_target->spawnid);
+        stmt->Bind(3, VERSION_STRING);
+        stmt->Bind(4, VERSION_STRING);
+
+        WorldDatabase.QueryStatement(std::move(stmt));
     }
 
     WaypointNode waypoint;

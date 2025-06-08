@@ -963,64 +963,51 @@ void Creature::SaveToDB()
         getWorldMap()->getBaseMap()->getSpawnsListAndCreate(x, y)->CreatureSpawns.push_back(m_spawn);
     }
 
-    std::stringstream ss;
+    {
+        auto delStmt = WorldDatabase.CreateStatement(WORLD_DEL_CREATURE_SPAWN_BY_ID_AND_BUILD);
+        delStmt->Bind(0, spawnid);
+        delStmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+        delStmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        WorldDatabase.ExecuteStatement(std::move(delStmt));
+    }
 
-    ss << "DELETE FROM " << m_spawn->origine << " WHERE id = ";
-    ss << spawnid;
-    ss << " AND min_build <= ";
-    ss << VERSION_STRING;
-    ss << " AND max_build >= ";
-    ss << VERSION_STRING;
-    ss << ";";
+    {
+        auto insStmt = WorldDatabase.CreateStatement(WORLD_INS_CREATURE_SPAWN);
+        insStmt->Bind(0, spawnid);
+        insStmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+        insStmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        insStmt->Bind(3, getEntry());
+        insStmt->Bind(4, GetMapId());
+        insStmt->Bind(5, m_position.x);
+        insStmt->Bind(6, m_position.y);
+        insStmt->Bind(7, m_position.z);
+        insStmt->Bind(8, m_position.o);
+        insStmt->Bind(9, static_cast<uint32_t>(getDefaultMovementType()));
+        insStmt->Bind(10, getDisplayId());
+        insStmt->Bind(11, getFactionTemplate());
+        insStmt->Bind(12, getUnitFlags());
+        insStmt->Bind(13, isPvpFlagSet() ? 1 : 0);
+        insStmt->Bind(14, getBytes0());
+        insStmt->Bind(15, getEmoteState());
+        insStmt->Bind(16, 0); // respawn link
+        insStmt->Bind(17, m_spawn->channel_spell);
+        insStmt->Bind(18, m_spawn->channel_target_go);
+        insStmt->Bind(19, m_spawn->channel_target_creature);
+        insStmt->Bind(20, static_cast<uint32_t>(getStandState()));
+        insStmt->Bind(21, m_spawn->death_state);
+        insStmt->Bind(22, getMountDisplayId());
+        insStmt->Bind(23, static_cast<uint32_t>(getSheathType()));
+        insStmt->Bind(24, m_spawn->Item1SlotEntry);
+        insStmt->Bind(25, m_spawn->Item2SlotEntry);
+        insStmt->Bind(26, m_spawn->Item3SlotEntry);
+        insStmt->Bind(27, IsFlying() ? 1 : 0);
+        insStmt->Bind(28, m_phase);
+        insStmt->Bind(29, 0); // event_entry
+        insStmt->Bind(30, 0); // wander_distance
+        insStmt->Bind(31, 0); // waypoint_group
 
-    WorldDatabase.Execute(ss.str().c_str());
-
-    ss.rdbuf()->str("");
-
-    ss << "INSERT INTO " << m_spawn->origine << " VALUES("
-        << spawnid << ","
-        << VERSION_STRING << ","
-        << VERSION_STRING << ","
-        << getEntry() << ","
-        << GetMapId() << ","
-        << m_position.x << ","
-        << m_position.y << ","
-        << m_position.z << ","
-        << m_position.o << ","
-        << static_cast<uint32_t>(getDefaultMovementType()) << ","
-        << getDisplayId() << ","
-        << getFactionTemplate() << ","
-        << getUnitFlags() << ","
-        << (isPvpFlagSet() ? "1" : "0") << ","
-        << getBytes0() << ","
-        << getEmoteState() << ",0,";
-
-    ss << m_spawn->channel_spell << ","
-        << m_spawn->channel_target_go << ","
-        << m_spawn->channel_target_creature << ",";
-
-    ss << uint32_t(getStandState()) << ",";
-
-    ss << m_spawn->death_state << ",";
-
-    ss << getMountDisplayId() << ","
-        << std::to_string(getSheathType()) << ","
-        << m_spawn->Item1SlotEntry << ","
-        << m_spawn->Item2SlotEntry << ","
-        << m_spawn->Item3SlotEntry << ",";
-
-    if (IsFlying())
-        ss << 1 << ",";
-    else
-        ss << 0 << ",";
-
-    ss << m_phase << ","
-        << "0"  // event_entry
-        << ",0"  // wander distance
-        << ",0" // waypoint_group
-        << ")";
-
-    WorldDatabase.Execute(ss.str().c_str());
+        WorldDatabase.ExecuteStatement(std::move(insStmt));
+    }
 }
 
 void Creature::LoadScript()
@@ -1033,7 +1020,12 @@ void Creature::DeleteFromDB()
     if (!GetSQL_id())
         return;
 
-    WorldDatabase.Execute("DELETE FROM %s WHERE id = %u AND min_build <= %u AND max_build >= %u", m_spawn->origine.c_str(), GetSQL_id(), VERSION_STRING, VERSION_STRING);
+   auto stmt = WorldDatabase.CreateStatement(WORLD_DEL_CREATURE_SPAWN_VERSIONED);
+   stmt->Bind(0, GetSQL_id());
+   stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+   stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+
+   WorldDatabase.ExecuteStatement(std::move(stmt));
 }
 
 

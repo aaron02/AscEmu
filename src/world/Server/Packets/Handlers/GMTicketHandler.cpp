@@ -62,21 +62,32 @@ void WorldSession::handleGMSurveySubmitOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    auto result = CharacterDatabase.Query("SELECT MAX(survey_id) FROM gm_survey");
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_MAX_GM_SURVEY_ID);
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
         return;
 
     uint32_t next_survey_id = result->Fetch()[0].asUint32() + 1;
 
-    for (auto subSurvey : srlPacket.subSurvey)
-        CharacterDatabase.Execute("INSERT INTO gm_survey_answers VALUES(%u , %u , %u)",
-            next_survey_id, subSurvey.subSurveyId, subSurvey.answerId);
+    for (const auto& subSurvey : srlPacket.subSurvey)
+    {
+        auto subStmt = CharacterDatabase.CreateStatement(CHAR_INS_GM_SURVEY_ANSWER);
+        subStmt->Bind(0, next_survey_id);
+        subStmt->Bind(1, subSurvey.subSurveyId);
+        subStmt->Bind(2, subSurvey.answerId);
+        CharacterDatabase.ExecuteStatement(std::move(subStmt));
+    }
 
-    CharacterDatabase.Execute("INSERT INTO gm_survey VALUES (%u, %u, %u, \'%s\', UNIX_TIMESTAMP(NOW()))",
-        next_survey_id, _player->getGuidLow(), srlPacket.mainSurveyId, CharacterDatabase.EscapeString(srlPacket.mainComment).c_str());
+    auto mainStmt = CharacterDatabase.CreateStatement(CHAR_INS_GM_SURVEY);
+    mainStmt->Bind(0, next_survey_id);
+    mainStmt->Bind(1, _player->getGuidLow());
+    mainStmt->Bind(2, srlPacket.mainSurveyId);
+    mainStmt->Bind(3, srlPacket.mainComment);
 
-    sLogger.debug("Player {} has submitted the gm suvey {} successfully.",
-        _player->getName(), next_survey_id);
+    CharacterDatabase.ExecuteStatement(std::move(mainStmt));
+
+    sLogger.debug("Player {} has submitted the gm survey {} successfully.", _player->getName(), next_survey_id);
 }
 
 void WorldSession::handleReportLag(WorldPacket& recvPacket)
@@ -88,8 +99,16 @@ void WorldSession::handleReportLag(WorldPacket& recvPacket)
 
     if (_player != nullptr)
     {
-        CharacterDatabase.Execute("INSERT INTO lag_reports (player, account, lag_type, map_id, position_x, position_y, position_z) VALUES(%u, %u, %u, %u, %f, %f, %f)",
-            _player->getGuidLow(), _accountId, srlPacket.lagType, srlPacket.mapId, srlPacket.location.x, srlPacket.location.y, srlPacket.location.z);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_LAG_REPORT);
+        stmt->Bind(0, _player->getGuidLow());
+        stmt->Bind(1, _accountId);
+        stmt->Bind(2, srlPacket.lagType);
+        stmt->Bind(3, srlPacket.mapId);
+        stmt->Bind(4, srlPacket.location.x);
+        stmt->Bind(5, srlPacket.location.y);
+        stmt->Bind(6, srlPacket.location.z);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
 
         sLogger.debug("Player {} has reported a lagreport with Type: {} on Map: {}", _player->getName(), srlPacket.lagType, srlPacket.mapId);
     }

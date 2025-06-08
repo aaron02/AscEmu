@@ -47,19 +47,34 @@ Auction::Auction(Field const* fields, std::unique_ptr<Item> pItem)
 
 void Auction::deleteFromDB()
 {
-    CharacterDatabase.WaitExecute("DELETE FROM auctions WHERE auctionId = %u", Id);
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_AUCTION_DELETE);
+    stmt->Bind(0, Id);
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Auction::saveToDB(uint32_t auctionHouseId)
 {
-    CharacterDatabase.Execute("INSERT INTO auctions VALUES(%u, %u, %u, %u, %u, %u, %u, %u, %u, %u)", 
-        Id, auctionHouseId, auctionItem->getGuidLow(), ownerGuid.getGuidLow(), startPrice, buyoutPrice, expireTime, highestBidderGuid.getGuidLow(), 
-        highestBid, depositAmount);
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_AUCTION_INSERT);
+    stmt->Bind(0, Id);
+    stmt->Bind(1, auctionHouseId);
+    stmt->Bind(2, auctionItem->getGuidLow());
+    stmt->Bind(3, ownerGuid.getGuidLow());
+    stmt->Bind(4, startPrice);
+    stmt->Bind(5, buyoutPrice);
+    stmt->Bind(6, expireTime);
+    stmt->Bind(7, highestBidderGuid.getGuidLow());
+    stmt->Bind(8, highestBid);
+    stmt->Bind(9, depositAmount);
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Auction::updateInDB()
 {
-    CharacterDatabase.Execute("UPDATE auctions SET bidder = %u, bid = %u WHERE auctionId = %u", highestBidderGuid.getGuidLow(), highestBid, Id);
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_AUCTION_UPDATE_BID);
+    stmt->Bind(0, highestBidderGuid.getGuidLow());
+    stmt->Bind(1, highestBid);
+    stmt->Bind(2, Id);
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 AuctionPacketList Auction::getListMember()
@@ -130,7 +145,10 @@ uint32_t AuctionHouse::getId() const { return auctionHouseEntryDbc ? auctionHous
 
 void AuctionHouse::loadAuctionsFromDB()
 {
-    auto result = CharacterDatabase.Query("SELECT * FROM auctions WHERE auctionhouse =%u", getId());
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_AUCTION_SELECT_BY_HOUSE);
+    stmt->Bind(0, getId());
+
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
     if (!result)
         return;
 
@@ -142,14 +160,16 @@ void AuctionHouse::loadAuctionsFromDB()
         auto pItem = sObjectMgr.loadItem(fields[2].asUint32());
         if (!pItem)
         {
-            CharacterDatabase.Execute("DELETE FROM auctions WHERE auctionId=%u", auctionId);
+            auto delStmt = CharacterDatabase.CreateStatement(CHARACTER_AUCTION_DELETE_BY_ID);
+            delStmt->Bind(0, auctionId);
+            CharacterDatabase.ExecuteStatement(std::move(delStmt));
             continue;
         }
 
         auctions.try_emplace(auctionId, std::make_unique<Auction>(fields, std::move(pItem)));
-    }
-    while (result->NextRow());
+    } while (result->NextRow());
 }
+
 
 void AuctionHouse::updateAuctions()
 {

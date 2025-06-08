@@ -121,8 +121,11 @@ inline void* allocate_and_copy(uint32_t len, void* pointer)
 
 void CommandTableStorage::Load()
 {
-    auto result = CharacterDatabase.Query("SELECT command_name, access_level FROM command_overrides");
-    if (!result) return;
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_COMMAND_OVERRIDES_SELECT);
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+
+    if (!result)
+        return;
 
     do
     {
@@ -485,7 +488,6 @@ void CommandTableStorage::Init()
         { "animprogress",           'o', &ChatHandler::HandleGOSetAnimProgressCommand,                     "Sets anim progress of selected GO",                                                 nullptr },
         { "faction",                'o', &ChatHandler::HandleGOSetFactionCommand,                          "Sets the faction of the GO",                                                        nullptr },
         { "flags",                  'o', &ChatHandler::HandleGOSetFlagsCommand,                            "Sets the flags of the GO",                                                          nullptr },
-        { "overrides",              'o', &ChatHandler::HandleGOSetOverridesCommand,                        "Sets override of selected GO",                                                      nullptr },
         { "phase",                  'o', &ChatHandler::HandleGOSetPhaseCommand,                            "Sets phase of selected GO",                                                         nullptr },
         { "scale",                  'o', &ChatHandler::HandleGOSetScaleCommand,                            "Sets scale of selected GO",                                                         nullptr },
         { "state",                  'o', &ChatHandler::HandleGOSetStateCommand,                            "Sets the state byte of the GO",                                                     nullptr },
@@ -548,14 +550,12 @@ void CommandTableStorage::Init()
 
     static ChatCommand NPCCommandTable[] =
     {
-        { "addagent",               'n', &ChatHandler::HandleNpcAddAgentCommand,                           "Add ai agents to npc.",                                                             nullptr },
         { "addtrainerspell",        'm', &ChatHandler::HandleNpcAddTrainerSpellCommand,                    "Add spells to trainer learn list.",                                                 nullptr },
         { "appear",                 'n', &ChatHandler::HandleNpcAppearCommand,                             "Teleports you to the target NPC's location.",                                       nullptr },
         { "cast",                   'n', &ChatHandler::HandleNpcCastCommand,                               "Makes NPC cast <spellid>.",                                                         nullptr },
         { "come",                   'n', &ChatHandler::HandleNpcComeCommand,                               "Makes NPC move to your position",                                                   nullptr },
         { "delete",                 'n', &ChatHandler::HandleNpcDeleteCommand,                             "Deletes mob from world optional from DB",                                           nullptr },
         { "info",                   'n', &ChatHandler::HandleNpcInfoCommand,                               "Displays NPC information",                                                          nullptr },
-        { "listAgent",              'n', &ChatHandler::HandleNpcListAIAgentCommand,                        "List AIAgents of selected target.",                                                 nullptr },
         { "listloot",               'm', &ChatHandler::HandleNpcListLootCommand,                           "Displays possible loot for the selected NPC.",                                      nullptr },
         { "follow",                 'm', &ChatHandler::HandleNpcFollowCommand,                             "Sets NPC to follow you",                                                            nullptr },
         { "stopfollow",             'm', &ChatHandler::HandleNpcStopFollowCommand,                         "Sets NPC to not follow anything",                                                   nullptr },

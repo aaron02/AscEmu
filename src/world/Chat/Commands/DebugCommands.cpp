@@ -31,13 +31,16 @@ This file is released under the MIT license. See README-MIT for more information
 
 bool ChatHandler::HandleMoveHardcodedScriptsToDBCommand(const char* args, WorldSession* session)
 {
+    /* todo aaron02
     uint32_t map = uint32_t(atoi(args));
     if (map == 0)
         return true;
 
     std::vector<uint32_t> creatureEntries;
 
-    auto creature_spawn_result = WorldDatabase.Query("SELECT entry FROM creature_spawns WHERE map = %u GROUP BY(entry)", map);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_ENTRIES_BY_MAP);
+    stmt->Bind(0, map);
+    auto creature_spawn_result = WorldDatabase.QueryStatement(std::move(stmt));
     if (creature_spawn_result)
     {
         {
@@ -154,7 +157,7 @@ bool ChatHandler::HandleMoveHardcodedScriptsToDBCommand(const char* args, WorldS
     }
 
     SystemMessage(session, "Dumped: %u hardcoded scripts to creature_ai_scripts_dump", count);
-
+*/
     return true;
 }
 

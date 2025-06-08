@@ -140,8 +140,8 @@ public:
     WorldSession* getSessionByAccountId(uint32_t accountId);
     WorldSession* getSessionByAccountName(const std::string& accountName);
 
-    void sendCharacterEnumToAccountSession(QueryResultVector& results, uint32_t accountId);
-    void loadAccountDataProcForId(QueryResultVector& results, uint32_t accountId);
+    void sendCharacterEnumToAccountSession(std::unique_ptr<QueryResult> result, uint32_t accountId);
+    void loadAccountDataProcForId(std::unique_ptr<QueryResult> result, uint32_t accountId);
 
     size_t getSessionCount();
 

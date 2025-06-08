@@ -101,7 +101,9 @@ void LogonCommHandler::loadAccountPermissions()
 {
     sLogger.info("LogonCommClient : Loading account permissions...");
 
-    auto result = CharacterDatabase.Query("SELECT id, permissions FROM account_permissions");
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_ACCOUNT_PERMISSIONS);
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+
     if (result != nullptr)
     {
         do

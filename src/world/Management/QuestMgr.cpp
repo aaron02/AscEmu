@@ -1877,7 +1877,7 @@ void QuestMgr::OnQuestFinished(Player* plr, QuestProperties const* qst, Object* 
                 if (pItem != NULL)
                 {
                     pItem->setStackCount(1);
-                    pItem->saveToDB(0, 0, true, NULL);
+                    pItem->saveToDB(0, 0, true);
                     itemGuid = pItem->getGuid();
                 }
             }
@@ -2511,7 +2511,12 @@ void QuestMgr::LoadExtraQuestStuff()
     // load creature starters
     uint32_t entry, quest;
 
-    auto pResult = sMySQLStore.getWorldDBQuery("SELECT * FROM creature_quest_starter WHERE min_build <= %u AND max_build >= %u", VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_ALL_CREATURE_QUEST_STARTER);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    auto pResult = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (pResult)
     {
         do
@@ -2528,7 +2533,12 @@ void QuestMgr::LoadExtraQuestStuff()
         } while (pResult->NextRow());
     }
 
-    pResult = sMySQLStore.getWorldDBQuery("SELECT * FROM creature_quest_finisher WHERE min_build <= %u AND max_build >= %u", VERSION_STRING, VERSION_STRING);
+    auto stmt2 = WorldDatabase.CreateStatement(WORLD_SEL_ALL_CREATURE_QUEST_FINISHER);
+    stmt2->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt2->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    pResult = WorldDatabase.QueryStatement(std::move(stmt2));
+
     if (pResult)
     {
         do
@@ -2545,7 +2555,12 @@ void QuestMgr::LoadExtraQuestStuff()
         } while (pResult->NextRow());
     }
 
-    pResult = sMySQLStore.getWorldDBQuery("SELECT * FROM gameobject_quest_starter WHERE min_build <= %u AND max_build >= %u", VERSION_STRING, VERSION_STRING);
+    auto stmt3 = WorldDatabase.CreateStatement(WORLD_SEL_ALL_GAMEOBJECT_QUEST_STARTER);
+    stmt3->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt3->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    pResult = WorldDatabase.QueryStatement(std::move(stmt3));
+
     if (pResult)
     {
         do
@@ -2562,7 +2577,12 @@ void QuestMgr::LoadExtraQuestStuff()
         } while (pResult->NextRow());
     }
 
-    pResult = sMySQLStore.getWorldDBQuery("SELECT * FROM gameobject_quest_finisher WHERE min_build <= %u AND max_build >= %u", VERSION_STRING, VERSION_STRING);
+    auto stmt4 = WorldDatabase.CreateStatement(WORLD_SEL_ALL_GAMEOBJECT_QUEST_FINISHER);
+    stmt4->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt4->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    pResult = WorldDatabase.QueryStatement(std::move(stmt4));
+
     if (pResult)
     {
         do
@@ -2586,62 +2606,76 @@ void QuestMgr::LoadExtraQuestStuff()
     uint32_t item;
     uint8_t item_count;
 
-    pResult = WorldDatabase.Query("SELECT * FROM item_quest_association");
-    if (pResult != NULL)
     {
-        do
-        {
-            Field* data = pResult->Fetch();
-            item = data[0].asUint32();
-            quest = data[1].asUint32();
-            item_count = data[2].asUint8();
+        auto stmt = WorldDatabase.CreateStatement(WORLD_ITEM_QUEST_ASSOCIATION_SELECT);
+        auto pResult = WorldDatabase.QueryStatement(std::move(stmt));
 
-            auto qst = sMySQLStore.getQuestProperties(quest);
-            if (qst == nullptr)
+        if (pResult)
+        {
+            do
             {
-                sLogger.debugFlag(AscEmu::Logging::LF_DB_TABLES, "Tried to add association to item {} for non-existent quest {}.", item, quest);
-            }
-            else
-            {
-                AddItemQuestAssociation(item, qst, item_count);
-            }
+                auto* data = pResult->Fetch();
+
+                auto item = data[0].asUint32();
+                auto quest = data[1].asUint32();
+                auto item_count = data[2].asUint8();
+
+                auto qst = sMySQLStore.getQuestProperties(quest);
+                if (!qst)
+                {
+                    sLogger.debugFlag(AscEmu::Logging::LF_DB_TABLES, "Tried to add association to item {} for non-existent quest {}.", item, quest);
+                }
+                else
+                {
+                    AddItemQuestAssociation(item, qst, item_count);
+                }
+
+            } while (pResult->NextRow());
         }
-        while (pResult->NextRow());
     }
 
     m_QuestPOIMap.clear();
 
-    auto result = WorldDatabase.Query("SELECT questId, poiId, objIndex, mapId, mapAreaId, floorId, unk3, unk4 FROM quest_poi");
-    if (result != NULL)
     {
-        uint32_t count = 0;
+        auto stmt = WorldDatabase.CreateStatement(WORLD_QUEST_POI_SELECT);
+        auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
-        do
+        if (result)
         {
-            Field* fields = result->Fetch();
+            uint32_t count = 0;
 
-            uint32_t questId = fields[0].asUint32();
-            uint32_t poiId = fields[1].asUint32();
-            int32_t  objIndex = fields[2].asInt32();
-            uint32_t mapId = fields[3].asUint32();
-            uint32_t mapAreaId = fields[4].asUint32();
-            uint32_t floorId = fields[5].asUint32();
-            uint32_t unk3 = fields[6].asUint32();
-            uint32_t unk4 = fields[7].asUint32();
+            do
+            {
+                Field* fields = result->Fetch();
 
-            QuestPOI POI(poiId, objIndex, mapId, mapAreaId, floorId, unk3, unk4);
-            m_QuestPOIMap[questId].push_back(POI);
+                uint32_t questId = fields[0].asUint32();
+                uint32_t poiId = fields[1].asUint32();
+                int32_t  objIndex = fields[2].asInt32();
+                uint32_t mapId = fields[3].asUint32();
+                uint32_t mapAreaId = fields[4].asUint32();
+                uint32_t floorId = fields[5].asUint32();
+                uint32_t unk3 = fields[6].asUint32();
+                uint32_t unk4 = fields[7].asUint32();
 
-            count++;
+                QuestPOI poi(poiId, objIndex, mapId, mapAreaId, floorId, unk3, unk4);
+                m_QuestPOIMap[questId].push_back(std::move(poi));
+
+                ++count;
+
+            } while (result->NextRow());
+
+            sLogger.info("QuestMgr : Point Of Interest (POI) data loaded for {} quests.", count);
         }
-        while (result->NextRow());
+    }
 
-        sLogger.info("QuestMgr : Point Of Interest (POI) data loaded for {} quests.", count);
+    {
+        auto stmt = WorldDatabase.CreateStatement(WORLD_QUEST_POI_POINTS_SELECT);
+        auto points = WorldDatabase.QueryStatement(std::move(stmt));
 
-        auto points = WorldDatabase.Query("SELECT questId, poiId, x, y FROM quest_poi_points");
-        if (points != NULL)
+        if (points)
         {
-            count = 0;
+            uint32_t count = 0;
+
             do
             {
                 Field* pointFields = points->Fetch();
@@ -2651,21 +2685,20 @@ void QuestMgr::LoadExtraQuestStuff()
                 int32_t  x = pointFields[2].asInt32();
                 int32_t  y = pointFields[3].asInt32();
 
-                QuestPOIVector & vect = m_QuestPOIMap[questId];
+                auto& vect = m_QuestPOIMap[questId];
 
-                for (QuestPOIVector::iterator itr = vect.begin(); itr != vect.end(); ++itr)
+                for (auto& poi : vect)
                 {
-                    if (itr->PoiId != poiId)
+                    if (poi.PoiId != poiId)
                         continue;
 
-                    QuestPOIPoint point(x, y);
-                    itr->points.push_back(point);
+                    poi.points.emplace_back(x, y);
                     break;
                 }
 
-                count++;
-            }
-            while (points->NextRow());
+                ++count;
+
+            } while (points->NextRow());
 
             sLogger.info("QuestMgr : {} quest Point Of Interest points loaded.", count);
         }

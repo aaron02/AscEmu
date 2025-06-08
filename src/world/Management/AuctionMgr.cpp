@@ -28,38 +28,55 @@ void AuctionMgr::loadAuctionHouses()
 {
     sLogger.info("AuctionMgr : Loading Auction Houses...");
 
-    auto res = CharacterDatabase.Query("SELECT MAX(auctionId) FROM auctions");
-    if (res)
     {
-        m_maxId = res->Fetch()[0].asUint32();
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_AUCTION_MAX_ID_SELECT);
+        auto res = CharacterDatabase.QueryStatement(std::move(stmt));
+        if (res)
+            m_maxId = res->Fetch()[0].asUint32();
     }
 
-    res = WorldDatabase.Query("SELECT DISTINCT ahgroup FROM auctionhouse");
     std::map<uint32_t, AuctionHouse*> tempmap;
-    if (res)
-    {
-        const uint32_t period = (res->GetRowCount() / 20) + 1;
-        uint32_t c = 0;
-        do
-        {
-            const auto& ah = m_auctionHouses.emplace_back(std::make_unique<AuctionHouse>(res->Fetch()[0].asUint32()));
-            ah->loadAuctionsFromDB();
-            tempmap.try_emplace(res->Fetch()[0].asUint32(), ah.get());
-            if (!((++c) % period))
-                sLogger.info("AuctionHouse : Done {}/{}, {}% complete.", c, res->GetRowCount(), c * 100 / res->GetRowCount());
 
+    {
+        auto stmt = WorldDatabase.CreateStatement(WORLD_AUCTIONHOUSE_GROUPS_SELECT);
+        auto res = WorldDatabase.QueryStatement(std::move(stmt));
+
+        if (res)
+        {
+            const uint32_t rowCount = res->GetRowCount();
+            const uint32_t period = (rowCount / 20) + 1;
+            uint32_t c = 0;
+
+            do
+            {
+                uint32_t ahgroup = res->Fetch()[0].asUint32();
+                const auto& ah = m_auctionHouses.emplace_back(std::make_unique<AuctionHouse>(ahgroup));
+                ah->loadAuctionsFromDB();
+                tempmap.try_emplace(ahgroup, ah.get());
+
+                if (!((++c) % period))
+                {
+                    sLogger.info("AuctionHouse : Done {}/{}, {}% complete.", c, rowCount, c * 100 / rowCount);
+                }
+            } while (res->NextRow());
         }
-        while (res->NextRow());
     }
 
-    res = WorldDatabase.Query("SELECT creature_entry, ahgroup FROM auctionhouse");
-    if (res)
     {
-        do
+        auto stmt = WorldDatabase.CreateStatement(WORLD_AUCTIONHOUSE_ENTRIES_SELECT);
+        auto res = WorldDatabase.QueryStatement(std::move(stmt));
+
+        if (res)
         {
-            m_auctionHouseEntryMap.try_emplace(res->Fetch()[0].asUint32(), tempmap[res->Fetch()[1].asUint32()]);
+            do
+            {
+                Field* fields = res->Fetch();
+                uint32_t entry = fields[0].asUint32();
+                uint32_t group = fields[1].asUint32();
+
+                m_auctionHouseEntryMap.try_emplace(entry, tempmap[group]);
+            } while (res->NextRow());
         }
-        while (res->NextRow());
     }
 }
 

@@ -321,7 +321,6 @@ public:
     bool HandleGOSetPhaseCommand(const char* args, WorldSession* m_session);
     bool HandleGOSetScaleCommand(const char* args, WorldSession* m_session);
     bool HandleGOSetAnimProgressCommand(const char* args, WorldSession* m_session);
-    bool HandleGOSetOverridesCommand(const char* args, WorldSession* m_session);
 
     //old GMTicket commands
     //\todo Rewrite these commands
@@ -405,7 +404,6 @@ public:
     bool HandleModifyBytes2(const char* args, WorldSession* session);
 
     // NPC Commands
-    bool HandleNpcAddAgentCommand(const char* args, WorldSession* m_session);
     bool HandleNpcAppearCommand(const char * _, WorldSession * __);
     bool HandleNpcAddTrainerSpellCommand(const char* args, WorldSession* m_session);
     bool HandleNpcCastCommand(const char* args, WorldSession* m_session);
@@ -413,7 +411,6 @@ public:
     bool HandleNpcDeleteCommand(const char* args, WorldSession* m_session);
     bool HandleNpcFollowCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleNpcInfoCommand(const char* /*args*/, WorldSession* m_session);
-    bool HandleNpcListAIAgentCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleNpcListLootCommand(const char* args, WorldSession* m_session);
     bool HandleNpcStopFollowCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleNpcRespawnCommand(const char* /*args*/, WorldSession* m_session);

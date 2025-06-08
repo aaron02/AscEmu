@@ -1,460 +1,486 @@
 /*
- * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
- * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- */
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
+This file is released under the MIT license. See README-MIT for more information.
+*/
 
- //////////////////////////////////////////////
- // Notes: .Execute is ASYNC! -
- // We should probably be using QueryBuffer for ASYNC and NONE-ASYNC queries to not lag the emu.
- // See: Player::_SavePetSpells for example of usage
- // updated: Tuesday, June 16th 2009 - Hasbro
- //////////////////////////////////////////////
+#include "Logging/Logger.hpp"
+#include "Database.hpp"
+#include <stdexcept>
+#include <iostream>
 
-#include "Utilities/Util.hpp"
-#include "Utilities/CallBack.h"
+using SystemTimePoint = std::chrono::system_clock::time_point;
 
-#include <string>
-#include <vector>
-#include <cstdarg>
+Database::Database() = default;
 
-#include "Debugging/Errors.h"
-
-using AscEmu::Threading::AEThread;
-using std::unique_ptr;
-using std::make_unique;
-
-SQLCallbackBase::~SQLCallbackBase()
+Database::~Database() 
 {
-
+    Shutdown();
 }
 
-void Database::createDbConnection()
+bool Database::Initialize(const std::string& host, uint32_t port, const std::string& user, const std::string& pass, const std::string& dbname, uint32_t connections, bool useLegacyAuth)
 {
-    if (m_dbConnection == nullptr)
-        m_dbConnection = GetFreeConnection();
-}
+    mHost = host;
+    mPort = port;
+    mUser = user;
+    mPass = pass;
+    mDBName = dbname;
 
-void Database::destroyDbConnection()
-{
-    if (m_dbConnection)
+    sLogger.info("MySQLDatabase : Connecting to `{}`, database `{}`...", mHost.c_str(), mDBName.c_str());
+    
+    // Prepare Statements
+    PrepareStatements();
+
+    m_connections.reserve(connections);
+    for (uint32_t i = 0; i < connections; ++i)
     {
-        m_dbConnection->Busy.release();
-        m_dbConnection = nullptr;
-    }
-}
+        MYSQL* mysql = mysql_init(nullptr);
+        if (!mysql)
+        {
+            sLogger.failure("[MySQL] mysql_init failed for connection " + std::to_string(i));
+            continue;
+        }
 
-void Database::createQueryBufferConnection()
-{
-    if (m_queryBufferConnection == nullptr)
-        m_queryBufferConnection = GetFreeConnection();
-}
+        // Set UTF8 charset
+        if (mysql_options(mysql, MYSQL_SET_CHARSET_NAME, "utf8"))
+            sLogger.failure(std::string("[MySQL] Warning: Failed to set UTF-8 charset: ") + mysql_error(mysql));
 
-void Database::dbThreadRunner(AEThread& /*thread*/)
-{
-    dbRunAllQueries();
-}
 
-void Database::dbThreadShutdown()
-{
-    // Shut down thread
-    m_dbThread->killAndJoin();
+        // Enable Reconnect
+        bool reconnect = true;
+        if (mysql_options(mysql, MYSQL_OPT_RECONNECT, &reconnect))
+            sLogger.failure(std::string("[MySQL] Warning: Failed to enable reconnect: ") + mysql_error(mysql));
 
-    // Execute remaining queries
-    dbRunAllQueries();
-    destroyDbConnection();
-}
 
-Database::Database()
-{
-    _counter = 0;
-    mConnectionCount = -1;   // Not connected.
-    //ThreadRunning = true;
-    mPort = 3306;
-    qt = nullptr;
+        // MySQL 8+ authentication plugin
+        if (!useLegacyAuth)
+        {
+            if (mysql_options(mysql, MYSQL_DEFAULT_AUTH, "caching_sha2_password"))
+            {
+                sLogger.failure(std::string("[MySQL] Failed to set MySQL 8 auth plugin: ") + mysql_error(mysql));
+                mysql_close(mysql);
+                return false;
+            }
+        }
 
-    m_dbConnection = nullptr;
-    m_queryBufferConnection = nullptr;
-}
+        // Connect
+        if (!mysql_real_connect(mysql, host.c_str(), user.c_str(), pass.c_str(), dbname.c_str(), port, nullptr, 0))
+        {
+            sLogger.failure(std::string("[MySQL] Connection failed: ") + mysql_error(mysql));
+            mysql_close(mysql);
+            return false;
+        }
 
-Database::~Database()
-{
+        // Setup Connection
+        auto conn = std::make_unique<DatabaseConnection>();
+        conn->handle = mysql;
 
-}
+        // Prepare Statements for Connection
+        PrepareStatementsForConnection(mysql, conn->preparedStatements);
 
-void Database::_Initialize()
-{
-    if (m_dbThread == nullptr)
-        m_dbThread = std::make_unique<AEThread>("DatabaseThread", [this](AEThread& thread) { this->dbThreadRunner(thread); }, std::chrono::milliseconds(10));
-    else
-        m_dbThread->reboot();
-
-    if (m_queryBufferThread == nullptr)
-        m_queryBufferThread = std::make_unique<AEThread>("QueryBufferThread", [this](AEThread& thread) { this->queryBufferThreadRunner(thread); }, std::chrono::milliseconds(10));
-    else
-        m_queryBufferThread->reboot();
-}
-
-DatabaseConnection* Database::GetFreeConnection()
-{
-    uint32_t i = 0;
-    for (;;)
-    {
-        DatabaseConnection* con = Connections[((i++) % mConnectionCount)].get();
-        if (con->Busy.attemptAcquire())
-            return con;
-    }
-}
-
-// Use this when we request data that can return a value (not async)
-std::unique_ptr<QueryResult> Database::Query(const char* QueryString, ...)
-{
-    va_list vlist;
-    va_start(vlist, QueryString);
-
-    // Get buffer size
-    va_list vlist_copy;
-    va_copy(vlist_copy, vlist);
-    const auto size = vsnprintf(nullptr, 0, QueryString, vlist_copy);
-    va_end(vlist_copy);
-
-    if (size < 0)
-    {
-        va_end(vlist);
-        return nullptr;
+        m_connections.push_back(std::move(conn));
     }
 
-    std::string sql(size, '\0');
-    vsnprintf(&sql[0], static_cast<size_t>(size) + 1, QueryString, vlist);
-    va_end(vlist);
+    // Queue Threading
+    m_running = true;
+    m_workerThread = std::thread(&Database::QueryWorker, this);
 
-    // Send the query
-    std::unique_ptr<QueryResult> qResult;
-    DatabaseConnection* con = GetFreeConnection();
-
-    if (_SendQuery(con, sql.data(), false))
-        qResult = _StoreQueryResult(con);
-
-    con->Busy.release();
-    return qResult;
-}
-
-std::unique_ptr<QueryResult> Database::Query(bool *success, const char* QueryString, ...)
-{
-    va_list vlist;
-    va_start(vlist, QueryString);
-
-    // Get buffer size
-    va_list vlist_copy;
-    va_copy(vlist_copy, vlist);
-    const auto size = vsnprintf(nullptr, 0, QueryString, vlist_copy);
-    va_end(vlist_copy);
-
-    if (size < 0)
-    {
-        va_end(vlist);
-        *success = false;
-        return nullptr;
-    }
-
-    std::string sql(size, '\0');
-    vsnprintf(&sql[0], static_cast<size_t>(size) + 1, QueryString, vlist);
-    va_end(vlist);
-
-    // Send the query
-    std::unique_ptr<QueryResult> qResult;
-    DatabaseConnection* con = GetFreeConnection();
-
-    if (_SendQuery(con, sql.data(), false))
-    {
-        qResult = _StoreQueryResult(con);
-        *success = true;
-    }
-    else
-    {
-        *success = false;
-    }
-
-    con->Busy.release();
-    return qResult;
-}
-
-std::unique_ptr<QueryResult> Database::QueryNA(const char* QueryString)
-{
-    // Send the query
-    std::unique_ptr<QueryResult> qResult;
-    DatabaseConnection* con = GetFreeConnection();
-
-    if (_SendQuery(con, QueryString, false))
-        qResult = _StoreQueryResult(con);
-
-    con->Busy.release();
-    return qResult;
-}
-
-std::unique_ptr<QueryResult> Database::FQuery(const char* QueryString, DatabaseConnection* con)
-{
-    // Send the query
-    std::unique_ptr<QueryResult> qResult;
-    if (_SendQuery(con, QueryString, false))
-        qResult = _StoreQueryResult(con);
-
-    return qResult;
-}
-
-void Database::FWaitExecute(const char* QueryString, DatabaseConnection* con)
-{
-    // Send the query
-    _SendQuery(con, QueryString, false);
-}
-
-void QueryBuffer::AddQuery(const char* format, ...)
-{
-    va_list vlist;
-    va_start(vlist, format);
-
-    // Get buffer size
-    va_list vlist_copy;
-    va_copy(vlist_copy, vlist);
-    const auto size = vsnprintf(nullptr, 0, format, vlist_copy);
-    va_end(vlist_copy);
-
-    if (size < 0)
-    {
-        va_end(vlist);
-        return;
-    }
-
-    std::string queryBuf(size, '\0');
-    vsnprintf(&queryBuf[0], static_cast<size_t>(size) + 1, format, vlist);
-    va_end(vlist);
-
-    queries.push_back(std::move(queryBuf));
-}
-
-void QueryBuffer::AddQueryNA(const char* str)
-{
-    queries.emplace_back(str);
-}
-
-void Database::destroyQueryBufferConnection()
-{
-    if (m_queryBufferConnection)
-    {
-        m_queryBufferConnection->Busy.release();
-        m_queryBufferConnection = nullptr;
-    }
-}
-
-void Database::dbRunAllQueries()
-{
-    while (auto query = queries_queue.pop())
-    {
-        createDbConnection();
-        _SendQuery(m_dbConnection, query.value().data(), false);
-    }
-    // No more queries => free the connection in the thread and reconnect when there are new queries
-    destroyDbConnection();
-}
-
-void Database::queryBufferThreadRunner(AEThread& /*thread*/)
-{
-    queryBufferRunAllQueries();
-}
-
-void Database::queryBufferThreadShutdown() {
-    m_queryBufferThread->killAndJoin();
-    queryBufferRunAllQueries();
-    destroyQueryBufferConnection();
-}
-
-void Database::queryBufferRunAllQueries()
-{
-    while (auto query = query_buffer.pop())
-    {
-        createQueryBufferConnection();
-        PerformQueryBuffer(query.value().get(), m_queryBufferConnection);
-    }
-    // No more queries => free the connection in the thread and reconnect when there are new queries
-    destroyQueryBufferConnection();
-}
-
-void QueryBuffer::AddQueryStr(const std::string & str)
-{
-    queries.emplace_back(str);
-}
-
-void Database::PerformQueryBuffer(QueryBuffer* b, DatabaseConnection* ccon)
-{
-    if (!b->queries.size())
-        return;
-
-    DatabaseConnection* con = ccon;
-    if (ccon == NULL)
-        con = GetFreeConnection();
-
-    _BeginTransaction(con);
-
-    for (auto itr = b->queries.begin(); itr != b->queries.end(); ++itr)
-    {
-        _SendQuery(con, (*itr).data(), false);
-    }
-
-    _EndTransaction(con);
-
-    if (ccon == NULL)
-        con->Busy.release();
-}
-// Use this when we do not have a result. ex: INSERT into SQL 1
-bool Database::Execute(const char* QueryString, ...)
-{
-    va_list vlist;
-    va_start(vlist, QueryString);
-
-    // Get buffer size
-    va_list vlist_copy;
-    va_copy(vlist_copy, vlist);
-    const auto size = vsnprintf(nullptr, 0, QueryString, vlist_copy);
-    va_end(vlist_copy);
-
-    if (size < 0)
-    {
-        va_end(vlist);
-        return false;
-    }
-
-    std::string queryBuf(size, '\0');
-    vsnprintf(&queryBuf[0], static_cast<size_t>(size) + 1, QueryString, vlist);
-    va_end(vlist);
-
-    if (m_dbThread->isKilled())
-        return WaitExecuteNA(queryBuf.data());
-
-    queries_queue.push(std::move(queryBuf));
+    mConnected = true;
     return true;
 }
 
-bool Database::ExecuteNA(const char* QueryString)
+void Database::Shutdown()
 {
-    if (m_dbThread->isKilled())
-        return WaitExecuteNA(QueryString);
+    m_running = false;
+    m_condition.notify_one();
 
-    queries_queue.push(std::string(QueryString));
-    return true;
+    if (m_workerThread.joinable())
+        m_workerThread.join();
+
+    for (auto& conn : m_connections)
+    {
+        if (conn && conn->handle)
+        {
+            for (auto& [idx, stmt] : conn->preparedStatements)
+                mysql_stmt_close(stmt);
+
+            conn->preparedStatements.clear();
+
+            mysql_close(conn->handle);
+            conn->handle = nullptr;
+        }
+    }
+
+    m_connections.clear();
+    mysql_library_end();
 }
 
-// Wait till the other queries are done, then execute
-bool Database::WaitExecute(const char* QueryString, ...)
+void Database::RegisterStatement(const uint32_t index, const std::string& sql)
 {
-    va_list vlist;
-    va_start(vlist, QueryString);
+    m_registeredStatements[index] = sql;
+}
 
-    // Get buffer size
-    va_list vlist_copy;
-    va_copy(vlist_copy, vlist);
-    const auto size = vsnprintf(nullptr, 0, QueryString, vlist);
-    va_end(vlist_copy);
-
-    if (size < 0)
+void Database::PrepareStatementsForConnection(MYSQL* mysql, std::unordered_map<uint32_t, MYSQL_STMT*>& stmtMap)
+{
+    for (const auto& [index, sql] : m_registeredStatements)
     {
-        va_end(vlist);
+        MYSQL_STMT* stmt = mysql_stmt_init(mysql);
+        if (!stmt)
+            sLogger.failure("Failed to init statement for: " + sql);
+
+        if (mysql_stmt_prepare(stmt, sql.c_str(), static_cast<unsigned long>(sql.length())) != 0)
+        {
+            mysql_stmt_close(stmt);
+            sLogger.failure("Failed to prepare statement: " + sql + " error: " + mysql_stmt_error(stmt));
+        }
+
+        stmtMap[index] = stmt;
+    }
+}
+
+std::unique_ptr<PreparedStatement> Database::CreateStatement(const uint32_t index)
+{
+    auto it = m_registeredStatements.find(index);
+    if (it == m_registeredStatements.end())
+        sLogger.failure("Statement not registered: " + std::to_string(index));
+
+    return std::make_unique<PreparedStatement>(index);
+}
+
+MYSQL_STMT* Database::GetPreparedStatement(DatabaseConnection* connection, const uint32_t index)
+{
+    auto it = connection->preparedStatements.find(index);
+    if (it == connection->preparedStatements.end())
+        sLogger.failure("Prepared statement index not found");
+
+    return it->second;
+}
+
+bool Database::ExecuteStatement(std::shared_ptr<PreparedStatement> stmt)
+{
+    LockedConnection conn = GetFreeConnection();
+    std::unique_lock<std::mutex>& guard = conn.lock;
+
+    MYSQL_STMT* native = GetPreparedStatement(conn.GetConnection(), stmt->GetIndex());
+    if (!native)
+        return false;
+
+    mysql_stmt_free_result(native);
+    mysql_stmt_reset(native);
+
+    std::vector<MYSQL_BIND> binds = stmt->BindToMYSQL();
+
+    if (!binds.empty() && mysql_stmt_bind_param(native, binds.data()) != 0)
+    {
+        std::cerr << "[MySQL] Bind failed: " << mysql_stmt_error(native) << "\n";
         return false;
     }
 
-    std::string sql(size, '\0');
-    vsnprintf(&sql[0], static_cast<size_t>(size) + 1, QueryString, vlist);
-    va_end(vlist);
+    bool result = mysql_stmt_execute(native) == 0;
 
-    DatabaseConnection* con = GetFreeConnection();
-    bool Result = _SendQuery(con, sql.data(), false);
-    con->Busy.release();
-    return Result;
+    // Clean up result buffer again in case user runs more queries on the same handle
+    mysql_stmt_free_result(native);
+    mysql_stmt_reset(native);
+
+    return result;
 }
 
-bool Database::WaitExecuteNA(const char* QueryString)
+std::unique_ptr<QueryResult> Database::QueryStatement(std::shared_ptr<PreparedStatement> stmt)
 {
-    DatabaseConnection* con = GetFreeConnection();
-    bool Result = _SendQuery(con, QueryString, false);
-    con->Busy.release();
-    return Result;
-}
+    LockedConnection conn = GetFreeConnection();
+    std::unique_lock<std::mutex>& guard = conn.lock;
 
-void AsyncQuery::AddQuery(const char* format, ...)
-{
-    va_list ap;
-    va_start(ap, format);
+    MYSQL_STMT* native = GetPreparedStatement(conn.GetConnection(), stmt->GetIndex());
+    if (!native)
+        return nullptr;
 
-    // Get buffer size
-    va_list ap_copy;
-    va_copy(ap_copy, ap);
-    const auto size = vsnprintf(nullptr, 0, format, ap_copy);
-    va_end(ap_copy);
+    std::vector<MYSQL_BIND> binds = stmt->BindToMYSQL();
 
-    if (size < 0)
+    if (!binds.empty() && mysql_stmt_bind_param(native, binds.data()) != 0)
     {
-        va_end(ap);
-        return;
+        std::cerr << "[MySQL] Bind failed: " << mysql_stmt_error(native) << "\n";
+        return nullptr;
     }
 
-    std::string queryBuf(size, '\0');
-    vsnprintf(&queryBuf[0], static_cast<size_t>(size) + 1, format, ap);
-    va_end(ap);
+    auto rows = QueryStatementRaw(native, stmt.get());
 
-    queries.emplace_back(nullptr, std::move(queryBuf));
+    if (rows.empty())
+        return nullptr;
+
+    uint32_t fieldCount = static_cast<uint32_t>(rows[0].size());
+    return std::make_unique<PreparedQueryResult>(std::move(rows), fieldCount);
 }
 
-void AsyncQuery::Perform()
+std::unique_ptr<QueryResult> Database::QueryStatement(bool* success, std::shared_ptr<PreparedStatement> stmt)
 {
-    DatabaseConnection* conn = db->GetFreeConnection();
-    for (std::vector<AsyncQueryResult>::iterator itr = queries.begin(); itr != queries.end(); ++itr)
-        itr->result = db->FQuery(itr->query.data(), conn);
+    if (success)
+        *success = false;
 
-    conn->Busy.release();
-    func->run(queries);
+    LockedConnection conn = GetFreeConnection();
+    std::unique_lock<std::mutex>& guard = conn.lock;
+
+    MYSQL_STMT* native = GetPreparedStatement(conn.GetConnection(), stmt->GetIndex());
+    if (!native)
+        return nullptr;
+
+    std::vector<MYSQL_BIND> binds = stmt->BindToMYSQL();
+
+    if (!binds.empty() && mysql_stmt_bind_param(native, binds.data()) != 0)
+    {
+        std::cerr << "[MySQL] Bind failed: " << mysql_stmt_error(native) << "\n";
+        return nullptr;
+    }
+
+    auto rows = QueryStatementRaw(native, stmt.get());
+    if (rows.empty())
+    {
+        if (success)
+            *success = true;
+        return nullptr;
+    }
+
+    uint32_t fieldCount = rows.empty() ? 0 : static_cast<uint32_t>(rows[0].size());
+    return std::make_unique<PreparedQueryResult>(std::move(rows), fieldCount);
 }
 
-AsyncQuery::AsyncQuery(std::unique_ptr<SQLCallbackBase> f) : func(std::move(f)), db(nullptr)
-{}
-
-AsyncQuery::~AsyncQuery() = default;
-
-void Database::EndThreads()
+void Database::AsyncMultiQueryStatement(std::vector<std::shared_ptr<PreparedStatement>> stmts, MultiQueryCallback cb)
 {
-    if (m_dbThread)
-        m_dbThread->requestKill();
-    if (m_queryBufferThread)
-        m_queryBufferThread->requestKill();
+    std::thread([this, stmts = std::move(stmts), cb = std::move(cb)]() mutable {
+        std::vector<std::unique_ptr<QueryResult>> results;
+        for (auto& stmt : stmts)
+        {
+            auto res = QueryStatement(stmt);
+            results.push_back(std::move(res));
+        }
+        if (cb)
+            cb(std::move(results));
+        }).detach();
+}
 
-    dbThreadShutdown();
-    queryBufferThreadShutdown();
+void Database::AsyncQueryStatement(std::shared_ptr<PreparedStatement> stmt, QueryCallback callback)
+{
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_queryQueue.push({ std::move(stmt), std::move(callback) });
+    }
+    m_condition.notify_one();
+}
+
+void Database::AsyncExecuteStatement(std::shared_ptr<PreparedStatement> stmt)
+{
+    AsyncQueryStatement(std::move(stmt), nullptr);
+}
+
+const uint32_t Database::GetQueueSize() const
+{
+    return m_queryQueue.size();
+}
+
+QueryResultRows Database::QueryStatementRaw(MYSQL_STMT* stmtHandle, PreparedStatement* stmt)
+{
+    QueryResultRows result;
+
+    if (!stmtHandle)
+        return result;
+
+    mysql_stmt_free_result(stmtHandle);
+    mysql_stmt_reset(stmtHandle);
+
+    // Bind input parameters
+    std::vector<MYSQL_BIND> binds = stmt->BindToMYSQL();
+    if (!binds.empty() && mysql_stmt_bind_param(stmtHandle, binds.data()) != 0)
+    {
+        std::cerr << "[MySQL] Bind failed: " << mysql_stmt_error(stmtHandle) << "\n";
+        return result;
+    }
+
+    if (mysql_stmt_execute(stmtHandle) != 0 || mysql_stmt_store_result(stmtHandle) != 0)
+        return result;
+
+    int numFields = mysql_stmt_field_count(stmtHandle);
+    if (numFields == 0)
+        return result;
+
+    MYSQL_RES* metadata = mysql_stmt_result_metadata(stmtHandle);
+    if (!metadata)
+        return result;
+
+    MYSQL_FIELD* fields = mysql_fetch_fields(metadata);
+    std::vector<MYSQL_BIND> resultBinds(numFields);
+    std::vector<std::vector<char>> buffers(numFields, std::vector<char>(1024));
+    std::vector<unsigned long> lengths(numFields);
+    std::vector<char> isNulls(numFields);
+
+    for (int i = 0; i < numFields; ++i)
+    {
+        resultBinds[i].buffer_type = fields[i].type;
+        resultBinds[i].buffer = buffers[i].data();
+        resultBinds[i].buffer_length = static_cast<unsigned long>(buffers[i].size());
+        resultBinds[i].length = &lengths[i];
+        resultBinds[i].is_null = reinterpret_cast<bool*>(&isNulls[i]);
+        resultBinds[i].is_unsigned = (fields[i].flags & UNSIGNED_FLAG) != 0;
+    }
+
+    if (mysql_stmt_bind_result(stmtHandle, resultBinds.data()) != 0)
+        return result;
+
+    while (mysql_stmt_fetch(stmtHandle) == 0)
+    {
+        std::vector<std::string> row;
+        for (int i = 0; i < numFields; ++i)
+        {
+            row.emplace_back(ConvertFieldToString(fields[i], resultBinds[i], lengths[i]));
+        }
+        result.emplace_back(std::move(row));
+    }
+
+    mysql_stmt_free_result(stmtHandle);
+    mysql_stmt_reset(stmtHandle);
+    mysql_free_result(metadata);
+
+    return result;
+}
+
+std::string Database::ConvertFieldToString(const MYSQL_FIELD& field, const MYSQL_BIND& bind, unsigned long length)
+{
+    if (*bind.is_null)
+        return "NULL";
+
+    switch (field.type)
+    {
+        case MYSQL_TYPE_INT24:
+        {
+            if (bind.is_unsigned)
+                return std::to_string(*reinterpret_cast<uint32_t*>(bind.buffer));
+            else
+                return std::to_string(*reinterpret_cast<int32_t*>(bind.buffer));
+        } break;
+
+        case MYSQL_TYPE_TINY:
+        {
+            if (bind.is_unsigned)
+                return std::to_string(*reinterpret_cast<uint8_t*>(bind.buffer));
+            else
+                return(std::to_string(*reinterpret_cast<int8_t*>(bind.buffer)));
+        } break;
+
+        case MYSQL_TYPE_SHORT:
+        {
+            if (bind.is_unsigned)
+                return std::to_string(*reinterpret_cast<uint16_t*>(bind.buffer));
+            else
+                return std::to_string(*reinterpret_cast<int16_t*>(bind.buffer));
+        } break;
+
+        case MYSQL_TYPE_LONG:
+        {
+            if (bind.is_unsigned)
+                return std::to_string(*reinterpret_cast<uint32_t*>(bind.buffer));
+            else
+                return std::to_string(*reinterpret_cast<int32_t*>(bind.buffer));
+        } break;
+
+        case MYSQL_TYPE_LONGLONG:
+        {
+            if (bind.is_unsigned)
+                return std::to_string(*reinterpret_cast<uint64_t*>(bind.buffer));
+            else
+                return std::to_string(*reinterpret_cast<int64_t*>(bind.buffer));
+        } break;
+
+        case MYSQL_TYPE_FLOAT:
+        {
+            return std::to_string(*reinterpret_cast<float*>(bind.buffer));
+        } break;
+
+        case MYSQL_TYPE_DOUBLE:
+        {
+            return std::to_string(*reinterpret_cast<double*>(bind.buffer));
+        } break;
+
+        case MYSQL_TYPE_DATETIME:
+        case MYSQL_TYPE_TIMESTAMP:
+        case MYSQL_TYPE_DATE:
+        {
+            const MYSQL_TIME* t = reinterpret_cast<const MYSQL_TIME*>(bind.buffer);
+
+            std::tm tm{};
+            tm.tm_year = t->year - 1900;
+            tm.tm_mon = t->month - 1;
+            tm.tm_mday = t->day;
+            tm.tm_hour = t->hour;
+            tm.tm_min = t->minute;
+            tm.tm_sec = t->second;
+            tm.tm_isdst = -1;
+
+            std::time_t tt = std::mktime(&tm);
+            SystemTimePoint tp = std::chrono::system_clock::from_time_t(tt);
+
+            std::time_t time = std::chrono::system_clock::to_time_t(tp);
+            std::tm tm_buf{};
+            localtime_s(&tm_buf, &time);
+
+            std::stringstream ss;
+            ss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S");
+            return ss.str();
+        }
+
+        case MYSQL_TYPE_BLOB:
+        case MYSQL_TYPE_STRING:
+        case MYSQL_TYPE_VAR_STRING:
+            return std::string(static_cast<const char*>(bind.buffer), length);
+
+        default:
+            return "[unsupported type]";
+    }
 }
 
 
-void Database::QueueAsyncQuery(std::unique_ptr<AsyncQuery> query)
+LockedConnection Database::GetFreeConnection()
 {
-    query->db = this;
-    query->Perform();
+    while (true)
+    {
+        for (auto& conn : m_connections)
+        {
+            std::unique_lock<std::mutex> lock(conn->mutex, std::try_to_lock);
+            if (lock.owns_lock())
+                return LockedConnection(conn.get(), std::move(lock));
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
 }
 
-void Database::AddQueryBuffer(std::unique_ptr<QueryBuffer> b)
+void Database::QueryWorker()
 {
-    // TODO: qt is always nullptr
-    if (qt != NULL)
-        query_buffer.push(std::move(b));
-    else
-        PerformQueryBuffer(b.get(), NULL);
+    while (m_running)
+    {
+        std::unique_lock<std::mutex> lock(m_queueMutex);
+        m_condition.wait(lock, [this]() { return !m_queryQueue.empty() || !m_running; });
+
+        while (!m_queryQueue.empty())
+        {
+            QueryTask task = std::move(m_queryQueue.front());
+            m_queryQueue.pop();
+            lock.unlock();
+
+            try
+            {
+                if (task.callback)
+                {
+                    auto result = QueryStatement(std::move(task.stmt));
+                    task.callback(std::move(result));
+                }
+                else
+                {
+                    ExecuteStatement(std::move(task.stmt));
+                }
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "[AsyncQuery] Exception: " << e.what() << "\n";
+            }
+
+            lock.lock();
+        }
+    }
 }

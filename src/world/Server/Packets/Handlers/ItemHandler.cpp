@@ -3028,7 +3028,7 @@ void WorldSession::handleWrapItemOpcode(WorldPacket& recvPacket)
 
     // save it
     dst->m_isDirty = true;
-    dst->saveToDB(srlPacket.destBagSlot, srlPacket.destSlot, false, nullptr);
+    dst->saveToDB(srlPacket.destBagSlot, srlPacket.destSlot, false);
 }
 
 void WorldSession::handleEquipmentSetUse(WorldPacket& data)

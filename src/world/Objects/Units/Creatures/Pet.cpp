@@ -145,7 +145,7 @@ void Pet::PrepareForRemove()
             updatePetInfo(!m_isScheduledForTemporaryUnsummon);
             // Save is not required when unsummoning temporarily
             if (plrOwner != nullptr && !m_isScheduledForTemporaryUnsummon)
-                plrOwner->_savePet(nullptr, false, this);
+                plrOwner->_savePet(false, this);
         }
     }
 
@@ -438,8 +438,12 @@ void Pet::rename(utf8_string const& newName)
     // Save summoned pet's new name to db (.pet renamepet)
     if (m_petType == PET_TYPE_SUMMON && !m_petExpires && m_unitOwner != nullptr)
     {
-        CharacterDatabase.Execute("UPDATE `playersummons` SET `name`='%s' WHERE `ownerguid`=%u AND `entry`=%u",
-            m_petName.data(), m_unitOwner->getGuidLow(), getEntry());
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_PLAYER_SUMMON_NAME);
+        stmt->Bind(0, m_petName);
+        stmt->Bind(1, m_unitOwner->getGuidLow());
+        stmt->Bind(2, getEntry());
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     if (auto* const plrOwner = getPlayerOwner())
@@ -776,16 +780,22 @@ bool Pet::_preparePetForPush(PetCache const* petCache)
     // Summon spells are loaded in UpdateSpellList
     if (!isNewSummon && m_petType == PET_TYPE_HUNTER)
     {
-        auto query = CharacterDatabase.Query("SELECT * FROM playerpetspells WHERE ownerguid = %u AND petnumber = %u", m_unitOwner->getGuidLow(), m_petId);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_PLAYER_PET_SPELLS);
+        stmt->Bind(0, m_unitOwner->getGuidLow());
+        stmt->Bind(1, m_petId);
+
+        auto query = CharacterDatabase.QueryStatement(std::move(stmt));
         if (query != nullptr)
         {
             do
             {
                 auto* field = query->Fetch();
-                const auto* petSpell = sSpellMgr.getSpellInfo(field[2].asUint32());
-                const auto flags = field[3].asUint16();
+                const auto* petSpell = sSpellMgr.getSpellInfo(field[0].asUint32());
+                const auto flags = field[1].asUint16();
+
                 if (petSpell != nullptr && mSpells.find(petSpell) == mSpells.cend())
                     mSpells.insert({ petSpell, flags });
+
             } while (query->NextRow());
         }
     }
@@ -909,17 +919,27 @@ void Pet::_setNameForEntry(uint32_t entry, SpellInfo const* createdBySpell)
         case PET_FELHUNTER:
         case PET_FELGUARD:
         {
-            auto result = CharacterDatabase.Query("SELECT `name` FROM `playersummons` WHERE `ownerguid`=%u AND `entry`=%d", m_unitOwner->getGuidLow(), entry);
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_PLAYERSUMMON_NAME);
+            stmt->Bind(0, m_unitOwner->getGuidLow());
+            stmt->Bind(1, entry);
+
+            auto result = CharacterDatabase.QueryStatement(std::move(stmt));
             if (result != nullptr)
             {
                 m_petName.assign(result->Fetch()->asCString());
             }
             else
             {
-                // Pet name is not found, generate new name and save it
                 m_petName.assign(generateName());
-                CharacterDatabase.Execute("INSERT INTO playersummons VALUES(%u, %u, '%s')", m_unitOwner->getGuidLow(), entry, m_petName.data());
+
+                auto insertStmt = CharacterDatabase.CreateStatement(CHAR_INS_PLAYERSUMMON);
+                insertStmt->Bind(0, m_unitOwner->getGuidLow());
+                insertStmt->Bind(1, entry);
+                insertStmt->Bind(2, m_petName);
+
+                CharacterDatabase.ExecuteStatement(std::move(insertStmt));
             }
+
         } break;
         case PET_GHOUL:
         {

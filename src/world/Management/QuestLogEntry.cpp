@@ -90,25 +90,23 @@ void QuestLogEntry::loadFromDB(Field* fields)
     m_state = fields[12].asUint32();
 }
 
-void QuestLogEntry::saveToDB(QueryBuffer* queryBuffer)
+void QuestLogEntry::saveToDB()
 {
-    std::stringstream ss;
-
-    ss << "REPLACE INTO questlog VALUES(";
-    ss << m_player->getGuidLow() << "," << m_questProperties->id << "," << uint32_t(m_slot) << "," << m_expirytime;
-
-    for (uint8_t i = 0; i < 4; ++i)
-        ss << "," << m_explored_areas[i];
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_QUESTLOG_REPLACE);
+    stmt->Bind(0, m_player->getGuidLow());
+    stmt->Bind(1, m_questProperties->id);
+    stmt->Bind(2, static_cast<uint32_t>(m_slot));
+    stmt->Bind(3, m_expirytime);
 
     for (uint8_t i = 0; i < 4; ++i)
-        ss << "," << m_mobcount[i];
+        stmt->Bind(4 + i, m_explored_areas[i]);
 
-    ss << "," << m_state << ");";
+    for (uint8_t i = 0; i < 4; ++i)
+        stmt->Bind(8 + i, m_mobcount[i]);
 
-    if (queryBuffer == nullptr)
-        CharacterDatabase.Execute(ss.str().c_str());
-    else
-        queryBuffer->AddQueryStr(ss.str());
+    stmt->Bind(12, m_state);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 uint8_t QuestLogEntry::getSlot() const { return m_slot; }

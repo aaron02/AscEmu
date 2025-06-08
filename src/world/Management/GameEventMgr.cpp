@@ -56,17 +56,19 @@ void GameEventMgr::LoadFromDB()
     // Clean event_saves from CharacterDB
     sLogger.info("GameEventMgr : Start cleaning gameevent_save");
     {
-        const char* cleanEventSaveQuery = "DELETE FROM gameevent_save WHERE state<>4";
-        CharacterDatabase.Execute(cleanEventSaveQuery);
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_GAMEEVENT_SAVE_CLEAN);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
+
     // Loading event_properties
     {
-        auto result = WorldDatabase.Query("SELECT entry, UNIX_TIMESTAMP(start_time), UNIX_TIMESTAMP(end_time), occurence, "
-                                          "length, holiday, description, world_event, announce "
-                                          "FROM gameevent_properties WHERE entry > 0 AND min_build <= %u AND max_build >= %u", getAEVersion(), getAEVersion());
+        auto stmt = WorldDatabase.CreateStatement(WORLD_GAMEEVENT_PROPERTIES_SELECT);
+        stmt->Bind(0, getAEVersion());
+        stmt->Bind(1, getAEVersion());
+
+        auto result = WorldDatabase.QueryStatement(std::move(stmt));
         if (!result)
         {
-            //mGameEvent.clear();
             sLogger.failure("GameEventMgr : gameevent_properties can not be read or does not include any version specific events!");
             return;
         }
@@ -87,29 +89,25 @@ void GameEventMgr::LoadFromDB()
             dbResult.world_event = GameEventState(field[7].asUint8());
             dbResult.announce = field[8].asUint8();
 
-            //if (gameEvent.isValid())
-            //{
-                mGameEvents.emplace(dbResult.entry, std::make_unique<GameEvent>(dbResult));
-                sLogger.debug("GameEventMgr : {}, Entry: {}, State: {}, Holiday: {} loaded", dbResult.description, dbResult.entry, dbResult.world_event, dbResult.holiday_id);
-                ++pCount;
-            //}
-            //else
-            //{
-            //    sLogger.debug("{} game event Entry: {} isn't a world event and has length = 0, thus it can't be used.", dbResult.description, dbResult.entry);
-            //}
+            mGameEvents.emplace(dbResult.entry, std::make_unique<GameEvent>(dbResult));
+            sLogger.debug("GameEventMgr : {}, Entry: {}, State: {}, Holiday: {} loaded",
+                dbResult.description, dbResult.entry, dbResult.world_event, dbResult.holiday_id);
+            ++pCount;
         } while (result->NextRow());
+
         sLogger.info("GameEventMgr : {} events loaded from table event_properties", pCount);
     }
+
     // Loading event_saves from CharacterDB
     sLogger.info("GameEventMgr : Start loading gameevent_save");
     {
-        const char* loadEventSaveQuery = "SELECT event_entry, state, next_start FROM gameevent_save";
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_GAMEEVENT_SAVE_SELECT);
         bool success = false;
-        auto result = CharacterDatabase.Query(&success, loadEventSaveQuery);
+        auto result = CharacterDatabase.QueryStatement(&success, std::move(stmt));
 
         if (!success)
         {
-            sLogger.failure("Query failed: {}", loadEventSaveQuery);
+            sLogger.failure("Query failed: CHARACTER_GAMEEVENT_SAVE_SELECT");
             return;
         }
 
@@ -124,35 +122,36 @@ void GameEventMgr::LoadFromDB()
                 auto gameEvent = GetEventById(event_id);
                 if (gameEvent == nullptr)
                 {
-                    CharacterDatabase.Query("DELETE FROM gameevent_save WHERE event_entry=%u", event_id);
+                    auto delStmt = CharacterDatabase.CreateStatement(CHARACTER_GAMEEVENT_SAVE_DELETE_BY_ID);
+                    delStmt->Bind(0, event_id);
+                    CharacterDatabase.QueryStatement(std::move(delStmt));
                     sLogger.info("Deleted invalid gameevent_save with entry {}", event_id);
                     continue;
                 }
 
-                gameEvent->state = (GameEventState)(field[1].asUint8());
-                gameEvent->nextstart = time_t(field[2].asUint32());
+                gameEvent->state = GameEventState(field[1].asUint8());
+                gameEvent->nextstart = static_cast<time_t>(field[2].asUint32());
 
                 ++pCount;
-
             } while (result->NextRow());
         }
 
-        sLogger.info("GameEventMgr : Loaded {} saved events loaded from table gameevent_saves", pCount);
+        sLogger.info("GameEventMgr : Loaded {} saved events from table gameevent_save", pCount);
     }
+
     // Loading event_creature from WorldDB
     sLogger.info("GameEventMgr : Start loading game event creature spawns");
     {
-        const char* loadEventCreatureSpawnsQuery = "SELECT id, entry, map, position_x, position_y, position_z, \
-                                                    orientation, movetype, displayid, faction, flags, pvp_flagged, bytes0, \
-                                                    emote_state, npc_respawn_link, channel_spell, channel_target_sqlid, \
-                                                    channel_target_sqlid_creature, standstate, death_state, mountdisplayid, sheath_state, \
-                                                    slot1item, slot2item, slot3item, CanFly, phase, waypoint_group, event_entry \
-                                                    FROM creature_spawns WHERE min_build <= %u AND max_build >= %u AND event_entry > 0";
+        auto stmt = WorldDatabase.CreateStatement(WORLD_EVENT_CREATURE_SPAWNS_SELECT);
+        stmt->Bind(0, VERSION_STRING);
+        stmt->Bind(1, VERSION_STRING);
+
         bool success = false;
-        auto result = WorldDatabase.Query(&success, loadEventCreatureSpawnsQuery, VERSION_STRING, VERSION_STRING);
+        auto result = WorldDatabase.QueryStatement(&success, std::move(stmt));
+
         if (!success)
         {
-            sLogger.failure("Query failed: {}", loadEventCreatureSpawnsQuery);
+            sLogger.failure("Query failed: WORLD_EVENT_CREATURE_SPAWNS_SELECT");
             return;
         }
 
@@ -164,7 +163,6 @@ void GameEventMgr::LoadFromDB()
                 Field* field = result->Fetch();
 
                 uint32_t event_id = field[28].asUint32();
-
                 auto gameEvent = GetEventById(event_id);
                 if (gameEvent == nullptr)
                 {
@@ -173,15 +171,17 @@ void GameEventMgr::LoadFromDB()
                 }
 
                 EventCreatureSpawnsQueryResult dbResult;
-                dbResult.event_entry = field[28].asUint32();
+                dbResult.event_entry = event_id;
                 dbResult.id = field[0].asUint32();
                 dbResult.entry = field[1].asUint32();
+
                 auto creature_properties = sMySQLStore.getCreatureProperties(dbResult.entry);
-                if (creature_properties == nullptr)
+                if (!creature_properties)
                 {
-                    sLogger.failure("Could not create CreatureSpawn for invalid entry {} (missing in table creature_properties)", dbResult.entry);
+                    sLogger.failure("Missing creature_properties for entry {}", dbResult.entry);
                     continue;
                 }
+
                 dbResult.map_id = field[2].asUint16();
                 dbResult.position_x = field[3].asFloat();
                 dbResult.position_y = field[4].asFloat();
@@ -210,27 +210,27 @@ void GameEventMgr::LoadFromDB()
                 dbResult.waypoint_group = field[27].asUint32();
 
                 gameEvent->npc_data.push_back(dbResult);
-
                 ++pCount;
-
-                //mNPCGuidList.insert(NPCGuidList::value_type(event_id, id));
 
             } while (result->NextRow());
         }
-        sLogger.info("GameEventMgr : {} creature spawns for {} events from table event_creature_spawns loaded.", pCount, static_cast<uint32_t>(mGameEvents.size()));
+
+        sLogger.info("GameEventMgr : {} creature spawns for {} events loaded from table creature_spawns.", pCount, static_cast<uint32_t>(mGameEvents.size()));
     }
+
     // Loading event_gameobject from WorldDB
     sLogger.info("GameEventMgr : Start loading game event gameobject spawns");
     {
-        const char* loadEventGameobjectSpawnsQuery = "SELECT id, entry, map, phase, position_x, position_y, \
-                                                      position_z, orientation, rotation0, rotation1, rotation2, \
-                                                      rotation3, spawntimesecs, state, \
-                                                      event_entry FROM gameobject_spawns WHERE min_build <= %u AND max_build >= %u AND event_entry > 0;";
+        auto stmt = WorldDatabase.CreateStatement(WORLD_EVENT_GAMEOBJECT_SPAWNS_SELECT);
+        stmt->Bind(0, VERSION_STRING);
+        stmt->Bind(1, VERSION_STRING);
+
         bool success = false;
-        auto result = WorldDatabase.Query(&success, loadEventGameobjectSpawnsQuery, VERSION_STRING, VERSION_STRING);
+        auto result = WorldDatabase.QueryStatement(&success, std::move(stmt));
+
         if (!success)
         {
-            sLogger.failure("Query failed: {}", loadEventGameobjectSpawnsQuery);
+            sLogger.failure("Query failed: WORLD_EVENT_GAMEOBJECT_SPAWNS_SELECT");
             return;
         }
 
@@ -243,7 +243,7 @@ void GameEventMgr::LoadFromDB()
                 uint32_t event_id = field[14].asUint32();
 
                 auto gameEvent = GetEventById(event_id);
-                if (gameEvent == nullptr)
+                if (!gameEvent)
                 {
                     sLogger.debugFlag(AscEmu::Logging::LF_DB_TABLES, "Could not find event for gameobject_spawns entry {}", event_id);
                     continue;
@@ -253,12 +253,14 @@ void GameEventMgr::LoadFromDB()
                 dbResult.event_entry = event_id;
                 dbResult.id = field[0].asUint32();
                 dbResult.entry = field[1].asUint32();
+
                 auto gameobject_info = sMySQLStore.getGameObjectProperties(dbResult.entry);
-                if (gameobject_info == nullptr)
+                if (!gameobject_info)
                 {
                     sLogger.debugFlag(AscEmu::Logging::LF_DB_TABLES, "Could not create GameobjectSpawn for invalid entry {} (missing in table gameobject_properties)", dbResult.entry);
                     continue;
                 }
+
                 dbResult.map_id = field[2].asUint32();
                 dbResult.phase = field[3].asUint32();
                 dbResult.position_x = field[4].asFloat();
@@ -273,14 +275,12 @@ void GameEventMgr::LoadFromDB()
                 dbResult.state = field[13].asUint32();
 
                 gameEvent->gameobject_data.push_back(dbResult);
-
                 ++pCount;
-
-                //mGOBGuidList.insert(GOBGuidList::value_type(event_id, id));
 
             } while (result->NextRow());
         }
-        sLogger.info("GameEventMgr : {} gameobject spawns for {} events from table gameobject_spawns loaded.", pCount, mGameEvents.size());
+
+        sLogger.info("GameEventMgr : {} gameobject spawns for {} events loaded from table gameobject_spawns.", pCount, static_cast<uint32_t>(mGameEvents.size()));
     }
 
     StartArenaEvents();

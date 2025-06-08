@@ -43,8 +43,12 @@ void WorldSession::handleMarkAsReadOpcode(WorldPacket& recvPacket)
     if (!sMailSystem.MailOption(MAIL_FLAG_NO_EXPIRY))
         mailMessage->expire_time = static_cast<uint32_t>(UNIXTIME) + (TimeVars::Day * 30);
 
-    CharacterDatabase.WaitExecute("UPDATE mailbox SET checked_flag = %u, expiry_time = %u WHERE message_id = %u",
-        mailMessage->checked_flag, mailMessage->expire_time, mailMessage->message_id);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_MAILBOX_STATE);
+    stmt->Bind(0, mailMessage->checked_flag);
+    stmt->Bind(1, mailMessage->expire_time);
+    stmt->Bind(2, mailMessage->message_id);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void WorldSession::handleMailDeleteOpcode(WorldPacket& recvPacket)
@@ -90,7 +94,10 @@ void WorldSession::handleTakeMoneyOpcode(WorldPacket& recvPacket)
     _player->modCoinage(mailMessage->money);
     mailMessage->money = 0;
 
-    CharacterDatabase.WaitExecute("UPDATE mailbox SET money = 0 WHERE message_id = %u", mailMessage->message_id);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_MAILBOX_CLEAR_MONEY);
+    stmt->Bind(0, mailMessage->message_id);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 
     SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_MONEY_TAKEN, MAIL_OK).serialise().get());
 }
@@ -414,7 +421,7 @@ void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
     }
     else
     {
-        item->saveToDB(slotResult.ContainerSlot, slotResult.Slot, true, nullptr);
+        item->saveToDB(slotResult.ContainerSlot, slotResult.Slot, true);
     }
 
     // Remove taken items and update message.
@@ -436,7 +443,11 @@ void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
         sMailSystem.SendAutomatedMessage(MAIL_TYPE_NORMAL, answerSender, answerReceiver, subject, "", answerCodMoney, 0, 0, MAIL_STATIONERY_TEST1, MAIL_CHECK_MASK_COD_PAYMENT);
 
         mailMessage->cod = 0;
-        CharacterDatabase.Execute("UPDATE mailbox SET cod = 0 WHERE message_id = %u", mailMessage->message_id);
+
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_MAILBOX_COD);
+        stmt->Bind(0, mailMessage->message_id);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 }
 
@@ -531,7 +542,7 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
 
             pItem->removeFromWorld();
             pItem->setOwner(nullptr);
-            pItem->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true, nullptr);
+            pItem->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true);
             msg.items.push_back(pItem->getGuidLow());
 
             if (hasPermissions())
@@ -568,7 +579,11 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
     // charge and save gold
     _player->modCoinage(-static_cast<int32_t>(cost));
 
-    CharacterDatabase.Execute("UPDATE characters SET gold = %u WHERE guid = %u", _player->getCoinage(), _player->m_playerInfo->guid);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_CHARACTER_GOLD);
+    stmt->Bind(0, _player->getCoinage());
+    stmt->Bind(1, _player->m_playerInfo->guid);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 
     SendPacket(SmsgSendMailResult(0, MAIL_RES_MAIL_SENT, MAIL_OK).serialise().get());
 }

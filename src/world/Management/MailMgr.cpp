@@ -62,8 +62,14 @@ void Mailbox::AddMessage(MailMessage* Message)
 void Mailbox::DeleteMessage(uint32_t MessageId, bool sql)
 {
     Messages.erase(MessageId);
+
     if (sql)
-        CharacterDatabase.WaitExecute("DELETE FROM mailbox WHERE message_id = %u", MessageId);
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_MAILBOX_DELETE);
+        stmt->Bind(0, MessageId);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 }
 
 void Mailbox::CleanupExpiredMessages()
@@ -83,38 +89,33 @@ void Mailbox::CleanupExpiredMessages()
 
 void MailSystem::SaveMessageToSQL(MailMessage* message)
 {
-    std::stringstream ss;
+    {
+        auto stmtDel = CharacterDatabase.CreateStatement(CHARACTER_MAILBOX_DELETE_BY_ID);
+        stmtDel->Bind(0, message->message_id);
+        CharacterDatabase.ExecuteStatement(std::move(stmtDel));
+    }
 
-    ss << "DELETE FROM mailbox WHERE message_id = ";
-    ss << message->message_id;
-    ss << ";";
+    std::ostringstream itemStream;
+    for (auto itemId : message->items)
+        itemStream << itemId << ",";
+    std::string serializedItems = itemStream.str();
 
-    CharacterDatabase.ExecuteNA(ss.str().c_str());
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_MAILBOX_INSERT);
+    stmt->Bind(0, message->message_id);
+    stmt->Bind(1, message->message_type);
+    stmt->Bind(2, message->player_guid);
+    stmt->Bind(3, message->sender_guid);
+    stmt->Bind(4, message->subject);
+    stmt->Bind(5, message->body);
+    stmt->Bind(6, serializedItems);
+    stmt->Bind(7, message->cod);
+    stmt->Bind(8, message->stationery);
+    stmt->Bind(9, message->expire_time);
+    stmt->Bind(10, message->delivery_time);
+    stmt->Bind(11, message->checked_flag);
+    stmt->Bind(12, message->deleted_flag);
 
-    ss.rdbuf()->str("");
-
-    std::vector< uint32_t >::iterator itr;
-    ss << "INSERT INTO mailbox VALUES("
-        << message->message_id << ","
-        << message->message_type << ","
-        << message->player_guid << ","
-        << message->sender_guid << ",\'"
-        << CharacterDatabase.EscapeString(message->subject) << "\',\'"
-        << CharacterDatabase.EscapeString(message->body) << "\',"
-        << message->money << ",'";
-
-    for (itr = message->items.begin(); itr != message->items.end(); ++itr)
-        ss << (*itr) << ",";
-
-    ss << "',"
-        << message->cod << ","
-        << message->stationery << ","
-        << message->expire_time << ","
-        << message->delivery_time << ","
-        << message->checked_flag << ","
-        << message->deleted_flag << ");";
-
-    CharacterDatabase.ExecuteNA(ss.str().c_str());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void MailSystem::RemoveMessageIfDeleted(uint32_t message_id, Player* plr)

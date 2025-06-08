@@ -127,12 +127,10 @@ namespace Arcemu
             //////////////////////////////////////////////////////////////////////////////////////////
             /// \note bool SavetoDB - Serializes the contents of the class and saves them to the database.
             ///
-            /// \param QueryBuffer* buf  -  Pointer to a QueryBuffer structure that can store the datas of the class
-            ///
             /// \returns true on success, false on failure.
             ///
             //////////////////////////////////////////////////////////////////////////////////////////
-            bool SavetoDB(QueryBuffer* buf);
+            bool SavetoDB();
 
 
             //////////////////////////////////////////////////////////////////////////////////////////

@@ -658,7 +658,7 @@ void WorldSession::handleOpenItemOpcode(WorldPacket& recvPacket)
         }
 
         item->m_isDirty = true;
-        item->saveToDB(srlPacket.containerSlot, srlPacket.slot, false, nullptr);
+        item->saveToDB(srlPacket.containerSlot, srlPacket.slot, false);
         return;
     }
 
@@ -953,17 +953,15 @@ void WorldSession::handleBugOpcode(WorldPacket& recv_data)
     uint32_t timeStamp = uint32_t(UNIXTIME);
     uint32_t reportId = sObjectMgr.generateReportId();
 
-    std::stringstream ss;
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_BUG_REPORT);
+    stmt->Bind(0, reportId);
+    stmt->Bind(1, accountId);
+    stmt->Bind(2, timeStamp);
+    stmt->Bind(3, srlPacket.suggestion);
+    stmt->Bind(4, srlPacket.type);
+    stmt->Bind(5, srlPacket.content);
 
-    ss << "INSERT INTO playerbugreports VALUES('";
-    ss << reportId << "','";
-    ss << accountId << "','";
-    ss << timeStamp << "','";
-    ss << srlPacket.suggestion << "','";
-    ss << CharacterDatabase.EscapeString(srlPacket.type) << "','";
-    ss << CharacterDatabase.EscapeString(srlPacket.content) << "')";
-
-    CharacterDatabase.ExecuteNA(ss.str().c_str());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 #else
 void WorldSession::handleBugOpcode(WorldPacket& recv_data)
@@ -987,17 +985,15 @@ void WorldSession::handleBugOpcode(WorldPacket& recv_data)
     uint32_t timeStamp = uint32_t(UNIXTIME);
     uint32_t reportId = sObjectMgr.generateReportId();
 
-    std::stringstream ss;
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_INS_BUG_REPORT_SIMPLE);
+    stmt->Bind(0, reportId);
+    stmt->Bind(1, accountId);
+    stmt->Bind(2, timeStamp);
+    stmt->Bind(3, 0);
+    stmt->Bind(4, 0);
+    stmt->Bind(5, bugMessage);
 
-    ss << "INSERT INTO playerbugreports VALUES('";
-    ss << reportId << "','";
-    ss << accountId << "','";
-    ss << timeStamp << "',";
-    ss << "'0',";
-    ss << "'0','";
-    ss << CharacterDatabase.EscapeString(bugMessage) << "')";
-
-    CharacterDatabase.ExecuteNA(ss.str().c_str());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 #endif
 
@@ -1721,7 +1717,11 @@ void WorldSession::handleWhoIsOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    auto resultAcctId = CharacterDatabase.Query("SELECT acct FROM characters WHERE name = '%s'", srlPacket.characterName.c_str());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_ACCT_BY_NAME);
+    stmt->Bind(0, srlPacket.characterName);
+
+    auto resultAcctId = CharacterDatabase.QueryStatement(std::move(stmt));
+
     if (!resultAcctId)
     {
         SendNotification("%s does not exit!", srlPacket.characterName.c_str());
@@ -1732,7 +1732,11 @@ void WorldSession::handleWhoIsOpcode(WorldPacket& recvPacket)
     const uint32_t accId = fields_acctID[0].asUint32();
 
     //todo: this will not work! no table accounts in character_db!!!
-    auto accountInfoResult = CharacterDatabase.Query("SELECT acct, login, gm, email, lastip, muted FROM accounts WHERE acct = %u", accId);
+    auto stmt2 = CharacterDatabase.CreateStatement(CHAR_SEL_ACCOUNT_INFO);
+    stmt2->Bind(0, accId);
+
+    auto accountInfoResult = CharacterDatabase.QueryStatement(std::move(stmt2));
+
     if (!accountInfoResult)
     {
         SendNotification("Account information for %s not found!", srlPacket.characterName.c_str());

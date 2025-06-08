@@ -18,7 +18,7 @@ public:
 
     void create(uint32_t itemid, Player* owner);
     void loadFromDB(Field* fields);
-    void saveToDB(int8_t slot, bool first, QueryBuffer* buf);
+    void saveToDB(int8_t slot, bool first);
 
     // Returns item in tuple with result if failed to add item, nullptr on success
     std::tuple<bool, std::unique_ptr<Item>> addItem(int16_t slot, std::unique_ptr<Item> itemHolder);

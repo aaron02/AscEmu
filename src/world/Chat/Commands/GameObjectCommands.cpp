@@ -347,7 +347,17 @@ bool ChatHandler::HandleGOMoveHereCommand(const char* /*args*/, WorldSession* m_
     }
 
     GreenSystemMessage(m_session, "Position changed in gameobject_spawns table for spawn ID: %u.", go_spawn->id);
-    WorldDatabase.Execute("UPDATE gameobject_spawns SET position_x = %f, position_y = %f, position_z = %f WHERE id = %u AND min_build <= %u AND max_build >= %u", position_x, position_y, position_z, go_spawn->id, VERSION_STRING, VERSION_STRING);
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_GAMEOBJECT_POSITION_UPDATE);
+    stmt->Bind(0, position_x);
+    stmt->Bind(1, position_y);
+    stmt->Bind(2, position_z);
+    stmt->Bind(3, go_spawn->id);
+    stmt->Bind(4, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(5, static_cast<uint32_t>(VERSION_STRING));
+
+    WorldDatabase.ExecuteStatement(std::move(stmt));
+ 
     sGMLog.writefromsession(m_session, "changed gameobject position of gameobject_spawns ID: %u.", go_spawn->id);
 
     uint32_t new_go_guid = m_session->GetPlayer()->getWorldMap()->generateGameobjectGuid();
@@ -649,7 +659,17 @@ bool ChatHandler::HandleGOSetFactionCommand(const char* args, WorldSession* m_se
     }
 
     GreenSystemMessage(m_session, "Faction changed in gameobject_spawns table for spawn ID: %u.", go_spawn->id);
-    WorldDatabase.Execute("REPLACE INTO gameobject_spawns_overrides VALUES(%u, %u, %u, %3.3lf,%u,%u)", go_spawn->id, VERSION_STRING, VERSION_STRING, gameobject->getScale(), go_faction, gameobject->getFlags());
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_GAMEOBJECT_SPAWN_OVERRIDE_REPLACE);
+    stmt->Bind(0, go_spawn->id);
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, gameobject->getScale());
+    stmt->Bind(4, go_faction);
+    stmt->Bind(5, gameobject->getFlags());
+
+    WorldDatabase.ExecuteStatement(std::move(stmt));
+
     sGMLog.writefromsession(m_session, "changed gameobject faction of gameobject_spawns ID: %u.", go_spawn->id);
 
     return true;
@@ -683,51 +703,21 @@ bool ChatHandler::HandleGOSetFlagsCommand(const char* args, WorldSession* m_sess
         return true;
     }
     GreenSystemMessage(m_session, "Flags changed in gameobject_spawns table for spawn ID: %u.", go_spawn->id);
-    WorldDatabase.Execute("REPLACE INTO gameobject_spawns_overrides VALUES(%u, %u, %u, %3.3lf,%u,%u)", go_spawn->id, VERSION_STRING, VERSION_STRING, gameobject->getScale(), gameobject->getFactionTemplate(), go_flags);
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_GAMEOBJECT_SPAWN_OVERRIDE_REPLACE);
+    stmt->Bind(0, go_spawn->id);
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, gameobject->getScale());
+    stmt->Bind(4, gameobject->getFactionTemplate());
+    stmt->Bind(5, go_flags);
+
+    WorldDatabase.ExecuteStatement(std::move(stmt));
+
     sGMLog.writefromsession(m_session, "changed gameobject flags of gameobject_spawns ID: %u.", go_spawn->id);
 
     return true;
 }
-
-//.gobject set overrides
-bool ChatHandler::HandleGOSetOverridesCommand(const char* args, WorldSession* m_session)
-{
-    uint32_t go_override;
-    if (sscanf(args, "%u", &go_override) < 1)
-    {
-        RedSystemMessage(m_session, "Wrong Syntax! Use: .gobject setoverride <value>");
-        return true;
-    }
-
-    auto gameobject = m_session->GetPlayer()->getSelectedGo();
-    if (gameobject == nullptr)
-    {
-        RedSystemMessage(m_session, "No selected GameObject!");
-        return true;
-    }
-
-    gameobject->SetOverrides(go_override);
-    auto go_spawn = gameobject->m_spawn;
-
-    if (go_spawn == nullptr)
-    {
-        RedSystemMessage(m_session, "The GameObject is not a spawn to save the data.");
-        return true;
-    }
-    GreenSystemMessage(m_session, "Overrides changed in gameobject_spawns table to %u for spawn ID: %u.", go_override, go_spawn->id);
-    WorldDatabase.Execute("UPDATE gameobject_spawns SET overrides = %u WHERE id = %u AND min_build <= %u AND max_build >= %u", go_override, go_spawn->id, VERSION_STRING, VERSION_STRING);
-    sGMLog.writefromsession(m_session, "changed gameobject scale of gameobject_spawns ID: %u to %u", go_spawn->id, go_override);
-
-    uint32_t new_go_guid = m_session->GetPlayer()->getWorldMap()->generateGameobjectGuid();
-    gameobject->RemoveFromWorld(true);
-    gameobject->SetNewGuid(new_go_guid);
-    gameobject->PushToWorld(m_session->GetPlayer()->getWorldMap());
-
-    m_session->GetPlayer()->setSelectedGo(new_go_guid);
-
-    return true;
-}
-
 
 //.gobject set phase
 bool ChatHandler::HandleGOSetPhaseCommand(const char* args, WorldSession* m_session)
@@ -757,7 +747,15 @@ bool ChatHandler::HandleGOSetPhaseCommand(const char* args, WorldSession* m_sess
         return true;
     }
     GreenSystemMessage(m_session, "Phase changed in gameobject_spawns table to %u for spawn ID: %u.", phase, go_spawn->id);
-    WorldDatabase.Execute("UPDATE gameobject_spawns SET phase = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", phase, go_spawn->id, VERSION_STRING, VERSION_STRING);
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_GAMEOBJECT_SPAWN_PHASE_UPDATE);
+    stmt->Bind(0, phase);
+    stmt->Bind(1, go_spawn->id);
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+    WorldDatabase.ExecuteStatement(std::move(stmt));
+
     sGMLog.writefromsession(m_session, "changed gameobject phase of gameobject_spawns ID: %u to %u", go_spawn->id, phase);
 
     uint32_t new_go_guid = m_session->GetPlayer()->getWorldMap()->generateGameobjectGuid();
@@ -796,7 +794,17 @@ bool ChatHandler::HandleGOSetScaleCommand(const char* args, WorldSession* m_sess
         return true;
     }
     GreenSystemMessage(m_session, "Scale changed in gameobject_spawns_overrides table to %3.3lf for spawn ID: %u.", scale, go_spawn->id);
-    WorldDatabase.Execute("REPLACE INTO gameobject_spawns_overrides VALUES(%u, %u, %u, %3.3lf,%u,%u)", go_spawn->id, VERSION_STRING, VERSION_STRING, scale, gameobject->getFactionTemplate(), gameobject->getFlags());
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_GAMEOBJECT_SPAWN_OVERRIDE_REPLACE);
+    stmt->Bind(0, go_spawn->id);
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, scale);
+    stmt->Bind(4, gameobject->getFactionTemplate());
+    stmt->Bind(5, gameobject->getFlags());
+
+    WorldDatabase.ExecuteStatement(std::move(stmt));
+
     sGMLog.writefromsession(m_session, "changed gameobject scale of gameobject_spawns ID: %u to %3.3lf", go_spawn->id, scale);
 
     uint32_t new_go_guid = m_session->GetPlayer()->getWorldMap()->generateGameobjectGuid();
@@ -837,7 +845,15 @@ bool ChatHandler::HandleGOSetStateCommand(const char* args, WorldSession* m_sess
         return true;
     }
     GreenSystemMessage(m_session, "State changed in gameobject_spawns table for spawn ID: %u.", go_spawn->id);
-    WorldDatabase.Execute("UPDATE gameobject_spawns SET state = %u WHERE id = %u AND min_build <= %u AND max_build >= %u", go_state, go_spawn->id, VERSION_STRING, VERSION_STRING);
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_GAMEOBJECT_SPAWN_STATE_UPDATE);
+    stmt->Bind(0, go_state);
+    stmt->Bind(1, go_spawn->id);
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+    WorldDatabase.ExecuteStatement(std::move(stmt));
+
     sGMLog.writefromsession(m_session, "changed gameobject state of gameobject_spawns ID: %u.", go_spawn->id);
 
     return true;

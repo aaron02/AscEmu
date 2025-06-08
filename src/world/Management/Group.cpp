@@ -360,7 +360,11 @@ void Group::Disband()
 
     m_groupLock.unlock();
 
-    CharacterDatabase.Execute("DELETE FROM `groups` WHERE `group_id` = %u", m_Id);
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_GROUP_DELETE);
+    stmt->Bind(0, m_Id);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
+
     sObjectMgr.removeGroup(m_Id);    // destroy ourselves
 }
 
@@ -746,92 +750,57 @@ void Group::SaveToDB()
     if (!m_disbandOnNoMembers) /* don't save bg groups */
         return;
 
-    std::stringstream ss;
-    //uint32_t i = 0;
-    //uint32_t fillers = 8 - m_SubGroupCount;
-
-
-    ss << "DELETE FROM `groups` WHERE `group_id` = ";
-    ss << m_Id;
-    ss << ";";
-
-    CharacterDatabase.Execute(ss.str().c_str());
-
-    ss.rdbuf()->str("");
-
-    ss << "INSERT INTO `groups` (group_id, group_type, subgroup_count, loot_method, loot_threshold, difficulty, raiddifficulty, assistant_leader, main_tank, main_assist,\
-          group1member1, group1member2, group1member3, group1member4, group1member5,\
-          group2member1, group2member2, group2member3, group2member4, group2member5,\
-          group3member1, group3member2, group3member3, group3member4, group3member5,\
-          group4member1, group4member2, group4member3, group4member4, group4member5,\
-          group5member1, group5member2, group5member3, group5member4, group5member5,\
-          group6member1, group6member2, group6member3, group6member4, group6member5,\
-          group7member1, group7member2, group7member3, group7member4, group7member5,\
-          group8member1, group8member2, group8member3, group8member4, group8member5,\
-                    timestamp, instanceids) VALUES("
-        << m_Id << "," // group_id (1/52)
-        << uint32_t(m_GroupType) << "," // group_type (2/52)
-        << uint32_t(m_SubGroupCount) << "," // subgroup_count (3/52)
-        << uint32_t(m_LootMethod) << "," // loot_method (4/52)
-        << uint32_t(m_LootThreshold) << "," // loot_threshold (5/52)
-        << uint32_t(m_difficulty) << "," // difficulty (6/52)
-        << uint32_t(m_raiddifficulty) << ","; // raiddifficulty (7/52)
-
-    // assistant_leader (8/52)
-    if (m_assistantLeader)
-        ss << m_assistantLeader->guid << ",";
-    else
-        ss << "0,";
-
-    // main_tank (9/52)
-    if (m_mainTank)
-        ss << m_mainTank->guid << ",";
-    else
-        ss << "0,";
-
-    // main_assist (10/52)
-    if (m_mainAssist)
-        ss << m_mainAssist->guid << ",";
-    else
-        ss << "0,";
-
-    auto membersNotFilled = 40;
-
-    // For each subgroup
-    for (uint8_t i = 0; i < m_SubGroupCount; ++i)
+    // Delete Group
     {
-        uint8_t j = 0;
+        auto stmtDel = CharacterDatabase.CreateStatement(CHARACTER_GROUP_DELETE);
+        stmtDel->Bind(0, m_Id);
 
-        // For each member in the group, while membercount is less than 5 (guard clause), add their ID to query
-        for (const auto itr : m_SubGroups[i]->getGroupMembers())
-        {
-            ss << itr->guid << ",";
-            ++j;
-        }
-
-        // Add 0 to query until we reach 5 (fill empty slots)
-        for (; j < 5; ++j)
-            ss << "0,";
-
-        membersNotFilled -= 5;
+        CharacterDatabase.ExecuteStatement(std::move(stmtDel));
     }
 
-    // Fill remaining empty slots
-    for (membersNotFilled; membersNotFilled > 0; --membersNotFilled)
-        ss << "0,";
+    // Insert Group
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_GROUP_INSERT);
 
-    //for (uint32_t i = 0; i < fillers; ++i)
-    //    ss << "0, 0, 0, 0, 0,";
+        stmt->Bind(0, m_Id);
+        stmt->Bind(1, uint32_t(m_GroupType));
+        stmt->Bind(2, uint32_t(m_SubGroupCount));
+        stmt->Bind(3, uint32_t(m_LootMethod));
+        stmt->Bind(4, uint32_t(m_LootThreshold));
+        stmt->Bind(5, uint32_t(m_difficulty));
+        stmt->Bind(6, uint32_t(m_raiddifficulty));
+        stmt->Bind(7, m_assistantLeader ? m_assistantLeader->guid : uint64_t(0));
+        stmt->Bind(8, m_mainTank ? m_mainTank->guid : uint64_t(0));
+        stmt->Bind(9, m_mainAssist ? m_mainAssist->guid : uint64_t(0));
 
-    // timestamp (51/52)
-    ss << (uint32_t)UNIXTIME << ",'";
+        uint32_t bindIndex = 10;
+        uint8_t filledGroups = 0;
 
-    // instanceids (52/52) // unused 03.02.22 pending delete
-    ss << 0 << ":" << 0 << ":" << 0 << " ";
+        for (uint8_t i = 0; i < m_SubGroupCount; ++i)
+        {
+            uint8_t j = 0;
+            for (const auto member : m_SubGroups[i]->getGroupMembers())
+            {
+                stmt->Bind(bindIndex++, member->guid);
+                ++j;
+            }
+            for (; j < 5; ++j)
+                stmt->Bind(bindIndex++, uint64_t(0));
 
-    ss << "')";
-    /*printf("==%s==\n", ss.str().c_str());*/
-    CharacterDatabase.Execute(ss.str().c_str());
+            filledGroups++;
+        }
+
+        for (; filledGroups < 8; ++filledGroups)
+        {
+            for (uint8_t i = 0; i < 5; ++i)
+                stmt->Bind(bindIndex++, uint64_t(0));
+        }
+
+        stmt->Bind(bindIndex++, uint32_t(UNIXTIME));
+        stmt->Bind(bindIndex++, "0:0:0 "); // placeholder
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 }
 
 void Group::UpdateOutOfRangePlayer(Player* pPlayer, bool Distribute, WorldPacket* Packet)
@@ -1214,7 +1183,10 @@ void Group::resetInstances(uint8_t method, bool isRaid, Player* SendMsgTo)
             }
             else
             {
-                CharacterDatabase.Execute("DELETE FROM group_instance WHERE instance = %u", instanceSave->getInstanceId());
+                auto stmt = CharacterDatabase.CreateStatement(CHARACTER_GROUP_INSTANCE_DELETE); 
+                stmt->Bind(0, instanceSave->getInstanceId());
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
             }
 
             // i don't know for sure if hash_map iterators
@@ -1281,7 +1253,11 @@ InstanceGroupBind* Group::bindToInstance(InstanceSaved* save, bool permanent, bo
     InstanceGroupBind& bind = m_boundInstances[save->getDifficulty()][save->getMapId()];
     if (!load && (!bind.save || permanent != bind.perm || save != bind.save))
     {
-        CharacterDatabase.Execute("REPLACE INTO group_instance (guid, instance, permanent) VALUES (%u, %u, %u)", GetID(), save->getInstanceId(), permanent);
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_GROUP_INSTANCE_REPLACE);
+        stmt->Bind(0, GetID()); stmt->Bind(1, save->getInstanceId());
+        stmt->Bind(2, permanent);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     if (bind.save != save)
@@ -1304,7 +1280,11 @@ void Group::unbindInstance(uint32_t mapid, uint8_t difficulty, bool unload)
     {
         if (!unload)
         {
-            CharacterDatabase.Execute("DELETE FROM group_instance WHERE guid = %u AND instance = %u", GetID(), itr->second.save->getInstanceId());
+            auto stmt = CharacterDatabase.CreateStatement(CHARACTER_GROUP_INSTANCE_DELETE2);
+            stmt->Bind(0, GetID());
+            stmt->Bind(1, itr->second.save->getInstanceId());
+
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
 
         itr->second.save->removeGroup(this);

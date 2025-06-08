@@ -23,7 +23,7 @@
 #include <sstream>
 
 #include "Database/Field.hpp"
-#include "Database/Database.h"
+#include "Database/Database.hpp"
 #include "WoWGuid.h"
 #include "WorldPacket.h"
 #include "Logging/Logger.hpp"
@@ -102,44 +102,28 @@ namespace Arcemu
         return true;
     }
 
-    bool EquipmentSetMgr::SavetoDB(QueryBuffer* buf)
+    bool EquipmentSetMgr::SavetoDB()
     {
-        if (buf == NULL)
-            return false;
-
-        std::stringstream ds;
-        ds << "DELETE FROM equipmentsets WHERE ownerguid = ";
-        ds << ownerGUID;
-
-        buf->AddQueryNA(ds.str().c_str());
-
-        for (EquipmentSetStorage::iterator itr = EquipmentSets.begin(); itr != EquipmentSets.end(); ++itr)
+        for (const auto& [_, set] : EquipmentSets)
         {
-            const auto& set = itr->second;
+            auto stmt = CharacterDatabase.CreateStatement(CHARACTER_EQUIPMENT_SETS_REPLACE);
+            stmt->Bind(0, ownerGUID);
+            stmt->Bind(1, set->SetGUID);
+            stmt->Bind(2, set->SetID);
+            stmt->Bind(3, set->SetName);
+            stmt->Bind(4, set->IconName);
 
-            std::stringstream ss;
-
-            ss << "INSERT INTO equipmentsets VALUES('";
-            ss << ownerGUID << "','";
-            ss << set->SetGUID << "','";
-            ss << set->SetID << "','";
-            ss << CharacterDatabase.EscapeString(set->SetName) << "','";
-            ss << set->IconName << "'";
-
-            for (uint32_t j = 0; j < set->ItemGUID.size(); ++j)
+            for (size_t i = 0; i < set->ItemGUID.size(); ++i)
             {
-                ss << ",'";
-                ss << set->ItemGUID[j];
-                ss << "'";
+                stmt->Bind(5 + i, set->ItemGUID[i]);
             }
 
-            ss << ")";
-
-            buf->AddQueryNA(ss.str().c_str());
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
 
         return true;
     }
+
 
     void EquipmentSetMgr::FillEquipmentSetListPacket(WorldPacket& data)
     {

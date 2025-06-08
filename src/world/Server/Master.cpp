@@ -1,3 +1,4 @@
+#include "Master.h"
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
  * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
@@ -67,6 +68,11 @@
 #include "Common.hpp"
 #include "Threading/LegacyThreading.h"
 #include "Utilities/Benchmark.hpp"
+
+
+#include "shared/Database/CharacterDatabaseConnection.hpp"
+#include "shared/Database/WorldDatabaseConnection.hpp"
+
 
 // DB version
 static const char* REQUIRED_CHAR_DB_VERSION = "20250516-00_characters";
@@ -325,7 +331,7 @@ bool Master::Run(int /*argc*/, char** /*argv*/)
 
     if (!_StartDB())
     {
-        Database::CleanupLibs();
+        mysql_library_end();
         sLogger.finalize();
         return false;
     }
@@ -334,7 +340,7 @@ bool Master::Run(int /*argc*/, char** /*argv*/)
 
     if (!checkRequiredDirs())
     {
-        Database::CleanupLibs();
+        mysql_library_end();
         sLogger.finalize();
         return false;
     }
@@ -456,8 +462,8 @@ bool Master::Run(int /*argc*/, char** /*argv*/)
     sLogger.info("Database : Clearing all pending queries...");
 
     // kill the database thread first so we don't lose any queries/data
-    CharacterDatabase.EndThreads();
-    WorldDatabase.EndThreads();
+    CharacterDatabase.Shutdown();
+    WorldDatabase.Shutdown();
 
     ls->Close();
 
@@ -530,67 +536,52 @@ bool Master::Run(int /*argc*/, char** /*argv*/)
 
 bool Master::_CheckDBVersion()
 {
-    auto wqr = WorldDatabase.QueryNA("SELECT LastUpdate FROM world_db_version ORDER BY id DESC LIMIT 1;");
-    if (wqr == NULL)
-    {
-        sLogger.fatal("Database : World database is missing the table `world_db_version` OR the table doesn't contain any rows. Can't validate database version. Exiting.");
-        sLogger.fatal("Database : You may need to update your database");
+    if (!ValidateDatabaseVersion(WorldDatabase, WORLD_VERSION_LAST_UPDATE, "world", REQUIRED_WORLD_DB_VERSION))
         return false;
-    }
 
-    Field* f = wqr->Fetch();
-    const char *WorldDBVersion = f->asCString();
-
-    sLogger.info("Database : Last world database update: {}", WorldDBVersion);
-    int result = strcmp(WorldDBVersion, REQUIRED_WORLD_DB_VERSION);
-    if (result != 0)
-    {
-        sLogger.fatal("Database : Last world database update doesn't match the required one which is {}.", REQUIRED_WORLD_DB_VERSION);
-
-        if (result < 0)
-        {
-            sLogger.fatal("Database : You need to apply the world update queries that are newer than {}. Exiting.", WorldDBVersion);
-            sLogger.fatal("Database : You can find the world update queries in the sql/world_updates sub-directory of your AscEmu source directory.");
-        }
-        else
-        {
-            sLogger.fatal("Database : Your world database is probably too new for this AscEmu version, you need to update your server. Exiting.");
-        }
-
+    if (!ValidateDatabaseVersion(CharacterDatabase, CHAR_VERSION_LAST_UPDATE, "character", REQUIRED_CHAR_DB_VERSION))
         return false;
-    }
-
-    auto cqr = CharacterDatabase.QueryNA("SELECT LastUpdate FROM character_db_version ORDER BY id DESC LIMIT 1;");
-    if (cqr == NULL)
-    {
-        sLogger.fatal("Database : Character database is missing the table `character_db_version` OR the table doesn't contain any rows. Can't validate database version. Exiting.");
-        sLogger.fatal("Database : You may need to update your database");
-        return false;
-    }
-
-    f = cqr->Fetch();
-    const char *CharDBVersion = f->asCString();
-
-    sLogger.info("Database : Last character database update: {}", CharDBVersion);
-    result = strcmp(CharDBVersion, REQUIRED_CHAR_DB_VERSION);
-    if (result != 0)
-    {
-        sLogger.fatal("Database : Last character database update doesn't match the required one which is {}.", REQUIRED_CHAR_DB_VERSION);
-        if (result < 0)
-        {
-            sLogger.fatal("Database : You need to apply the character update queries that are newer than {}. Exiting.", CharDBVersion);
-            sLogger.fatal("Database : You can find the character update queries in the sql/character_updates sub-directory of your AscEmu source directory.");
-        }
-        else
-            sLogger.fatal("Database : Your character database is too new for this AscEmu version, you need to update your server. Exiting.");
-
-        return false;
-    }
 
     sLogger.info("Database : Database successfully validated.");
+    return true;
+}
+
+bool Master::ValidateDatabaseVersion(Database& db, const uint32_t stmtIndex, const char* dbName, const char* requiredVersion)
+{
+    auto stmt = db.CreateStatement(stmtIndex);
+    auto result = db.QueryStatement(std::move(stmt));
+
+    if (!result)
+    {
+        sLogger.fatal("Database : {} database is missing the version table or has no rows. Can't validate version. Exiting.", dbName);
+        sLogger.fatal("Database : You may need to update your {} database", dbName);
+        return false;
+    }
+
+    const char* version = result->Fetch()[0].asCString();
+    sLogger.info("Database : Last {} database update: {}", dbName, version);
+
+    int cmp = std::strcmp(version, requiredVersion);
+    if (cmp != 0)
+    {
+        sLogger.fatal("Database : Last {} database update doesn't match required version: {}.", dbName, requiredVersion);
+
+        if (cmp < 0)
+        {
+            sLogger.fatal("Database : You need to apply the {} update queries newer than {}. Exiting.", dbName, version);
+            sLogger.fatal("Database : You can find them in the sql/{}_updates sub-directory.", dbName);
+        }
+        else
+        {
+            sLogger.fatal("Database : Your {} database is too new for this AscEmu version. Update your server. Exiting.", dbName);
+        }
+
+        return false;
+    }
 
     return true;
 }
+
 
 bool Master::_StartDB()
 {
@@ -603,7 +594,7 @@ bool Master::_StartDB()
     wdb_result = !wdb_result ? wdb_result : !worldConfig.worldDb.dbName.empty();
     wdb_result = !wdb_result ? wdb_result : worldConfig.worldDb.port != 0;
 
-    Database_World = Database::CreateDatabaseInterface();
+    Database_World = std::make_unique<WorldDatabaseConnection>();
 
     if (wdb_result == false)
     {
@@ -612,8 +603,14 @@ bool Master::_StartDB()
     }
 
     // Initialize it
-    if (!WorldDatabase.Initialize(worldConfig.worldDb.host.c_str(), (unsigned int)worldConfig.worldDb.port, worldConfig.worldDb.user.c_str(),
-                                             worldConfig.worldDb.password.c_str(), worldConfig.worldDb.dbName.c_str(), worldConfig.worldDb.connections, 16384, worldConfig.worldDb.isLegacyAuth))
+    if (!WorldDatabase.Initialize(worldConfig.worldDb.host.c_str(),
+        (unsigned int)worldConfig.worldDb.port,
+        worldConfig.worldDb.user.c_str(),
+        worldConfig.worldDb.password.c_str(),
+        worldConfig.worldDb.dbName.c_str(),
+        worldConfig.worldDb.connections,
+        /*16384, Buffer Size*/
+        worldConfig.worldDb.isLegacyAuth))
     {
         sLogger.fatal("Configs : Connection to WorldDatabase failed. Check your database configurations!");
         return false;
@@ -625,7 +622,7 @@ bool Master::_StartDB()
     cdb_result = !cdb_result ? cdb_result : !worldConfig.charDb.dbName.empty();
     cdb_result = !cdb_result ? cdb_result : worldConfig.charDb.port != 0;
 
-    Database_Character = Database::CreateDatabaseInterface();
+    Database_Character = std::make_unique<CharacterDatabaseConnection>();
 
     if (cdb_result == false)
     {
@@ -634,8 +631,14 @@ bool Master::_StartDB()
     }
 
     // Initialize it
-    if (!CharacterDatabase.Initialize(worldConfig.charDb.host.c_str(), (unsigned int)worldConfig.charDb.port, worldConfig.charDb.user.c_str(),
-                                                 worldConfig.charDb.password.c_str(), worldConfig.charDb.dbName.c_str(), worldConfig.charDb.connections, 16384, worldConfig.charDb.isLegacyAuth))
+    if (!CharacterDatabase.Initialize(worldConfig.charDb.host.c_str(),
+        (unsigned int)worldConfig.charDb.port,
+        worldConfig.charDb.user.c_str(),
+        worldConfig.charDb.password.c_str(),
+        worldConfig.charDb.dbName.c_str(),
+        worldConfig.charDb.connections,
+        /*16384, Buffer Size*/
+        worldConfig.charDb.isLegacyAuth))
     {
         sLogger.fatal("Configs : Connection to CharacterDatabase failed. Check your database configurations!");
         return false;
@@ -648,7 +651,7 @@ void Master::_StopDB()
 {
     Database_World = nullptr;
     Database_Character = nullptr;
-    Database::CleanupLibs();
+    mysql_library_end();
 }
 
 void Master::_HookSignals()
@@ -692,8 +695,8 @@ void OnCrash(bool Terminate)
     try
     {
         sLogger.info("sql : Waiting for all database queries to finish...");
-        WorldDatabase.EndThreads();
-        CharacterDatabase.EndThreads();
+        WorldDatabase.Shutdown();
+        CharacterDatabase.Shutdown();
         sLogger.info("sql : All pending database operations cleared.");
         sWorld.saveAllPlayersToDb();
         sLogger.info("sql : Data saved.");

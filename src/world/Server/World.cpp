@@ -335,18 +335,18 @@ WorldSession* World::getSessionByAccountName(const std::string& accountName)
     return worldSession;
 }
 
-void World::sendCharacterEnumToAccountSession(QueryResultVector& results, uint32_t accountId)
+void World::sendCharacterEnumToAccountSession(std::unique_ptr<QueryResult> result, uint32_t accountId)
 {
     WorldSession* worldSession = getSessionByAccountId(accountId);
     if (worldSession != nullptr)
-        worldSession->characterEnumProc(results[0].result.get());
+        worldSession->characterEnumProc(result.get());
 }
 
-void World::loadAccountDataProcForId(QueryResultVector& results, uint32_t accountId)
+void World::loadAccountDataProcForId(std::unique_ptr<QueryResult> result, uint32_t accountId)
 {
     WorldSession* worldSession = getSessionByAccountId(accountId);
     if (worldSession != nullptr)
-        worldSession->loadAccountDataProc(results[0].result.get());
+        worldSession->loadAccountDataProc(result.get());
 }
 
 size_t World::getSessionCount()
@@ -784,8 +784,16 @@ bool World::setInitialWorldSettings()
 
 void World::resetCharacterLoginBannState()
 {
-    CharacterDatabase.WaitExecute("UPDATE characters SET online = 0 WHERE online = 1");
-    CharacterDatabase.WaitExecute("UPDATE characters SET banned= 0,banReason='' WHERE banned > 100 AND banned < %u", UNIXTIME);
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_ONLINE_RESET);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_BAN_RESET);
+        stmt->Bind(0, UNIXTIME);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 }
 
 bool World::loadDbcDb2Stores()

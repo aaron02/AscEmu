@@ -29,7 +29,7 @@
 #include <sstream>
 #include <Utilities/Strings.hpp>
 
-#include "Database/Database.h"
+#include "Database/Database.hpp"
 #include "Threading/LegacyThreading.h"
 
 LogonConsole& LogonConsole::getInstance()

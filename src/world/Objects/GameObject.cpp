@@ -369,78 +369,84 @@ void GameObject::deleteFromDB()
         std::string tableExtra = tableOrigine + "_extra";
         std::string tableOverrides = tableOrigine + "_overrides";
 
-        WorldDatabase.Execute("DELETE FROM %s WHERE id = %u AND min_build <= %u AND max_build >= %u ", tableOrigine.c_str(), m_spawn->id, VERSION_STRING, VERSION_STRING);
-        WorldDatabase.Execute("DELETE FROM %s WHERE id = %u AND min_build <= %u AND max_build >= %u ", tableExtra.c_str(), m_spawn->id, VERSION_STRING, VERSION_STRING);
-        WorldDatabase.Execute("DELETE FROM %s WHERE id = %u AND min_build <= %u AND max_build >= %u ", tableOverrides.c_str(), m_spawn->id, VERSION_STRING, VERSION_STRING);
+        {
+            auto del = WorldDatabase.CreateStatement(WORLD_DEL_GAMEOBJECT_SPAWN);
+            del->Bind(0, m_spawn->id);
+            del->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+            del->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+            WorldDatabase.ExecuteStatement(std::move(del));
+        }
+
+        {
+            auto del = WorldDatabase.CreateStatement(WORLD_DEL_GAMEOBJECT_SPAWN_EXTRA);
+            del->Bind(0, m_spawn->id);
+            del->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+            del->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+            WorldDatabase.ExecuteStatement(std::move(del));
+        }
+
+        {
+            auto del = WorldDatabase.CreateStatement(WORLD_DEL_GAMEOBJECT_SPAWN_OVERRIDES);
+            del->Bind(0, m_spawn->id);
+            del->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+            del->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+            WorldDatabase.ExecuteStatement(std::move(del));
+        }
     }
 }
 
 void GameObject::saveToDB(bool newSpawn)
 {
-    if (m_spawn == nullptr)
+    if (!m_spawn)
     {
         sLogger.failure("Saving to Database failed for GameObject with entry {} spawnId {}, no SpawnData available", getEntry(), getSpawnId());
         return;
     }
-    std::stringstream ss;
 
     if (newSpawn)
     {
-        ss << "INSERT INTO " << m_spawn->origine << " VALUES("
-           << m_spawn->id << ","
-           << VERSION_STRING << ","
-           << VERSION_STRING << ","
-           << getEntry() << ","
-           << GetMapId() << ","
-           << GetPhase() << ","
-           << GetPositionX() << ","
-           << GetPositionY() << ","
-           << GetPositionZ() << ","
-           << GetOrientation() << ","
-           << getParentRotation(0) << ","
-           << getParentRotation(1) << ","
-           << getParentRotation(2) << ","
-           << getParentRotation(3) << ","
-           << int32_t(m_respawnDelayTime) << ","
-           << int32_t(getState()) << ","
-           << "0)";           // event
+        auto stmt = WorldDatabase.CreateStatement(WORLD_INS_GAMEOBJECT_SPAWN);
+        stmt->Bind(0, m_spawn->id);
+        stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(3, getEntry());
+        stmt->Bind(4, GetMapId());
+        stmt->Bind(5, GetPhase());
+        stmt->Bind(6, GetPositionX());
+        stmt->Bind(7, GetPositionY());
+        stmt->Bind(8, GetPositionZ());
+        stmt->Bind(9, GetOrientation());
+        stmt->Bind(10, getParentRotation(0));
+        stmt->Bind(11, getParentRotation(1));
+        stmt->Bind(12, getParentRotation(2));
+        stmt->Bind(13, getParentRotation(3));
+        stmt->Bind(14, static_cast<int32_t>(m_respawnDelayTime));
+        stmt->Bind(15, static_cast<int32_t>(getState()));
+        stmt->Bind(16, 0); // event_entry
+
+        WorldDatabase.ExecuteStatement(std::move(stmt));
     }
     else
     {
-        ss << "UPDATE  " << m_spawn->origine << " SET "
-            << "phase = "
-            << GetPhase() << ","
-            << "position_x = "
-            << GetPositionX() << ","
-            << "position_y = "
-            << GetPositionY() << ","
-            << "position_z = "
-            << GetPositionZ() << ","
-            << "orientation = "
-            << GetOrientation() << ","
-            << "rotation0 = "
-            << getParentRotation(0) << ","
-            << "rotation1 = "
-            << getParentRotation(1) << ","
-            << "rotation2 = "
-            << getParentRotation(2) << ","
-            << "rotation3 = "
-            << getParentRotation(3) << ","
-            << "spawntimesecs = "
-            << int32_t(m_respawnDelayTime) << ","
-            << "state = "
-            << int32_t(getState()) << ","
-            << "event_entry = "
-            << "0 " // event
-            << "WHERE id = "
-            << m_spawn->id << " AND "
-            << "min_build <= "
-            << VERSION_STRING << " AND "
-            << "max_build >= "
-            << VERSION_STRING;
-    }
+        auto stmt = WorldDatabase.CreateStatement(WORLD_UPD_GAMEOBJECT_SPAWN);
+        stmt->Bind(0, GetPhase());
+        stmt->Bind(1, GetPositionX());
+        stmt->Bind(2, GetPositionY());
+        stmt->Bind(3, GetPositionZ());
+        stmt->Bind(4, GetOrientation());
+        stmt->Bind(5, getParentRotation(0));
+        stmt->Bind(6, getParentRotation(1));
+        stmt->Bind(7, getParentRotation(2));
+        stmt->Bind(8, getParentRotation(3));
+        stmt->Bind(9, static_cast<int32_t>(m_respawnDelayTime));
+        stmt->Bind(10, static_cast<int32_t>(getState()));
+        stmt->Bind(11, 0); // event_entry
+        stmt->Bind(12, m_spawn->id);
+        stmt->Bind(13, static_cast<uint32_t>(VERSION_STRING));
+        stmt->Bind(14, static_cast<uint32_t>(VERSION_STRING));
 
-    WorldDatabase.Execute(ss.str().c_str());
+        WorldDatabase.ExecuteStatement(std::move(stmt));
+    }
 }
 
 bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationVector const& position, QuaternionData const& rotation, GameObject_State state, uint32_t spawnId)

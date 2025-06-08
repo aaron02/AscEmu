@@ -46,6 +46,7 @@ private:
     bool _StartDB();
     void _StopDB();
     bool _CheckDBVersion();
+    bool ValidateDatabaseVersion(Database& db, const uint32_t stmtIndex, const char* dbName, const char* requiredVersion);
 
     void _HookSignals();
     void _UnhookSignals();

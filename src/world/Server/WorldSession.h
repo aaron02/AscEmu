@@ -329,7 +329,7 @@ protected:
         //////////////////////////////////////////////////////////////////////////////////////////
         // CharacterHandler.cpp
     public:
-        void loadPlayerFromDBProc(QueryResultVector& results);
+        void loadPlayerFromDBProc(std::unique_ptr<QueryResult> result);
         uint8_t deleteCharacter(WoWGuid guid);
 
         void initGMMyMaster();

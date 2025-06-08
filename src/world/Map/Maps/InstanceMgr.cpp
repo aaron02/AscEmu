@@ -83,7 +83,15 @@ void InstanceSaved::saveToDB()
         }
     }
 
-    CharacterDatabase.Execute("INSERT INTO instance (id, map, resettime, difficulty, completedEncounters, data) VALUES (%u, %u, %u, %u, %u, \'%s\')", m_instanceid, getMapId(), uint64_t(getResetTimeForDB()), uint8_t(getDifficulty()), completedEncounters, data.c_str());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_INSERT);
+    stmt->Bind(0, m_instanceid);
+    stmt->Bind(1, getMapId());
+    stmt->Bind(2, static_cast<uint64_t>(getResetTimeForDB()));
+    stmt->Bind(3, static_cast<uint8_t>(getDifficulty()));
+    stmt->Bind(4, completedEncounters);
+    stmt->Bind(5, data);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void InstanceSaved::deleteFromDB()
@@ -131,32 +139,52 @@ InstanceMgr& InstanceMgr::getInstance()
 
 void InstanceMgr::loadInstances()
 {
-    auto oldTime = Util::TimeNow();
+    const auto oldTime = Util::TimeNow();
 
     // Delete expired instances
-    CharacterDatabase.Execute("DELETE i FROM instance i LEFT JOIN instance_reset ir ON mapid = map AND i.difficulty = ir.difficulty "
-        "WHERE (i.resettime > 0 AND i.resettime < UNIX_TIMESTAMP()) OR (ir.resettime IS NOT NULL AND ir.resettime < UNIX_TIMESTAMP())");
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_DELETE_EXPIRED);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     // Delete invalid character_instance and group_instance references
-    CharacterDatabase.Execute("DELETE ci.* FROM character_instance AS ci LEFT JOIN characters AS c ON ci.guid = c.guid WHERE c.guid IS NULL");
-    CharacterDatabase.Execute("DELETE gi.* FROM group_instance     AS gi LEFT JOIN `groups`   AS g ON gi.guid = g.group_id WHERE g.group_id IS NULL");
+    {
+        auto stmt1 = CharacterDatabase.CreateStatement(CHAR_INSTANCE_DELETE_INVALID_CHARACTERS);
+        CharacterDatabase.ExecuteStatement(std::move(stmt1));
 
-    // Delete invalid instance references
-    CharacterDatabase.Execute("DELETE i.* FROM instance AS i LEFT JOIN character_instance AS ci ON i.id = ci.instance LEFT JOIN group_instance AS gi ON i.id = gi.instance WHERE ci.guid IS NULL AND gi.guid IS NULL");
+        auto stmt2 = CharacterDatabase.CreateStatement(CHAR_INSTANCE_DELETE_INVALID_GROUPS);
+        CharacterDatabase.ExecuteStatement(std::move(stmt2));
+    }
 
-    // Delete invalid references to instance
-    CharacterDatabase.Execute("DELETE FROM respawn WHERE instanceId > 0 AND instanceId NOT IN (SELECT id FROM instance)");
-    CharacterDatabase.Execute("DELETE tmp.* FROM character_instance AS tmp LEFT JOIN instance ON tmp.instance = instance.id WHERE tmp.instance > 0 AND instance.id IS NULL");
-    CharacterDatabase.Execute("DELETE tmp.* FROM group_instance     AS tmp LEFT JOIN instance ON tmp.instance = instance.id WHERE tmp.instance > 0 AND instance.id IS NULL");
+    // Delete orphaned instances
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_DELETE_ORPHANED_INSTANCES);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 
-    // Clean invalid references to instance
-    CharacterDatabase.Execute("UPDATE corpses SET instanceId = 0 WHERE instanceId > 0 AND instanceId NOT IN (SELECT id FROM instance)");
-    CharacterDatabase.Execute("UPDATE characters AS tmp LEFT JOIN instance ON tmp.instance_id = instance.id SET tmp.instance_id = 0 WHERE tmp.instance_id > 0 AND instance.id IS NULL");
+    // Delete invalid respawn references
+    {
+        auto stmt1 = CharacterDatabase.CreateStatement(CHAR_RESPAWN_DELETE_INVALID);
+        CharacterDatabase.ExecuteStatement(std::move(stmt1));
 
-    // Initialize Free Instance Ids
+        auto stmt2 = CharacterDatabase.CreateStatement(CHAR_CHARACTER_INSTANCE_DELETE_INVALID);
+        CharacterDatabase.ExecuteStatement(std::move(stmt2));
+
+        auto stmt3 = CharacterDatabase.CreateStatement(CHAR_GROUP_INSTANCE_DELETE_INVALID);
+        CharacterDatabase.ExecuteStatement(std::move(stmt3));
+    }
+
+    // Clean corpses / characters with invalid instance refs
+    {
+        auto stmt1 = CharacterDatabase.CreateStatement(CHAR_CORPSE_CLEAN_INVALID_INSTANCE);
+        CharacterDatabase.ExecuteStatement(std::move(stmt1));
+
+        auto stmt2 = CharacterDatabase.CreateStatement(CHAR_CHARACTER_CLEAN_INVALID_INSTANCE);
+        CharacterDatabase.ExecuteStatement(std::move(stmt2));
+    }
+
+    // Initialize & Load
     sMapMgr.initializeInstanceIds();
-
-    // Load reset times and clean expired instances
     sInstanceMgr.loadResetTimes();
 
     sLogger.info("Loaded instances in {} ms", Util::GetTimeDifferenceToNow(oldTime));
@@ -179,7 +207,8 @@ void InstanceMgr::loadResetTimes()
     typedef std::pair<ResetTimeMapDiffInstances::const_iterator, ResetTimeMapDiffInstances::const_iterator> ResetTimeMapDiffInstancesBounds;
     ResetTimeMapDiffInstances mapDiffResetInstances;
 
-    if (auto result = CharacterDatabase.Query("SELECT id, map, difficulty, resettime FROM instance ORDER BY id ASC"))
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_RESETTIME_SELECT);
+    if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
     {
         do
         {
@@ -215,7 +244,8 @@ void InstanceMgr::loadResetTimes()
 
     // load the global resettimes for raid and heroic instances
     auto resetHour = static_cast<uint8_t>(worldConfig.instance.relativeDailyHeroicInstanceResetHour);
-    if (auto result = CharacterDatabase.Query("SELECT mapid, difficulty, resettime FROM instance_reset"))
+    auto stmt2 = CharacterDatabase.CreateStatement(CHAR_INSTANCE_MAPDATA_SELECT);
+    if (auto result = CharacterDatabase.QueryStatement(std::move(stmt2)))
     {
         do
         {
@@ -227,7 +257,11 @@ void InstanceMgr::loadResetTimes()
             WDB::Structures::MapDifficulty const* mapDiff = getMapDifficultyData(mapid, difficulty);
             if (!mapDiff)
             {
-                CharacterDatabase.Execute("DELETE FROM instance_reset WHERE mapid = %u AND difficulty = %u", uint16_t(mapid), uint8_t(difficulty));
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_RESET_DELETE);
+                stmt->Bind(0, mapid);
+                stmt->Bind(1, static_cast<uint8_t>(difficulty));
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
                 continue;
             }
 
@@ -235,7 +269,12 @@ void InstanceMgr::loadResetTimes()
             uint64_t newresettime = Util::getLocalHourTimestamp(oldresettime, resetHour, false);
             if (oldresettime != newresettime)
             {
-                CharacterDatabase.Execute("UPDATE instance_reset SET resettime = %u WHERE mapid = %u AND difficulty = %u", uint64_t(newresettime), uint16_t(mapid), uint8_t(difficulty));
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_RESET_UPDATE);
+                stmt->Bind(0, newresettime);
+                stmt->Bind(1, mapid);
+                stmt->Bind(2, static_cast<uint8_t>(difficulty));
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
             }
 
             initializeResetTimeFor(mapid, difficulty, newresettime);
@@ -268,7 +307,12 @@ void InstanceMgr::loadResetTimes()
             // initialize the reset time
             t = Util::getLocalHourTimestamp(today + period, resetHour);
 
-            CharacterDatabase.Execute("INSERT INTO instance_reset (mapid, difficulty, resettime) VALUES (%u, %u, %u)", uint16_t(mapid), uint8_t(difficulty), uint64_t(t));
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_RESET_INSERT);
+            stmt->Bind(0, mapid);
+            stmt->Bind(1, static_cast<uint8_t>(difficulty));
+            stmt->Bind(2, static_cast<uint64_t>(t));
+
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
 
         if (t < now)
@@ -278,7 +322,12 @@ void InstanceMgr::loadResetTimes()
             time_t day = (t / DAY) * DAY;
             t = Util::getLocalHourTimestamp(day + ((today - day) / period + 1) * period, resetHour);
 
-            CharacterDatabase.Execute("UPDATE instance_reset SET resettime = %u WHERE mapid = %u AND difficulty = %u", uint64_t(t), uint16_t(mapid), uint8_t(difficulty));
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_RESET_UPDATE);
+            stmt->Bind(0, static_cast<uint64_t>(t));
+            stmt->Bind(1, mapid);
+            stmt->Bind(2, static_cast<uint8_t>(difficulty));
+
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
 
         initializeResetTimeFor(mapid, difficulty, t);
@@ -421,13 +470,33 @@ void InstanceMgr::resetOrWarnAll(uint32_t mapid, InstanceDifficulty::Difficultie
         if (!next_reset)
             return;
 
-        CharacterDatabase.Execute("DELETE FROM character_instance USING character_instance LEFT JOIN instance ON character_instance.instance = id WHERE (extendState = 0 or permanent = 0) and map = %u and difficulty = %u", uint16_t(mapid), uint8_t(difficulty));
+        {
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_DELETE_CHARACTER_INSTANCE_FOR_MAP_DIFF);
+            stmt->Bind(0, uint16_t(mapid));
+            stmt->Bind(1, uint8_t(difficulty));
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
+        }
 
-        CharacterDatabase.Execute("DELETE FROM group_instance USING group_instance LEFT JOIN instance ON group_instance.instance = id WHERE map = %u and difficulty = %u", uint16_t(mapid), uint8_t(difficulty));
+        {
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_DELETE_GROUP_INSTANCE_FOR_MAP_DIFF);
+            stmt->Bind(0, uint16_t(mapid));
+            stmt->Bind(1, uint8_t(difficulty));
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
+        }
 
-        CharacterDatabase.Execute("DELETE FROM instance WHERE map = %u and difficulty = %u and (SELECT guid FROM character_instance WHERE extendState != 0 AND instance = id LIMIT 1) IS NULL", uint16_t(mapid), uint8_t(difficulty));
+        {
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_DELETE_INSTANCE_WITHOUT_EXTENDED_CHARACTERS);
+            stmt->Bind(0, uint16_t(mapid));
+            stmt->Bind(1, uint8_t(difficulty));
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
+        }
 
-        CharacterDatabase.Execute("UPDATE character_instance LEFT JOIN instance ON character_instance.instance = id SET extendState = extendState-1 WHERE map = %u and difficulty = %u", uint16_t(mapid), uint8_t(difficulty));
+        {
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_DECREMENT_EXTENDSTATE_FOR_MAP_DIFF);
+            stmt->Bind(0, uint16_t(mapid));
+            stmt->Bind(1, uint8_t(difficulty));
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
+        }
 
         // promote loaded binds to instances of the given map
         for (InstanceSavedMap::iterator itr = m_instanceSaveById.begin(); itr != m_instanceSaveById.end();)
@@ -442,7 +511,12 @@ void InstanceMgr::resetOrWarnAll(uint32_t mapid, InstanceDifficulty::Difficultie
         addResetEvent(true, time_t(next_reset - 3600), InstResetEvent(1, mapid, difficulty, 0));
 
         // Update it in the DB
-        CharacterDatabase.Execute("UPDATE instance_reset SET resettime = %u WHERE mapid = %u AND difficulty = %u", uint64_t(next_reset), uint16_t(mapid), uint8_t(difficulty));
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_INSTANCE_RESET_UPDATE);
+        stmt->Bind(0, static_cast<uint64_t>(next_reset));
+        stmt->Bind(1, static_cast<uint16_t>(mapid));
+        stmt->Bind(2, static_cast<uint8_t>(difficulty));
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 
     uint32_t timeLeft;
@@ -522,9 +596,27 @@ InstanceSaved* InstanceMgr::addInstanceSave(uint32_t mapId, uint32_t instanceId,
 
 void InstanceMgr::deleteInstanceFromDB(uint32_t instanceid)
 {
-    CharacterDatabase.Execute("DELETE FROM instance WHERE id = %u", instanceid);
-    CharacterDatabase.Execute("DELETE FROM character_instance WHERE instance = %u", instanceid);
-    CharacterDatabase.Execute("DELETE FROM group_instance WHERE instance = %u", instanceid);
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DELETE_INSTANCE_BY_ID);
+        stmt->Bind(0, instanceid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DELETE_CHARACTER_INSTANCE_BY_INSTANCE);
+        stmt->Bind(0, instanceid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_DELETE_GROUP_INSTANCE_BY_INSTANCE);
+        stmt->Bind(0, instanceid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
 }
 
 void InstanceMgr::removeInstanceSave(uint32_t InstanceId)
@@ -535,7 +627,11 @@ void InstanceMgr::removeInstanceSave(uint32_t InstanceId)
         // save the resettime for normal instances only when they get unloaded
         if (time_t resettime = itr->second->getResetTimeForDB())
         {
-            CharacterDatabase.Execute("UPDATE instance SET resettime = %u WHERE id = %u", uint64_t(resettime), InstanceId);
+            auto stmt = CharacterDatabase.CreateStatement(CHAR_UPDATE_INSTANCE_RESETTIME_BY_ID);
+            stmt->Bind(0, static_cast<uint64_t>(resettime));
+            stmt->Bind(1, InstanceId);
+            
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
         }
 
         m_instanceSaveById.erase(itr);

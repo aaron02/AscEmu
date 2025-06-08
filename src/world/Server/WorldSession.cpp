@@ -1,4 +1,4 @@
-/*
+﻿/*
  * AscEmu Framework based on ArcEmu MMORPG Server
  * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -354,30 +354,34 @@ void WorldSession::LogoutPlayer(bool Save)
 
         if (worldConfig.server.useAccountData)
         {
-            std::stringstream ss;
-            ss << "UPDATE account_data SET ";
-            for (uint32_t ui = 0; ui < 8; ui++)
-            {
-                if (sAccountData[ui].bIsDirty)
-                {
-                    if (dirty)
-                        ss << ",";
-                    ss << "uiconfig" << ui << "=\"";
+            std::array<std::string, 8> configData;
 
-                    if (sAccountData[ui].data)
-                    {
-                        CharacterDatabase.EscapeLongString(sAccountData[ui].data.get(), sAccountData[ui].sz, ss);
-                        // ss.write(sAccountData[ui].data,sAccountData[ui].sz);
-                    }
-                    ss << "\"";
+            for (uint32_t i = 0; i < 8; ++i)
+            {
+                if (sAccountData[i].bIsDirty)
+                {
                     dirty = true;
-                    sAccountData[ui].bIsDirty = false;
+                    if (sAccountData[i].data)
+                        configData[i].assign(sAccountData[i].data.get(), sAccountData[i].sz);
+                    else
+                        configData[i].clear();
+
+                    sAccountData[i].bIsDirty = false;
+                }
+                else
+                {
+                    configData[i].clear();
                 }
             }
+
             if (dirty)
             {
-                ss << " WHERE acct=" << _accountId << ";";
-                CharacterDatabase.ExecuteNA(ss.str().c_str());
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_ACCOUNT_DATA);
+                for (uint32_t i = 0; i < 8; ++i)
+                    stmt->Bind(i, configData[i]);
+                stmt->Bind(8, _accountId);
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
             }
         }
 

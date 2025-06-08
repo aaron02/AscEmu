@@ -78,7 +78,9 @@ void FormationMgr::loadCreatureFormations()
     auto oldMSTime = Util::TimeNow();
 
     //Get group data
-    auto result = WorldDatabase.Query("SELECT leaderGUID, memberGUID, dist, angle, groupAI, point_1, point_2 FROM creature_formations ORDER BY leaderGUID");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_FORMATIONS);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (!result)
     {
         sLogger.debug("FormationMgr : Loaded 0 creatures in formations. DB table `creature_formations` is empty!");
@@ -111,19 +113,28 @@ void FormationMgr::loadCreatureFormations()
 
         // check data correctness
         {
-            auto spawnResult = WorldDatabase.Query("SELECT * FROM creature_spawns WHERE id = %u", member.LeaderSpawnId);
-            if (spawnResult == nullptr)
             {
-                sLogger.failure("FormationMgr : creature_formations table leader guid {} incorrect (not exist)", member.LeaderSpawnId);
-                continue;
+                auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_SPAWN_BY_ID);
+                stmt->Bind(0, member.LeaderSpawnId);
+
+                auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt));
+                if (spawnResult == nullptr)
+                {
+                    sLogger.failure("FormationMgr : creature_formations table leader guid {} incorrect (not exist)", member.LeaderSpawnId);
+                    continue;
+                }
             }
 
-            spawnResult = nullptr;
-            spawnResult = WorldDatabase.Query("SELECT * FROM creature_spawns WHERE id = %u", memberSpawnId);
-            if (spawnResult == nullptr)
             {
-                sLogger.failure("FormationMgr : creature_formations table member guid {} incorrect (not exist)", memberSpawnId);
-                continue;
+                auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_SPAWN_BY_ID);
+                stmt->Bind(0, memberSpawnId);
+
+                auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt));
+                if (spawnResult == nullptr)
+                {
+                    sLogger.failure("FormationMgr : creature_formations table member guid {} incorrect (not exist)", memberSpawnId);
+                    continue;
+                }
             }
 
             leaderSpawnIds.insert(member.LeaderSpawnId);

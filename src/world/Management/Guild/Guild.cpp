@@ -132,7 +132,7 @@ bool Guild::create(Player* pLeader, std::string const& name)
         return false;
 
     WorldSession* pLeaderSession = pLeader->getSession();
-    if (pLeaderSession == nullptr)
+    if (!pLeaderSession)
         return false;
 
     m_id = sGuildMgr.getNextGuildId();
@@ -149,14 +149,30 @@ bool Guild::create(Player* pLeader, std::string const& name)
 
     sLogger.debug("GUILD: creating guild {} for leader {} ({})", name, pLeader->getName(), WoWGuid::getGuidLowPartFromUInt64(m_leaderGuid));
 
-    CharacterDatabase.Execute("DELETE FROM guild_members WHERE guildId = %u", m_id);
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_DELETE_MEMBERS);
+        stmt->Bind(0, m_id);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 
-    CharacterDatabase.Execute("INSERT INTO guilds (guildId, guildName, leaderGuid, emblemStyle, emblemColor, borderStyle, borderColor, backgroundColor,"
-        "guildInfo, motd, createdate, bankBalance, guildLevel, guildExperience, todayExperience) "
-        "VALUES('%u', '%s', '%u', '%u', '%u', '%u', '%u', '%u', '%s', '%s', '%u', '%u', '%u', '0', '0')",
-        m_id, name.c_str(), m_leaderGuid, m_emblemInfo.getStyle(), m_emblemInfo.getColor(), m_emblemInfo.getBorderStyle(),
-        m_emblemInfo.getBorderColor(), m_emblemInfo.getBackgroundColor(), m_info.c_str(), m_motd.c_str(), uint32_t(m_createdDate),
-        m_bankMoney, m_level);
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_INSERT);
+        stmt->Bind(0, m_id);
+        stmt->Bind(1, m_name);
+        stmt->Bind(2, m_leaderGuid);
+        stmt->Bind(3, m_emblemInfo.getStyle());
+        stmt->Bind(4, m_emblemInfo.getColor());
+        stmt->Bind(5, m_emblemInfo.getBorderStyle());
+        stmt->Bind(6, m_emblemInfo.getBorderColor());
+        stmt->Bind(7, m_emblemInfo.getBackgroundColor());
+        stmt->Bind(8, m_info);
+        stmt->Bind(9, m_motd);
+        stmt->Bind(10, uint32_t(m_createdDate));
+        stmt->Bind(11, m_bankMoney);
+        stmt->Bind(12, m_level);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     createDefaultGuildRanks();
     bool ret = addMember(m_leaderGuid, GR_GUILDMASTER);
@@ -174,6 +190,7 @@ bool Guild::create(Player* pLeader, std::string const& name)
     return ret;
 }
 
+
 void Guild::disband()
 {
     broadcastEvent(GE_DISBANDED, 0, {});
@@ -183,21 +200,24 @@ void Guild::disband()
         deleteMember(itr->second->getGUID(), true);
     }
 
-    CharacterDatabase.Execute("DELETE FROM guilds WHERE guildId = %u", m_id);
+    auto deleteByGuildId = [this](CharacterDatabaseStatements stmtIndex)
+        {
+            auto stmt = CharacterDatabase.CreateStatement(stmtIndex);
+            stmt->Bind(0, m_id);
+            CharacterDatabase.ExecuteStatement(std::move(stmt));
+        };
 
-    CharacterDatabase.Execute("DELETE FROM guild_ranks WHERE guildId = %u", m_id);
-
-    CharacterDatabase.Execute("DELETE FROM guild_bank_tabs WHERE guildId = %u", m_id);
+    deleteByGuildId(CHAR_GUILD_DELETE);
+    deleteByGuildId(CHAR_GUILD_RANKS_DELETE);
+    deleteByGuildId(CHAR_GUILD_BANK_TABS_DELETE);
 
     deleteBankItems(true);
 
-    CharacterDatabase.Execute("DELETE FROM guild_bank_items WHERE guildId = %u", m_id);
+    deleteByGuildId(CHAR_GUILD_BANK_ITEMS_DELETE);
+    deleteByGuildId(CHAR_GUILD_BANK_RIGHTS_DELETE);
+    deleteByGuildId(CHAR_GUILD_LOGS_DELETE);
+    deleteByGuildId(CHAR_GUILD_BANK_LOGS_DELETE);
 
-    CharacterDatabase.Execute("DELETE FROM guild_bank_rights WHERE guildId = %u", m_id);
-
-    CharacterDatabase.Execute("DELETE FROM guild_logs WHERE guildId = %u", m_id);
-
-    CharacterDatabase.Execute("DELETE FROM guild_bank_logs WHERE guildId = %u", m_id);
 #if VERSION_STRING >= Cata
     sGuildFinderMgr.deleteGuild(m_id);
 #endif
@@ -207,8 +227,13 @@ void Guild::disband()
 
 void Guild::saveGuildToDB()
 {
-    CharacterDatabase.Execute("UPDATE guilds SET guildLevel = '%u', guildExperience = '%llu', todayExperience = '%llu' WHERE guildId = %u",
-        static_cast<uint32_t>(getLevel()), getExperience(), getTodayExperience(), getId());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_SAVE);
+    stmt->Bind(0, static_cast<uint32_t>(getLevel()));
+    stmt->Bind(1, getExperience());
+    stmt->Bind(2, getTodayExperience());
+    stmt->Bind(3, getId());
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Guild::updateMemberData(Player* player, uint8_t dataid, uint32_t value)
@@ -500,7 +525,12 @@ void Guild::handleSetMOTD(WorldSession* session, std::string const& motd)
     else
     {
         m_motd = motd;
-        CharacterDatabase.Execute("UPDATE guilds SET motd = '%s' WHERE guildId = %u", CharacterDatabase.EscapeString(motd).c_str(), m_id);
+
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_SET_MOTD);
+        stmt->Bind(0, motd);
+        stmt->Bind(1, m_id);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+
         broadcastEvent(GE_MOTD, 0, { motd });
     }
 }
@@ -513,7 +543,12 @@ void Guild::handleSetInfo(WorldSession* session, std::string const& info)
     if (_hasRankRight(session->GetPlayer()->getGuid(), GR_RIGHT_MODIFY_GUILD_INFO))
     {
         m_info = info;
-        CharacterDatabase.Execute("UPDATE guilds SET guildInfo = '%s' WHERE guildId = %u", info.c_str(), m_id);
+
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_SET_INFO);
+        stmt->Bind(0, info);
+        stmt->Bind(1, m_id);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 }
 
@@ -839,9 +874,23 @@ void Guild::handleRemoveRank(WorldSession* session, uint8_t rankId)
     if (_getRanksSize() <= MIN_GUILD_RANKS || rankId >= _getRanksSize() || !isLeader(session->GetPlayer()))
         return;
 
-    CharacterDatabase.Execute("DELETE FROM guild_bank_rights WHERE rankId = %u AND guildId = %u", rankId, m_id);
+    // DELETE FROM guild_bank_rights
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_RIGHTS_DELETE_BY_RANK);
+        stmt->Bind(0, rankId);
+        stmt->Bind(1, m_id);
 
-    CharacterDatabase.Execute("DELETE FROM guild_ranks WHERE rankId = %u AND guildId = %u", rankId, m_id);
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
+    // DELETE FROM guild_ranks
+    {
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_RANKS_DELETE_BY_RANK);
+        stmt->Bind(0, rankId);
+        stmt->Bind(1, m_id);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
 
     _guildRankInfoStore.erase(_guildRankInfoStore.begin() + rankId);
 
@@ -1173,7 +1222,11 @@ bool Guild::loadMemberFromDB(Field* fields, Field* fields2)
     auto member = std::make_unique<GuildMember>(m_id, WoWGuid(lowguid, 0, HIGHGUID_TYPE_PLAYER).getRawGuid(), fields[2].asUint8());
     if (!member->loadGuildMembersFromDB(fields, fields2))
     {
-        CharacterDatabase.Execute("DELETE FROM guild_members WHERE guildId = %u", lowguid);
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_DELETE_MEMBERS);
+        stmt->Bind(0, lowguid);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+
         return false;
     }
 
@@ -1431,7 +1484,10 @@ bool Guild::addMember(uint64_t guid, uint8_t rankId)
     }
     else
     {
-        if (auto result = CharacterDatabase.Query("SELECT guildId, playerGuid FROM guild_members WHERE playerid = %u", WoWGuid::getGuidLowPartFromUInt64(guid)))
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_MEMBER_SELECT_BY_PLAYER);
+        stmt->Bind(0, WoWGuid::getGuidLowPartFromUInt64(guid));
+
+        if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
         {
             Field* fields = result->Fetch();
             if (fields[0].asUint32() != 0)
@@ -1483,7 +1539,10 @@ bool Guild::addMember(uint64_t guid, uint8_t rankId)
 
     memberPtr->saveGuildMembersToDB(false);
 
-    CharacterDatabase.Execute("INSERT INTO guild_members_withdraw VALUES(%u, 0, 0, 0, 0, 0, 0, 0, 0, 0)", m_id);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_MEMBER_WITHDRAW_INSERT);
+    stmt->Bind(0, m_id);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 
     updateAccountsNumber();
 
@@ -1554,7 +1613,10 @@ void Guild::deleteMember(uint64_t guid, bool isDisbanding, bool /*isKicked*/)
 #endif
     }
 
-    CharacterDatabase.Execute("DELETE FROM guild_members WHERE guildId = %u", lowguid);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_DELETE_MEMBERS);
+    stmt->Bind(0, lowguid);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 
     if (!isDisbanding)
         updateAccountsNumber();
@@ -1603,9 +1665,19 @@ void Guild::createNewBankTab()
     uint8_t tabId = _getPurchasedTabsSize();
     _guildBankTabsStore.emplace_back(std::make_unique<GuildBankTab>(m_id, tabId));
 
-    CharacterDatabase.Execute("DELETE FROM guild_bank_tabs WHERE guildId = %u AND tabId = %u", m_id, static_cast<uint32_t>(tabId));
+    // DELETE
+    auto delStmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_TABS_DELETE);
+    delStmt->Bind(0, m_id);
+    delStmt->Bind(1, static_cast<uint32_t>(tabId));
 
-    CharacterDatabase.Execute("INSERT INTO guild_bank_tabs VALUES(%u, %u, '', '', '')", m_id, static_cast<uint32_t>(tabId));
+    CharacterDatabase.ExecuteStatement(std::move(delStmt));
+
+    // INSERT
+    auto insertStmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_TABS_INSERT);
+    insertStmt->Bind(0, m_id);
+    insertStmt->Bind(1, static_cast<uint32_t>(tabId));
+
+    CharacterDatabase.ExecuteStatement(std::move(insertStmt));
 
     ++tabId;
     for (auto itr = _guildRankInfoStore.begin(); itr != _guildRankInfoStore.end(); ++itr)
@@ -1614,8 +1686,15 @@ void Guild::createNewBankTab()
 
 void Guild::createDefaultGuildRanks()
 {
-    CharacterDatabase.Execute("DELETE FROM guild_ranks WHERE guildId = %u", m_id);
-    CharacterDatabase.Execute("DELETE FROM guild_bank_rights WHERE guildId = %u", m_id);
+    auto delRanks = CharacterDatabase.CreateStatement(CHAR_GUILD_RANKS_DELETE_ALL);
+    delRanks->Bind(0, m_id);
+
+    CharacterDatabase.ExecuteStatement(std::move(delRanks));
+
+    auto delRights = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_RIGHTS_DELETE);
+    delRights->Bind(0, m_id);
+
+    CharacterDatabase.ExecuteStatement(std::move(delRights));
 
     createRank("GuildMaster", GR_RIGHT_ALL);
     createRank("Officer", GR_RIGHT_ALL);
@@ -1683,7 +1762,11 @@ bool Guild::modifyBankMoney(uint64_t amount, bool add)
         m_bankMoney -= amount;
     }
 
-    CharacterDatabase.Execute("UPDATE guild SET bankBalance = %llu WHERE guildId = %u", m_bankMoney, m_id);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_UPDATE_BANK_BALANCE);
+    stmt->Bind(0, m_bankMoney);
+    stmt->Bind(1, m_id);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 
     return true;
 }
@@ -1696,7 +1779,11 @@ void Guild::setLeaderGuid(GuildMember* pLeader)
     m_leaderGuid = pLeader->getGUID();
     pLeader->changeRank(GR_GUILDMASTER);
 
-    CharacterDatabase.Execute("UPDATE guild SET leaderGuid = '%u' WHERE guildId = %u", WoWGuid::getGuidLowPartFromUInt64(m_leaderGuid), m_id);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_UPDATE_LEADER);
+    stmt->Bind(0, WoWGuid::getGuidLowPartFromUInt64(m_leaderGuid));
+    stmt->Bind(1, m_id);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Guild::setRankBankMoneyPerDay(uint8_t rankId, uint32_t moneyPerDay)
@@ -2274,7 +2361,7 @@ void Guild::swapItems(Player* player, uint8_t tabId, uint8_t slotId, uint8_t des
 
         pItem2Holder->modStackCount(-static_cast<int32_t>(splitedAmount));
         pItem2Holder->setCreatorGuid(0);
-        pItem2Holder->saveToDB(0, 0, true, nullptr);
+        pItem2Holder->saveToDB(0, 0, true);
 
         pItemHolder = sObjectMgr.createItem(pItem2Holder->getEntry(), player);
         if (pItemHolder == nullptr)
@@ -2282,7 +2369,7 @@ void Guild::swapItems(Player* player, uint8_t tabId, uint8_t slotId, uint8_t des
 
         pItemHolder->setStackCount(splitedAmount);
         pItemHolder->setCreatorGuid(0);
-        pItemHolder->saveToDB(0, 0, true, nullptr);
+        pItemHolder->saveToDB(0, 0, true);
     }
     else
     {
@@ -2352,7 +2439,7 @@ void Guild::swapItemsWithInventory(Player* player, bool toChar, uint8_t tabId, u
                 pSourceItem2 = pDestItem;
 
                 pSourceItem2->modStackCount(-static_cast<int32_t>(splitedAmount));
-                pSourceItem2->saveToDB(0, 0, true, nullptr);
+                pSourceItem2->saveToDB(0, 0, true);
 
                 dstItemHolder = sObjectMgr.createItem(pSourceItem2->getEntry(), player);
                 if (dstItemHolder == nullptr)
@@ -2368,7 +2455,7 @@ void Guild::swapItemsWithInventory(Player* player, bool toChar, uint8_t tabId, u
         }
 
         srcItemHolder->setOwner(nullptr);
-        srcItemHolder->saveToDB(0, 0, true, nullptr);
+        srcItemHolder->saveToDB(0, 0, true);
         getBankTab(tabId)->setItem(slotId, std::move(srcItemHolder));
 
         if (dstItemHolder != nullptr)
@@ -2390,7 +2477,7 @@ void Guild::swapItemsWithInventory(Player* player, bool toChar, uint8_t tabId, u
 
             auto dstItemHolder = getBankTab(tabId)->getItemHolder(slotId);
             dstItemHolder->setOwner(player);
-            dstItemHolder->saveToDB(playerBag, playerSlotId, true, nullptr);
+            dstItemHolder->saveToDB(playerBag, playerSlotId, true);
 
             logBankEvent(GB_LOG_WITHDRAW_ITEM, tabId, player->getGuidLow(),
                 dstItemHolder->getEntry(), static_cast<uint16_t>(dstItemHolder->getStackCount()));
@@ -2628,7 +2715,11 @@ void Guild::GuildMember::setPublicNote(std::string const& publicNote)
 
     mPublicNote = publicNote;
 
-    CharacterDatabase.Execute("UPDATE guild_members SET publicNote = '%s' WHERE playerid = %u", publicNote.c_str(), WoWGuid::getGuidLowPartFromUInt64(mGuid));
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_MEMBER_UPDATE_PUBLIC_NOTE);
+    stmt->Bind(0, publicNote);
+    stmt->Bind(1, WoWGuid::getGuidLowPartFromUInt64(mGuid));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Guild::GuildMember::setOfficerNote(std::string const& officerNote)
@@ -2638,7 +2729,11 @@ void Guild::GuildMember::setOfficerNote(std::string const& officerNote)
 
     mOfficerNote = officerNote;
 
-    CharacterDatabase.Execute("UPDATE guild_members SET officerNote = '%s' WHERE playerid = %u", officerNote.c_str(), WoWGuid::getGuidLowPartFromUInt64(mGuid));
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_MEMBER_UPDATE_OFFICER_NOTE);
+    stmt->Bind(0, officerNote);
+    stmt->Bind(1, WoWGuid::getGuidLowPartFromUInt64(mGuid));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Guild::GuildMember::setZoneId(uint32_t id)
@@ -2707,8 +2802,14 @@ bool Guild::GuildMember::loadGuildMembersFromDB(Field* fields, Field* fields2)
 
 void Guild::GuildMember::saveGuildMembersToDB(bool /*_delete*/) const
 {
-    CharacterDatabase.Execute("REPLACE INTO guild_members VALUES (%u, %u, %u, '%s', '%s')",
-        mGuildId, WoWGuid::getGuidLowPartFromUInt64(mGuid), static_cast<uint32_t>(mRankId), mPublicNote.c_str(), mOfficerNote.c_str());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_MEMBER_REPLACE);
+    stmt->Bind(0, mGuildId);
+    stmt->Bind(1, WoWGuid::getGuidLowPartFromUInt64(mGuid));
+    stmt->Bind(2, static_cast<uint32_t>(mRankId));
+    stmt->Bind(3, mPublicNote);
+    stmt->Bind(4, mOfficerNote);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 uint64_t Guild::GuildMember::getGUID() const
@@ -2808,7 +2909,11 @@ void Guild::GuildMember::changeRank(uint8_t newRank)
     if (Player* player = sObjectMgr.getPlayer(WoWGuid::getGuidLowPartFromUInt64(mGuid)))
         player->setGuildRank(newRank);
 
-    CharacterDatabase.Execute("UPDATE guild_members SET guildRank = '%u' WHERE playerid = %u", static_cast<uint32_t>(newRank), WoWGuid::getGuidLowPartFromUInt64(mGuid));
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_MEMBER_UPDATE_RANK);
+    stmt->Bind(0, static_cast<uint32_t>(newRank));
+    stmt->Bind(1, WoWGuid::getGuidLowPartFromUInt64(mGuid));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Guild::GuildMember::updateLogoutTime()
@@ -2835,10 +2940,14 @@ void Guild::GuildMember::updateBankWithdrawValue(uint8_t tabId, uint32_t amount)
 {
     mBankWithdraw[tabId] += amount;
 
-    CharacterDatabase.Execute("REPLACE INTO guild_members_withdraw VALUES('%u', '%u', '%u', '%u', '%u', '%u', '%u', '%u', '%u', '%u')",
-        WoWGuid::getGuidLowPartFromUInt64(mGuid),
-        mBankWithdraw[0], mBankWithdraw[1], mBankWithdraw[2], mBankWithdraw[3], mBankWithdraw[4],
-        mBankWithdraw[5], mBankWithdraw[6], 0, 0);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_MEMBER_WITHDRAW_REPLACE);
+    stmt->Bind(0, WoWGuid::getGuidLowPartFromUInt64(mGuid));
+    for (uint8_t i = 0; i < 7; ++i)
+        stmt->Bind(i + 1, mBankWithdraw[i]);
+    stmt->Bind(8, uint32_t(0)); // reserved/default
+    stmt->Bind(9, uint32_t(0)); // reserved/default
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void Guild::GuildMember::resetValues(bool weekly)

@@ -308,7 +308,7 @@ public:
     ~AchievementMgr();
 
     void loadFromDb(QueryResult* _achievementResult, QueryResult* _criteriaResult);
-    void saveToDb(QueryBuffer* _buffer);
+    void saveToDb();
 
     bool canCompleteCriteria(WDB::Structures::AchievementCriteriaEntry const* _achievementCriteria, AchievementCriteriaTypes _type, Player* _player) const;
     bool canCompleteCriteria(WDB::Structures::AchievementCriteriaEntry const* _achievementCriteria, AchievementCriteriaTypes _type, int32_t _miscValue1, int32_t _miscValue2, Player* _player) const;

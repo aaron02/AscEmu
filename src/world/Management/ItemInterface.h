@@ -162,7 +162,7 @@ private:
         void m_DestroyForPlayer();
 
         void mLoadItemsFromDatabase(QueryResult* result);
-        void mSaveItemsToDatabase(bool first, QueryBuffer* buf);
+        void mSaveItemsToDatabase(bool first);
 
         Item* GetInventoryItem(int16_t slot);
         Item* GetInventoryItem(int8_t ContainerSlot, int16_t slot);

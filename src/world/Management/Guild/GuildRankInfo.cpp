@@ -7,7 +7,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "GuildBankRightsAndSlots.hpp"
 #include "GuildDefinitions.hpp"
 #include "Logging/Log.hpp"
-#include "Database/Database.h"
+#include "Database/Database.hpp"
 #include "Logging/Logger.hpp"
 #include "Server/DatabaseDefinition.hpp"
 
@@ -41,13 +41,21 @@ void GuildRankInfo::saveGuildRankToDB(bool _delete) const
 {
     if (_delete)
     {
-        CharacterDatabase.Execute("DELETE FROM guild_ranks WHERE guildId = %u AND rankId = %u", mGuildId, (uint32_t)mRankId);
+        auto delStmt = CharacterDatabase.CreateStatement(CHAR_GUILD_RANK_DELETE);
+        delStmt->Bind(0, mGuildId);
+        delStmt->Bind(1, static_cast<uint32_t>(mRankId));
+
+        CharacterDatabase.ExecuteStatement(std::move(delStmt));
     }
     else
     {
-        CharacterDatabase.Execute("DELETE FROM guild_ranks WHERE guildId = %u AND rankId = %u", mGuildId, (uint32_t)mRankId);
-        CharacterDatabase.Execute("INSERT INTO guild_ranks (guildId, rankId, rankName, rankRights, goldLimitPerDay) VALUES ('%u', '%u', '%s', '%u', '0')",
-            mGuildId, (uint32_t)mRankId, mName.c_str(), mRights);
+        auto repStmt = CharacterDatabase.CreateStatement(CHAR_GUILD_RANK_REPLACE);
+        repStmt->Bind(0, mGuildId);
+        repStmt->Bind(1, static_cast<uint32_t>(mRankId));
+        repStmt->Bind(2, mName);
+        repStmt->Bind(3, static_cast<uint32_t>(mRights));
+
+        CharacterDatabase.ExecuteStatement(std::move(repStmt));
     }
 }
 
@@ -68,7 +76,12 @@ void GuildRankInfo::setName(std::string const& name)
 
     mName = name;
 
-    CharacterDatabase.Execute("UPDATE guild_ranks SET rankName = '%s', rankId = %u WHERE guildId = %u", mName.c_str(), static_cast<uint32_t>(mRankId), mGuildId);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_RANK_UPDATE_NAME);
+    stmt->Bind(0, mName);
+    stmt->Bind(1, mGuildId);
+    stmt->Bind(2, static_cast<uint32_t>(mRankId));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 uint32_t GuildRankInfo::getRights() const
@@ -86,7 +99,12 @@ void GuildRankInfo::setRights(uint32_t rights)
 
     mRights = rights;
 
-    CharacterDatabase.Execute("UPDATE guild_ranks SET rankRights = %u WHERE guildId = %u AND rankId = %u", mRights, mGuildId, static_cast<uint32_t>(mRankId));
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_RANK_UPDATE_RIGHTS);
+    stmt->Bind(0, static_cast<uint32_t>(mRights));
+    stmt->Bind(1, mGuildId);
+    stmt->Bind(2, static_cast<uint32_t>(mRankId));
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 uint32_t GuildRankInfo::getBankMoneyPerDay() const
@@ -104,7 +122,12 @@ void GuildRankInfo::setBankMoneyPerDay(uint32_t money)
 
     mBankMoneyPerDay = money;
 
-    CharacterDatabase.Execute("UPDATE guild_ranks SET goldLimitPerDay = '%u', rankId = '%u' WHERE guildId = %u", money, static_cast<uint32_t>(mRankId), mGuildId);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_RANK_UPDATE_GOLDLIMIT);
+    stmt->Bind(0, static_cast<uint32_t>(money));
+    stmt->Bind(1, static_cast<uint32_t>(mRankId));
+    stmt->Bind(2, mGuildId);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 int8_t GuildRankInfo::getBankTabRights(uint8_t tabId) const
@@ -132,8 +155,14 @@ void GuildRankInfo::createMissingTabsIfNeeded(uint8_t tabs, bool /*_delete*/, bo
         if (logOnCreate)
             sLogger.failure("Guild {} has broken Tab {} for rank {}. Created default tab.", mGuildId, i, static_cast<uint32_t>(mRankId));
 
-        CharacterDatabase.Execute("REPLACE INTO guild_bank_rights VALUES(%u, %u, %u, %u, %u);",
-            mGuildId, i, static_cast<uint32_t>(mRankId), static_cast<uint32_t>(rightsAndSlots.getRights()), rightsAndSlots.getSlots());
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_RIGHTS_REPLACE);
+        stmt->Bind(0, mGuildId);
+        stmt->Bind(1, i);
+        stmt->Bind(2, static_cast<uint32_t>(mRankId));
+        stmt->Bind(3, static_cast<uint32_t>(rightsAndSlots.getRights()));
+        stmt->Bind(4, rightsAndSlots.getSlots());
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 }
 
@@ -147,7 +176,13 @@ void GuildRankInfo::setBankTabSlotsAndRights(GuildBankRightsAndSlots rightsAndSl
 
     if (saveToDB)
     {
-        CharacterDatabase.Execute("REPLACE INTO guild_bank_rights VALUES(%u, %u, %u, %u, %u)",
-            mGuildId, static_cast<uint32_t>(guildBR.getTabId()), static_cast<uint32_t>(mRankId), static_cast<uint32_t>(guildBR.getRights()), guildBR.getSlots());
+        auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_BANK_RIGHTS_REPLACE);
+        stmt->Bind(0, mGuildId);
+        stmt->Bind(1, static_cast<uint32_t>(guildBR.getTabId()));
+        stmt->Bind(2, static_cast<uint32_t>(mRankId));
+        stmt->Bind(3, static_cast<uint32_t>(guildBR.getRights()));
+        stmt->Bind(4, guildBR.getSlots());
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 }

@@ -26,7 +26,7 @@
 #include "LogonCommClient.h"
 #include "LogonCommHandler.h"
 #include "WorldPacket.h"
-#include "Database/Database.h"
+#include "Database/Database.hpp"
 #include "Server/World.h"
 #include "Cryptography/LogonCommDefines.h"
 #include "Logging/Logger.hpp"
@@ -306,8 +306,9 @@ void LogonCommClientSocket::HandleRequestAccountMapping(WorldPacket& recvData)
     recvData >> realm_id;
 
     // fetch the character mapping
-    auto result = CharacterDatabase.Query("SELECT acct FROM characters");
-
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_CHARACTER_ACCOUNTS);
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+    
     if (result)
     {
         do
@@ -573,7 +574,13 @@ void LogonCommClientSocket::HandleResultCheckAccount(WorldPacket& recvData)
             if (gmlevel.compare("0") != 0)
             {
                 //Update account_permissions
-                CharacterDatabase.Execute("REPLACE INTO account_permissions (`id`, `permissions`, `name`) VALUES (%u, '%s', '%s')", accountId, gmlevel.c_str(), account_string);
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_REP_ACCOUNT_PERMISSIONS);
+                stmt->Bind(0, accountId);
+                stmt->Bind(1, gmlevel);
+                stmt->Bind(2, account_string);
+
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
+
                 if (request_name.compare("none") != 0)
                     session_name->SystemMessage("Account permissions has been updated to '%s' for account '%s' (%u). The change will be effective immediately.", gmlevel.c_str(), account_string, accountId);
 
@@ -594,7 +601,10 @@ void LogonCommClientSocket::HandleResultCheckAccount(WorldPacket& recvData)
             else
             {
                 //Update account_permissions
-                CharacterDatabase.Execute("DELETE FROM account_permissions WHERE id = %u", accountId);
+                auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_ACCOUNT_PERMISSIONS);
+                stmt->Bind(0, accountId);
+                CharacterDatabase.ExecuteStatement(std::move(stmt));
+
                 if (request_name.compare("none") != 0)
                     session_name->SystemMessage("Account permissions removed for account '%s' (%u). The change will be effective immediately.", account_string, accountId);
 

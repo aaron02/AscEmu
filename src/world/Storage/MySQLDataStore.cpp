@@ -69,7 +69,11 @@ void MySQLDataStore::loadAdditionalTableConfig()
                     {
                         if (myTable.mainTable == target_table)
                         {
-                            if (auto result = WorldDatabase.Query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = \"%s\" AND table_name = \"%s\"", WorldDatabase.GetDatabaseName().c_str(), additional_table.c_str()))
+                            auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_TABLE_EXISTS);
+                            stmt->Bind(0, WorldDatabase.GetDatabaseName());
+                            stmt->Bind(1, additional_table);
+
+                            if (auto result = WorldDatabase.QueryStatement(std::move(stmt)))
                             {
                                 Field* fields = result->Fetch();
 
@@ -95,7 +99,7 @@ void MySQLDataStore::loadAdditionalTableConfig()
             sLogger.debugFlag(AscEmu::Logging::DebugFlags::LF_DB_TABLES, "MySQLDataLoads : - {} ", additionalTableList);
     }
 }
-
+/*
 std::unique_ptr<QueryResult> MySQLDataStore::getWorldDBQuery(const char* query, ...)
 {
     // fill in values
@@ -165,12 +169,14 @@ std::unique_ptr<QueryResult> MySQLDataStore::getWorldDBQuery(const char* query, 
     // no additional tables defined, just send our query
     return WorldDatabase.Query(preparedQuery.c_str());
 }
-
+*/
 void MySQLDataStore::loadItemPagesTable()
 {
     auto startTime = Util::TimeNow();
 
-    auto itempages_result = WorldDatabase.Query("SELECT entry, text, next_page FROM item_pages");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_ITEM_PAGES);
+    auto itempages_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (itempages_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `item_pages` is empty!");
@@ -226,43 +232,10 @@ void MySQLDataStore::loadItemPropertiesTable()
 
     uint32_t item_count = 0;
 
-    auto item_result = getWorldDBQuery("SELECT * FROM item_properties base "
-        "WHERE build=(SELECT MAX(build) FROM item_properties spec WHERE base.entry = spec.entry AND build <= %u)", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_ITEM_PROPERTIES);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
 
-    //                                                 0      1       2        3       4        5         6       7       8       9          10
-    /*auto item_result = WorldDatabase.Query("SELECT entry, class, subclass, field4, name1, displayid, quality, flags, flags2, buyprice, sellprice, "
-    //                                                   11             12              13           14            15            16               17
-                                                   "inventorytype, allowableclass, allowablerace, itemlevel, requiredlevel, RequiredSkill, RequiredSkillRank, "
-    //                                                   18                 19                    20                21                    22             23
-                                                   "RequiredSpell, RequiredPlayerRank1, RequiredPlayerRank2, RequiredFaction, RequiredFactionStanding, Unique, "
-    //                                                  24           25              26           27           28           29         30           31
-                                                   "maxcount, ContainerSlots, itemstatscount, stat_type1, stat_value1, stat_type2, stat_value2, stat_type3, "
-    //                                                  32           33          34           35          36           37           38          39
-                                                   "stat_value3, stat_type4, stat_value4, stat_type5, stat_value5, stat_type6, stat_value6, stat_type7, "
-    //                                                  40           41          42           43          44           45           46
-                                                   "stat_value7, stat_type8, stat_value8, stat_type9, stat_value9, stat_type10, stat_value10, "
-    //                                                          47                           48                 49        50        51         52        53
-                                                   "ScaledStatsDistributionId, ScaledStatsDistributionFlags, dmg_min1, dmg_max1, dmg_type1, dmg_min2, dmg_max2, "
-    //                                                 54       55       56        57         58          59         60          61       62        63
-                                                   "dmg_type2, armor, holy_res, fire_res, nature_res, frost_res, shadow_res, arcane_res, delay, ammo_type, "
-    //                                                64      65             66             67              68               69                   70
-                                                   "range, spellid_1, spelltrigger_1, spellcharges_1, spellcooldown_1, spellcategory_1, spellcategorycooldown_1, "
-    //                                                  71           72              73              74               75                   76
-                                                   "spellid_2, spelltrigger_2, spellcharges_2, spellcooldown_2, spellcategory_2, spellcategorycooldown_2, "
-    //                                                  77           78              79              80               81                   82
-                                                   "spellid_3, spelltrigger_3, spellcharges_3, spellcooldown_3, spellcategory_3, spellcategorycooldown_3, "
-    //                                                  83           84              85              86               87                   88
-                                                   "spellid_4, spelltrigger_4, spellcharges_4, spellcooldown_4, spellcategory_4, spellcategorycooldown_4, "
-    //                                                  89           90              91              92               93                   94
-                                                   "spellid_5, spelltrigger_5, spellcharges_5, spellcooldown_5, spellcategory_5, spellcategorycooldown_5, "
-    //                                                 95         96          97         98             99          100      101         102          103
-                                                   "bonding, description, page_id, page_language, page_material, quest_id, lock_id, lock_material, sheathID, "
-    //                                                 104          105        106     107         108           109      110      111         112
-                                                   "randomprop, randomsuffix, block, itemset, MaxDurability, ZoneNameID, mapid, bagfamily, TotemCategory, "
-    //                                                   113           114         115          116          117           118         119          120
-                                                   "socket_color_1, unk201_3, socket_color_2, unk201_5, socket_color_3, unk201_7, socket_bonus, GemProperties, "
-    //                                                      121                122                 123                 124             125        126
-                                                   "ReqDisenchantSkill, ArmorDamageModifier, existingduration, ItemLimitCategoryId, HolidayId, food_type FROM item_properties");*/
+    auto item_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (item_result == nullptr)
     {
@@ -594,24 +567,10 @@ void MySQLDataStore::loadCreaturePropertiesTable()
     auto startTime = Util::TimeNow();
     uint32_t creature_properties_count = 0;
 
-    //                                                         0          1           2             3                 4               5                  6
-    auto creature_properties_result = getWorldDBQuery("SELECT entry, killcredit1, killcredit2, male_displayid, female_displayid, male_displayid2, female_displayid2, "
-        //7      8         9         10       11     12     13       14            15              16           17
-        "name, subname, icon_name, type_flags, type, family, `rank`, encounter, base_attack_mod, range_attack_mod, leader, "
-        //  18        19        20        21         22      23     24      25          26           27
-        "minlevel, maxlevel, faction, minhealth, maxhealth, mana, scale, npcflags, attacktime, attack_school, "
-        //   28          29         30            31                 32                33            34        35
-        "mindamage, maxdamage, can_ranged, rangedattacktime, rangedmindamage, rangedmaxdamage, respawntime, armor, "
-        //   36           37           38            39          40           41            42             43
-        "resistance1, resistance2, resistance3, resistance4, resistance5, resistance6, combat_reach, bounding_radius, "
-        // 44    45     46         47          48         49        50          51            52     53      54
-        "auras, boss, money, isTriggerNpc, walk_speed, run_speed, fly_speed, extra_a9_flags, spell1, spell2, spell3, "
-        // 55      56      57      58      59        60           61               62            63         64           65
-        "spell4, spell5, spell6, spell7, spell8, spell_flags, modImmunities, isTrainingDummy, guardtype, summonguard, spelldataid, "
-        //  66         67        68          69          70          71          72          73         74         75
-        "vehicleid, rooted, questitem1, questitem2, questitem3, questitem4, questitem5, questitem6, waypointid, gossipId FROM creature_properties base "
-        //
-        "WHERE build=(SELECT MAX(build) FROM creature_properties buildspecific WHERE base.entry = buildspecific.entry AND build <= %u)", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_PROPERTIES);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto creature_properties_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (creature_properties_result == nullptr)
     {
@@ -841,10 +800,8 @@ void MySQLDataStore::loadCreaturePropertiesTable()
         creatureProperties.waypointid = fields[74].asUint32();
 
         creatureProperties.gossipId = fields[75].asUint32();
-        std::string origin = fields[76].asCString();
 
-        if (origin == "creature_properties_copy")
-            sLogger.info("MySQLDataLoads : Loaded {} creature proto from table {}", creatureProperties.Id, origin);
+        sLogger.info("MySQLDataLoads : Loaded {} creature proto from table creature_properties", creatureProperties.Id);
 
         auto movement = getCreaturePropertiesMovement(entry);
         if (movement)
@@ -902,8 +859,8 @@ void MySQLDataStore::loadCreaturePropertiesMovementTable()
     auto startTime = Util::TimeNow();
     uint32_t creature_properties_movement_count = 0;
 
-    //                                                                      0          1           2             3                 4               5                  6
-    auto creature_properties_movement_result = WorldDatabase.Query("SELECT CreatureId, Ground, Swim, Flight, Rooted, Chase, Random, InteractionPauseTimer FROM creature_properties_movement");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_MOVEMENT_PROPS);
+    auto creature_properties_movement_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (creature_properties_movement_result == nullptr)
     {
@@ -963,17 +920,10 @@ void MySQLDataStore::loadGameObjectPropertiesTable()
     auto startTime = Util::TimeNow();
     uint32_t gameobject_properties_count = 0;
 
-    //                                                           0      1        2        3         4              5          6          7            8             9
-    auto gameobject_properties_result = getWorldDBQuery("SELECT entry, type, display_id, name, category_name, cast_bar_text, UnkStr, parameter_0, parameter_1, parameter_2, "
-        //     10           11          12           13           14            15           16           17           18
-        "parameter_3, parameter_4, parameter_5, parameter_6, parameter_7, parameter_8, parameter_9, parameter_10, parameter_11, "
-        //     19            20            21            22           23            24            25            26
-        "parameter_12, parameter_13, parameter_14, parameter_15, parameter_16, parameter_17, parameter_18, parameter_19, "
-        //     27            28            29            30        31        32          33          34         35
-        "parameter_20, parameter_21, parameter_22, parameter_23, size, QuestItem1, QuestItem2, QuestItem3, QuestItem4, "
-        //     36          37
-        "QuestItem5, QuestItem6 FROM gameobject_properties base "
-        "WHERE build=(SELECT MAX(build) FROM gameobject_properties buildspecific WHERE base.entry = buildspecific.entry AND build <= %u)", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_PROPERTIES);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto gameobject_properties_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (gameobject_properties_result == nullptr)
     {
@@ -1068,7 +1018,12 @@ void MySQLDataStore::loadGameObjectSpawnsExtraTable()
 {
     auto startTime = Util::TimeNow();
 
-    auto result = getWorldDBQuery("SELECT id, parent_rotation0, parent_rotation1, parent_rotation2, parent_rotation3 FROM gameobject_spawns_extra WHERE min_build <= %u AND max_build >= %u", VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_SPAWNS_EXTRA);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (!result)
     {
         sLogger.info("Loaded 0 gameobjectSpawnsExtra definitions. DB table `gameobject_spawns_extra` is empty.");
@@ -1110,7 +1065,12 @@ void MySQLDataStore::loadGameObjectSpawnsOverrideTable()
 {
     auto startTime = Util::TimeNow();
 
-    auto result = getWorldDBQuery("SELECT id, scale, faction, flags FROM gameobject_spawns_overrides WHERE min_build <= %u AND max_build >= %u", VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_SPAWNS_OVERRIDES);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (!result)
     {
         sLogger.info("Loaded 0 gameobject overrides. DB table `gameobject_spawn_overrides` is empty.");
@@ -1150,46 +1110,10 @@ void MySQLDataStore::loadQuestPropertiesTable()
     auto startTime = Util::TimeNow();
     uint32_t quest_count = 0;
 
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_QUEST_PROPERTIES);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
 
-              //                                  0       1     2      3       4          5        6          7              8                 9
-    auto quest_result = getWorldDBQuery("SELECT entry, ZoneId, sort, flags, MinLevel, questlevel, Type, RequiredRaces, RequiredClass, RequiredTradeskill, "
-        //           10                    11                 12             13          14            15           16         17
-        "RequiredTradeskillValue, RequiredRepFaction, RequiredRepValue, LimitTime, SpecialFlags, PrevQuestId, NextQuestId, srcItem, "
-        //     18        19     20         21            22              23          24          25               26
-        "SrcItemCount, Title, Details, Objectives, CompletionText, IncompleteText, EndText, ObjectiveText1, ObjectiveText2, "
-        //     27               28           29          30           31          32         33           34         35
-        "ObjectiveText3, ObjectiveText4, ReqItemId1, ReqItemId2, ReqItemId3, ReqItemId4, ReqItemId5, ReqItemId6, ReqItemCount1, "
-        //     36             37            38              39             40              41                 42
-        "ReqItemCount2, ReqItemCount3, ReqItemCount4, ReqItemCount5, ReqItemCount6, ReqKillMobOrGOId1, ReqKillMobOrGOId2, "
-        //     43                   44                    45                  46                      47                  48
-        "ReqKillMobOrGOId3, ReqKillMobOrGOId4, ReqKillMobOrGOCount1, ReqKillMobOrGOCount2, ReqKillMobOrGOCount3, ReqKillMobOrGOCount4, "
-        //     49                 50              51              52              53           54           55           56
-        "ReqCastSpellId1, ReqCastSpellId2, ReqCastSpellId3, ReqCastSpellId4, ReqEmoteId1, ReqEmoteId2, ReqEmoteId3, ReqEmoteId4, "
-        //     57                  58                59               60                61                 62                63
-        "RewChoiceItemId1, RewChoiceItemId2, RewChoiceItemId3, RewChoiceItemId4, RewChoiceItemId5, RewChoiceItemId6, RewChoiceItemCount1, "
-        //     64                   65                  66                   67                   68              69          70
-        "RewChoiceItemCount2, RewChoiceItemCount3, RewChoiceItemCount4, RewChoiceItemCount5, RewChoiceItemCount6, RewItemId1, RewItemId2, "
-        //     71          72           73              74            75             76              77             78             79
-        "RewItemId3, RewItemId4, RewItemCount1, RewItemCount2, RewItemCount3, RewItemCount4, RewRepFaction1, RewRepFaction2, RewRepFaction3, "
-        //     80               81               82            83           84             85          86              87            88
-        "RewRepFaction4, RewRepFaction5, RewRepFaction6, RewRepValue1, RewRepValue2, RewRepValue3, RewRepValue4, RewRepValue5, RewRepValue6, "
-        //     89         90       91       92       93            94             95             96           97        98      99      100
-        "RewRepLimit, RewMoney, RewXP, RewSpell, CastSpell, MailTemplateId, MailDelaySecs, MailSendItem, PointMapId, PointX, PointY, PointOpt, "
-        //      101                  102             103             104              105              106                107
-        "RewardMoneyAtMaxLevel, ExploreTrigger1, ExploreTrigger2, ExploreTrigger3, ExploreTrigger4, RequiredOneOfQuest, RequiredQuest1, "
-        //     108              109            110             111           112             113            114              115
-        "RequiredQuest2, RequiredQuest3, RequiredQuest4, RemoveQuests, ReceiveItemId1, ReceiveItemId2, ReceiveItemId3, ReceiveItemId4, "
-        //     116                117                  118               119             120          121            122             123
-        "ReceiveItemCount1, ReceiveItemCount2, ReceiveItemCount3, ReceiveItemCount4, IsRepeatable, bonushonor, bonusarenapoints, rewardtitleid, "
-        //     124              125               126             127           128           129           130            131
-        "rewardtalents, suggestedplayers, detailemotecount, detailemote1, detailemote2, detailemote3, detailemote4, detailemotedelay1, "
-        //     132                133                134                135                136               137               138
-        "detailemotedelay2, detailemotedelay3, detailemotedelay4, completionemotecnt, completionemote1, completionemote2, completionemote3, "
-        //     139                 140                     141                   142                    143                 144
-        "completionemote4, completionemotedelay1, completionemotedelay2, completionemotedelay3, completionemotedelay4, completeemote, "
-        //      145                   146              147
-        "incompleteemote, iscompletedbyspelleffect, RewXPId FROM quest_properties base "
-        "WHERE build=(SELECT MAX(build) FROM quest_properties buildspecific WHERE base.entry = buildspecific.entry AND build <= %u)", VERSION_STRING);
+    auto quest_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (quest_result == nullptr)
     {
@@ -1390,8 +1314,8 @@ void MySQLDataStore::loadGameObjectQuestItemBindingTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                0      1     2        3
-    auto gameobject_quest_item_result = WorldDatabase.Query("SELECT entry, quest, item, item_count FROM gameobject_quest_item_binding");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_QUEST_ITEM_BINDING);
+    auto gameobject_quest_item_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     uint32_t gameobject_quest_item_count = 0;
 
@@ -1432,8 +1356,8 @@ void MySQLDataStore::loadGameObjectQuestPickupBindingTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                  0      1           2
-    auto gameobject_quest_pickup_result = WorldDatabase.Query("SELECT entry, quest, required_count FROM gameobject_quest_pickup_binding");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_QUEST_PICKUP_BINDING);
+    auto gameobject_quest_pickup_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     uint32_t gameobject_quest_pickup_count = 0;
 
@@ -1476,8 +1400,8 @@ void MySQLDataStore::loadCreatureDifficultyTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                             0          1            2             3
-    auto creature_difficulty_result = WorldDatabase.Query("SELECT entry, difficulty_1, difficulty_2, difficulty_3 FROM creature_difficulty");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_DIFFICULTY);
+    auto creature_difficulty_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (creature_difficulty_result == nullptr)
     {
@@ -1546,9 +1470,8 @@ void MySQLDataStore::loadDisplayBoundingBoxesTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                       0       1    2     3      4      5      6         7
-    //auto display_bounding_boxes_result = WorldDatabase.Query("SELECT displayid, lowx, lowy, lowz, highx, highy, highz, boundradius FROM display_bounding_boxes");
-    auto display_bounding_boxes_result = WorldDatabase.Query("SELECT displayid, highz FROM display_bounding_boxes");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_DISPLAY_BOUNDING_BOXES);
+    auto display_bounding_boxes_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (display_bounding_boxes_result == nullptr)
     {
@@ -1602,10 +1525,8 @@ void MySQLDataStore::loadVendorRestrictionsTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                              0       1          2            3              4
-    auto vendor_restricitons_result = WorldDatabase.Query("SELECT entry, racemask, classmask, reqrepfaction, reqrepfactionvalue, "
-    //                                                                    5                 6           7
-                                                                  "canbuyattextid, cannotbuyattextid, flags FROM vendor_restrictions");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_VENDOR_RESTRICTIONS);
+    auto vendor_restricitons_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (vendor_restricitons_result == nullptr)
     {
@@ -1654,24 +1575,8 @@ void MySQLDataStore::loadNpcTextTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                          0
-    auto npc_gossip_text_result = WorldDatabase.Query("SELECT entry, "
-    //                                                     1       2        3       4          5           6            7           8            9           10
-                                                        "prob0, text0_0, text0_1, lang0, EmoteDelay0_0, Emote0_0, EmoteDelay0_1, Emote0_1, EmoteDelay0_2, Emote0_2, "
-    //                                                     11      12       13      14         15          16           17          18           19          20
-                                                        "prob1, text1_0, text1_1, lang1, EmoteDelay1_0, Emote1_0, EmoteDelay1_1, Emote1_1, EmoteDelay1_2, Emote1_2, "
-    //                                                     21      22       23      24         25          26           27          28           29          30
-                                                        "prob2, text2_0, text2_1, lang2, EmoteDelay2_0, Emote2_0, EmoteDelay2_1, Emote2_1, EmoteDelay2_2, Emote2_2, "
-    //                                                     31      32       33      34         35          36           37          38           39          40
-                                                        "prob3, text3_0, text3_1, lang3, EmoteDelay3_0, Emote3_0, EmoteDelay3_1, Emote3_1, EmoteDelay3_2, Emote3_2, "
-    //                                                     41      42       43      44         45          46           47          48           49          50
-                                                        "prob4, text4_0, text4_1, lang4, EmoteDelay4_0, Emote4_0, EmoteDelay4_1, Emote4_1, EmoteDelay4_2, Emote4_2, "
-    //                                                     51      52       53      54         55          56           57          58           59          60
-                                                        "prob5, text5_0, text5_1, lang5, EmoteDelay5_0, Emote5_0, EmoteDelay5_1, Emote5_1, EmoteDelay5_2, Emote5_2, "
-    //                                                     61      62       63      64         65          66           67          68           69          70
-                                                        "prob6, text6_0, text6_1, lang6, EmoteDelay6_0, Emote6_0, EmoteDelay6_1, Emote6_1, EmoteDelay6_2, Emote6_2, "
-    //                                                     71      72       73      74         75          76           77          78           79          80
-                                                        "prob7, text7_0, text7_1, lang7, EmoteDelay7_0, Emote7_0, EmoteDelay7_1, Emote7_1, EmoteDelay7_2, Emote7_2 FROM npc_gossip_texts");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_NPC_GOSSIP_TEXTS);
+    auto npc_gossip_text_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (npc_gossip_text_result == nullptr)
     {
@@ -1733,8 +1638,8 @@ void MySQLDataStore::loadNpcScriptTextTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                          0      1           2       3     4       5          6         7       8        9         10
-    auto npc_script_text_result = WorldDatabase.Query("SELECT entry, text, creature_entry, id, type, language, probability, emote, duration, sound, broadcast_id FROM npc_script_text");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_NPC_SCRIPT_TEXT);
+    auto npc_script_text_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (npc_script_text_result == nullptr)
     {
@@ -1808,8 +1713,8 @@ void MySQLDataStore::loadGossipMenuOptionTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                              0         1
-    auto gossip_menu_optiont_result = WorldDatabase.Query("SELECT entry, option_text FROM gossip_menu_option");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GOSSIP_MENU_OPTION);
+    auto gossip_menu_optiont_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (gossip_menu_optiont_result == nullptr)
     {
@@ -1852,8 +1757,9 @@ void MySQLDataStore::loadGraveyardsTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                   0         1         2           3            4         5          6           7       8
-    auto graveyards_result = WorldDatabase.Query("SELECT id, position_x, position_y, position_z, orientation, zoneid, adjacentzoneid, mapid, faction FROM graveyards");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GRAVEYARDS);
+    auto graveyards_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (graveyards_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `graveyards` is empty!");
@@ -1902,8 +1808,9 @@ void MySQLDataStore::loadTeleportCoordsTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                        0     1         2           3           4
-    auto teleport_coords_result = WorldDatabase.Query("SELECT id, mapId, position_x, position_y, position_z FROM spell_teleport_coords");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_TELEPORT_COORDS);
+    auto teleport_coords_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (teleport_coords_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `spell_teleport_coords` is empty!");
@@ -1948,8 +1855,9 @@ void MySQLDataStore::loadFishingTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                  0      1         2
-    auto fishing_result = WorldDatabase.Query("SELECT zone, MinSkill, MaxSkill FROM fishing");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_FISHING);
+    auto fishing_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (fishing_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `fishing` is empty!");
@@ -1992,13 +1900,11 @@ void MySQLDataStore::loadWorldMapInfoTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                       0        1       2       3           4             5          6        7      8          9
-    auto worldmap_info_result = WorldDatabase.Query("SELECT entry, screenid, type, maxplayers, minlevel, minlevel_heroic, repopx, repopy, repopz, repopentry, "
-    //                                                           10       11      12         13           14                15              16
-                                                            "area_name, flags, cooldown, lvl_mod_a, required_quest_A, required_quest_H, required_item, "
-    //                                                              17              18              19                20
-                                                            "heroic_keyid_1, heroic_keyid_2, viewingDistance, required_checkpoint FROM worldmap_info base "
-                                                            "WHERE build=(SELECT MAX(build) FROM worldmap_info buildspecific WHERE base.entry = buildspecific.entry AND build <= %u)", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_WORLDMAP_INFO);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto worldmap_info_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (worldmap_info_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `worldmap_info` is empty!");
@@ -2059,8 +1965,9 @@ void MySQLDataStore::loadZoneGuardsTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                     0         1              2
-    auto zone_guards_result = WorldDatabase.Query("SELECT zone, horde_entry, alliance_entry FROM zoneguards");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_ZONE_GUARDS);
+    auto zone_guards_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (zone_guards_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `zoneguards` is empty!");
@@ -2103,8 +2010,9 @@ void MySQLDataStore::loadBattleMastersTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                            0                1
-    auto battlemasters_result = WorldDatabase.Query("SELECT creature_entry, battleground_id FROM battlemasters");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_BATTLEMASTERS);
+    auto battlemasters_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (battlemasters_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `battlemasters` is empty!");
@@ -2148,9 +2056,10 @@ void MySQLDataStore::loadTotemDisplayIdsTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                          0     1        2
-    auto totemdisplayids_result = WorldDatabase.Query("SELECT race, totem, displayid FROM totemdisplayids base "
-        "WHERE build=(SELECT MAX(build) FROM totemdisplayids spec WHERE base.race = spec.race AND base.totem = spec.totem AND build <= %u)", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_TOTEMDISPLAYIDS);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto totemdisplayids_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (totemdisplayids_result == nullptr)
     {
@@ -2194,8 +2103,9 @@ void MySQLDataStore::loadSpellClickSpellsTable()
     auto startTime = Util::TimeNow();
     _spellClickInfoStore.clear();
 
-    //                                                0          1         2            3
-    auto spellclickspells_result = WorldDatabase.Query("SELECT npc_entry, spell_id, cast_flags, user_type FROM npc_spellclick_spells");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELLCLICKSPELLS);
+    auto spellclickspells_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (spellclickspells_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `spellclickspells` is empty!");
@@ -2259,8 +2169,9 @@ void MySQLDataStore::loadWorldStringsTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                             0     1
-    auto worldstring_tables_result = WorldDatabase.Query("SELECT entry, text FROM worldstring_tables");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_WORLDSTRING_TABLES);
+    auto worldstring_tables_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (worldstring_tables_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `worldstring_tables` is empty!");
@@ -2302,8 +2213,9 @@ void MySQLDataStore::loadPointsOfInterestTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                              0   1  2    3     4     5        6
-    auto points_of_interest_result = WorldDatabase.Query("SELECT entry, x, y, icon, flags, data, icon_name FROM points_of_interest");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_POINTS_OF_INTEREST);
+    auto points_of_interest_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (points_of_interest_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `points_of_interest` is empty!");
@@ -2350,8 +2262,9 @@ void MySQLDataStore::loadItemSetLinkedSetBonusTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                           0            1
-    auto linked_set_bonus_result = WorldDatabase.Query("SELECT itemset, itemset_bonus FROM itemset_linked_itemsetbonus");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LINKED_SET_BONUS);
+    auto linked_set_bonus_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (linked_set_bonus_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `itemset_linked_itemsetbonus` is empty!");
@@ -2398,8 +2311,9 @@ void MySQLDataStore::loadCreatureInitialEquipmentTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                0              1           2          3
-    auto initial_equipment_result = WorldDatabase.Query("SELECT creature_entry, itemslot_1, itemslot_2, itemslot_3 FROM creature_initial_equip;");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_INITIAL_EQUIPMENT);
+    auto initial_equipment_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (initial_equipment_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `creature_initial_equip` is empty!");
@@ -2449,10 +2363,11 @@ void MySQLDataStore::loadPlayerCreateInfoTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                             1     2      3      4          5          6         7           8
-    auto player_create_info_result = WorldDatabase.Query("SELECT race, class, mapID, zoneID, positionX, positionY, positionZ, orientation FROM playercreateinfo pi "
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_CREATE_INFO);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
 
-        "WHERE build=(SELECT MAX(build) FROM playercreateinfo buildspecific WHERE pi.race = buildspecific.race AND pi.class = buildspecific.class AND build <= %u)", VERSION_STRING);
+    auto player_create_info_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (player_create_info_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `playercreateinfo` is empty!");
@@ -2488,9 +2403,10 @@ void MySQLDataStore::loadPlayerCreateInfoTable()
 
 void MySQLDataStore::loadPlayerCreateInfoBars()
 {
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_CREATE_INFO_BARS);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
 
-    //                                                                 0     1      2        3      4     5
-    auto player_create_info_bars_result = WorldDatabase.Query("SELECT race, class, button, action, type, misc FROM playercreateinfo_bars WHERE build = %u", VERSION_STRING);
+    auto player_create_info_bars_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (player_create_info_bars_result == nullptr)
     {
@@ -2526,8 +2442,10 @@ void MySQLDataStore::loadPlayerCreateInfoItems()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                   0     1       2       3       4
-    auto player_create_info_items_result = WorldDatabase.Query("SELECT race, class, protoid, slotid, amount FROM playercreateinfo_items WHERE build = %u", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_CREATE_INFO_ITEMS);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto player_create_info_items_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (player_create_info_items_result == nullptr)
     {
@@ -2578,8 +2496,11 @@ void MySQLDataStore::loadPlayerCreateInfoSkills()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                      0         1         2       3
-    auto player_create_info_skills_result = WorldDatabase.Query("SELECT raceMask, classMask, skillid, level FROM playercreateinfo_skills WHERE min_build <= %u AND max_build >= %u", getAEVersion(), getAEVersion());
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_CREATE_INFO_SKILLS);
+    stmt->Bind(0, getAEVersion());
+    stmt->Bind(1, getAEVersion());
+
+    auto player_create_info_skills_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (player_create_info_skills_result == nullptr)
     {
@@ -2636,8 +2557,11 @@ void MySQLDataStore::loadPlayerCreateInfoSpellLearn()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                     0         1         2
-    auto player_create_info_spells_result = WorldDatabase.Query("SELECT raceMask, classMask, spellid FROM playercreateinfo_spell_learn WHERE min_build <= %u AND max_build >= %u", getAEVersion(), getAEVersion());
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_CREATE_INFO_SPELLS);
+    stmt->Bind(0, getAEVersion());
+    stmt->Bind(1, getAEVersion());
+
+    auto player_create_info_spells_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (player_create_info_spells_result == nullptr)
     {
@@ -2690,8 +2614,10 @@ void MySQLDataStore::loadPlayerCreateInfoSpellCast()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                      0         1         2
-    auto player_create_info_spells_result = WorldDatabase.Query("SELECT raceMask, classMask, spellid FROM playercreateinfo_spell_cast WHERE build = %u", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_CREATE_INFO_SPELLS_CAST);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto player_create_info_spells_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (player_create_info_spells_result == nullptr)
     {
@@ -2744,8 +2670,10 @@ void MySQLDataStore::loadPlayerCreateInfoLevelstats()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                           0     1      2          3           4            5             6             7
-    auto player_levelstats_result = WorldDatabase.Query("SELECT race, class, level, BaseStrength, BaseAgility, BaseStamina, BaseIntellect, BaseSpirit FROM player_levelstats WHERE build = %u", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_LEVELSTATS);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto player_levelstats_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (player_levelstats_result == nullptr)
     {
@@ -2814,8 +2742,10 @@ void MySQLDataStore::loadPlayerCreateInfoClassLevelstats()
 {
     auto startTime = Util::TimeNow();
 
-    //                                                                 0      1        2          3
-    auto player_classlevelstats_result = WorldDatabase.Query("SELECT class, level, BaseHealth, BaseMana FROM player_classlevelstats WHERE build = %u", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_CLASSLEVELSTATS);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto player_classlevelstats_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (player_classlevelstats_result)
     {
@@ -2920,8 +2850,10 @@ void MySQLDataStore::loadPlayerXpToLevelTable()
     for (uint32_t level = 0; level < worldConfig.player.playerLevelCap; ++level)
         _playerXPperLevelStore[level] = 0;
 
-    auto player_xp_to_level_result = WorldDatabase.Query("SELECT player_lvl, next_lvl_req_xp FROM player_xp_for_level base "
-        "WHERE build=(SELECT MAX(build) FROM player_xp_for_level spec WHERE base.player_lvl = spec.player_lvl AND build <= %u)", VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PLAYER_XP_TO_LEVEL);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+
+    auto player_xp_to_level_result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (player_xp_to_level_result == nullptr)
     {
@@ -2968,7 +2900,9 @@ uint32_t MySQLDataStore::getPlayerXPForLevel(uint32_t level)
 
 void MySQLDataStore::loadSpellOverrideTable()
 {
-    auto spelloverride_result = WorldDatabase.Query("SELECT DISTINCT overrideId FROM spelloverride");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELLOVERRIDE);
+    auto spelloverride_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (spelloverride_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `spelloverride` is empty!");
@@ -2980,7 +2914,11 @@ void MySQLDataStore::loadSpellOverrideTable()
         Field* fields = spelloverride_result->Fetch();
         uint32_t distinct_override_id = fields[0].asUint32();
 
-        auto spellid_for_overrideid_result = WorldDatabase.Query("SELECT spellId FROM spelloverride WHERE overrideId = %u", distinct_override_id);
+        auto stmt2 = WorldDatabase.CreateStatement(WORLD_SEL_SPELLID_FOR_OVERRIDEID);
+        stmt2->Bind(0, static_cast<uint32_t>(distinct_override_id));
+
+        auto spellid_for_overrideid_result = WorldDatabase.QueryStatement(std::move(stmt2));
+
         auto list = std::make_unique<std::list<SpellInfo const*>>();
         if (spellid_for_overrideid_result != nullptr)
         {
@@ -3013,8 +2951,10 @@ void MySQLDataStore::loadSpellOverrideTable()
 void MySQLDataStore::loadNpcGossipTextIdTable()
 {
     auto startTime = Util::TimeNow();
-    //                                                    0         1
-    auto npc_gossip_properties_result = WorldDatabase.Query("SELECT creatureid, textid FROM npc_gossip_properties");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_NPC_GOSSIP_PROPERTIES);
+    auto npc_gossip_properties_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (npc_gossip_properties_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `npc_gossip_properties` is empty!");
@@ -3054,8 +2994,10 @@ uint32_t MySQLDataStore::getGossipTextIdForNpc(uint32_t entry)
 void MySQLDataStore::loadPetLevelAbilitiesTable()
 {
     auto startTime = Util::TimeNow();
-    //                                                              0       1      2        3        4        5         6         7
-    auto pet_level_abilities_result = WorldDatabase.Query("SELECT level, health, armor, strength, agility, stamina, intellect, spirit FROM pet_level_abilities");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PET_LEVEL_ABILITIES);
+    auto pet_level_abilities_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (pet_level_abilities_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `pet_level_abilities` is empty!");
@@ -3107,7 +3049,9 @@ void MySQLDataStore::loadBroadcastTable()
 {
     auto startTime = Util::TimeNow();
 
-    auto broadcast_result = getWorldDBQuery("SELECT * FROM worldbroadcast");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_WORLDBROADCAST);
+    auto broadcast_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (broadcast_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `worldbroadcast` is empty!");
@@ -3155,8 +3099,10 @@ MySQLStructure::WorldBroadCast const* MySQLDataStore::getWorldBroadcastById(uint
 void MySQLDataStore::loadAreaTriggerTable()
 {
     auto startTime = Util::TimeNow();
-    //                                                       0      1    2     3       4       5           6          7             8               9                  10
-    auto area_trigger_result = WorldDatabase.Query("SELECT entry, type, map, screen, name, position_x, position_y, position_z, orientation, required_honor_rank, required_level FROM areatriggers");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_AREA_TRIGGER);
+    auto area_trigger_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (area_trigger_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `areatriggers` is empty!");
@@ -3306,7 +3252,9 @@ void MySQLDataStore::loadWordFilterCharacterNames()
 {
     auto startTime = Util::TimeNow();
 
-    auto filter_character_names_result = WorldDatabase.Query("SELECT * FROM wordfilter_character_names");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_FILTER_CHARACTER_NAMES);
+    auto filter_character_names_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (filter_character_names_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `wordfilter_character_names` is empty!");
@@ -3358,7 +3306,9 @@ void MySQLDataStore::loadWordFilterChat()
 {
     auto startTime = Util::TimeNow();
 
-    auto filter_chat_result = WorldDatabase.Query("SELECT * FROM wordfilter_chat");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_FILTER_CHAT);
+    auto filter_chat_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (filter_chat_result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `wordfilter_chat` is empty!");
@@ -3400,8 +3350,10 @@ void MySQLDataStore::loadWordFilterChat()
 void MySQLDataStore::loadLocalesCreature()
 {
     auto startTime = Util::TimeNow();
-    //                                        0         1          2      3
-    auto result = WorldDatabase.Query("SELECT id, language_code, name, subname FROM locales_creature");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_CREATURE);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_creature` is empty!");
@@ -3452,8 +3404,10 @@ MySQLStructure::LocalesCreature const* MySQLDataStore::getLocalizedCreature(uint
 void MySQLDataStore::loadLocalesGameobject()
 {
     auto startTime = Util::TimeNow();
-    //                                          0         1          2
-    auto result = WorldDatabase.Query("SELECT entry, language_code, name FROM locales_gameobject");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_GAMEOBJECT);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_gameobject` is empty!");
@@ -3503,8 +3457,10 @@ MySQLStructure::LocalesGameobject const* MySQLDataStore::getLocalizedGameobject(
 void MySQLDataStore::loadLocalesGossipMenuOption()
 {
     auto startTime = Util::TimeNow();
-    //                                          0         1             2
-    auto result = WorldDatabase.Query("SELECT entry, language_code, option_text FROM locales_gossip_menu_option");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_GOSSIP_MENU_OPTION);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_gossip_menu_option` is empty!");
@@ -3554,8 +3510,10 @@ MySQLStructure::LocalesGossipMenuOption const* MySQLDataStore::getLocalizedGossi
 void MySQLDataStore::loadLocalesItem()
 {
     auto startTime = Util::TimeNow();
-    //                                          0         1          2         3
-    auto result = WorldDatabase.Query("SELECT entry, language_code, name, description FROM locales_item");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_ITEM);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_item` is empty!");
@@ -3627,8 +3585,10 @@ MySQLStructure::RecallStruct const* MySQLDataStore::getRecallByName(std::string 
 void MySQLDataStore::loadLocalesItemPages()
 {
     auto startTime = Util::TimeNow();
-    //                                          0         1           2
-    auto result = WorldDatabase.Query("SELECT entry, language_code, text FROM locales_item_pages");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_ITEM_PAGES);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_item_pages` is empty!");
@@ -3678,8 +3638,10 @@ MySQLStructure::LocalesItemPages const* MySQLDataStore::getLocalizedItemPages(ui
 void MySQLDataStore::loadLocalesNpcScriptText()
 {
     auto startTime = Util::TimeNow();
-    //                                          0         1          2
-    auto result = WorldDatabase.Query("SELECT entry, language_code, text FROM locales_npc_script_text");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_NPC_SCRIPT_TEXT);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_npc_script_text` is empty!");
@@ -3729,8 +3691,10 @@ MySQLStructure::LocalesNpcScriptText const* MySQLDataStore::getLocalizedNpcScrip
 void MySQLDataStore::loadLocalesNpcText()
 {
     auto startTime = Util::TimeNow();
-    //                                          0         1           2       3       4       5       6       7       8       9       10      11     12      13      14      15      16      17
-    auto result = WorldDatabase.Query("SELECT entry, language_code, text0, text0_1, text1, text1_1, text2, text2_1, text3, text3_1, text4, text4_1, text5, text5_1, text6, text6_1, text7, text7_1 FROM locales_npc_gossip_texts");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_NPC_GOSSIP_TEXTS);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_npc_gossip_texts` is empty!");
@@ -3785,8 +3749,10 @@ MySQLStructure::LocalesNpcGossipText const* MySQLDataStore::getLocalizedNpcGossi
 void MySQLDataStore::loadLocalesQuest()
 {
     auto startTime = Util::TimeNow();
-    //                                          0         1           2       3         4            5                 6           7           8                9              10             11
-    auto result = WorldDatabase.Query("SELECT entry, language_code, Title, Details, Objectives, CompletionText, IncompleteText, EndText, ObjectiveText1, ObjectiveText2, ObjectiveText3, ObjectiveText4 FROM locales_quest");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_QUEST);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_quest` is empty!");
@@ -3845,8 +3811,10 @@ MySQLStructure::LocalesQuest const* MySQLDataStore::getLocalizedQuest(uint32_t e
 void MySQLDataStore::loadLocalesWorldbroadcast()
 {
     auto startTime = Util::TimeNow();
-    //                                          0         1          2
-    auto result = WorldDatabase.Query("SELECT entry, language_code, text FROM locales_worldbroadcast");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_WORLDBROADCAST);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_worldbroadcast` is empty!");
@@ -3896,8 +3864,10 @@ MySQLStructure::LocalesWorldbroadcast const* MySQLDataStore::getLocalizedWorldbr
 void MySQLDataStore::loadLocalesWorldmapInfo()
 {
     auto startTime = Util::TimeNow();
-    //                                         0           1         2
-    auto result = WorldDatabase.Query("SELECT entry, language_code, text FROM locales_worldmap_info");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_WORLDMAP_INFO);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_worldmap_info` is empty!");
@@ -3947,8 +3917,10 @@ MySQLStructure::LocalesWorldmapInfo const* MySQLDataStore::getLocalizedWorldmapI
 void MySQLDataStore::loadLocalesWorldStringTable()
 {
     auto startTime = Util::TimeNow();
-    //                                         0           1         2
-    auto result = WorldDatabase.Query("SELECT entry, language_code, text FROM locales_worldstring_table");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOCALES_WORLDSTRING_TABLE);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `locales_worldstring_table` is empty!");
@@ -4081,8 +4053,10 @@ std::string MySQLDataStore::getLocaleGossipTitleOrElse(uint32_t entry, uint32_t 
 void MySQLDataStore::loadProfessionDiscoveriesTable()
 {
     auto startTime = Util::TimeNow();
-    //                                           0           1              2          3
-    auto result = WorldDatabase.Query("SELECT SpellId, SpellToDiscover, SkillValue, Chance FROM professiondiscoveries");
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_PROFESSION_DISCOVERIES);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `professiondiscoveries` is empty!");
@@ -4111,8 +4085,13 @@ void MySQLDataStore::loadProfessionDiscoveriesTable()
 void MySQLDataStore::loadTransportDataTable()
 {
     auto startTime = Util::TimeNow();
-    //                                          0      1
-    auto result = WorldDatabase.Query("SELECT entry, name FROM transport_data WHERE min_build <= %u AND max_build >= %u", getAEVersion(), getAEVersion());
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_TRANSPORT_DATA);
+    stmt->Bind(0, getAEVersion());
+    stmt->Bind(1, getAEVersion());
+
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `transport_data` is empty!");
@@ -4154,8 +4133,12 @@ void MySQLDataStore::loadTransportDataTable()
 void MySQLDataStore::loadTransportEntrys()
 {
     auto startTime = Util::TimeNow();
-    //                                                  
-    auto result = WorldDatabase.Query("SELECT entry FROM gameobject_properties WHERE type = 15 AND  build <= %u ORDER BY entry ASC", getAEVersion());
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_PROPERTIES_TYPE_15);
+    stmt->Bind(0, getAEVersion());
+
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Loaded 0 transport templates. DB table `gameobject_properties` has no transports!");
@@ -4181,8 +4164,12 @@ void MySQLDataStore::loadTransportEntrys()
 void MySQLDataStore::loadTransportMaps()
 {
     auto startTime = Util::TimeNow();
-    //                                                  
-    auto result = WorldDatabase.Query("SELECT parameter_6 FROM gameobject_properties WHERE type = 15 AND  build <= %u ORDER BY entry ASC", getAEVersion());
+
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GO_PROPERTIES_TYPE_15_PARAM6);
+    stmt->Bind(0, getAEVersion());
+
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Loaded 0 transport maps. DB table `gameobject_properties` has no transports!");
@@ -4208,8 +4195,9 @@ void MySQLDataStore::loadGossipMenuItemsTable()
 {
     auto startTime = Util::TimeNow();
 
-    //                                             0          1
-    auto result = WorldDatabase.Query("SELECT gossip_menu, text_id FROM gossip_menu ORDER BY gossip_menu");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GOSSIP_MENU);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `gossip_menu` is empty!");
@@ -4235,8 +4223,9 @@ void MySQLDataStore::loadGossipMenuItemsTable()
 
     _gossipMenuItemsStores.clear();
 
-    //                                             0       1            2        3            4                5               6               7                 8                9                10                11                 12
-    auto resultItems = WorldDatabase.Query("SELECT id, item_order, menu_option, icon, on_choose_action, on_choose_data, on_choose_data2, on_choose_data3, on_choose_data4, next_gossip_menu, next_gossip_text, requirement_type, requirement_data FROM gossip_menu_items ORDER BY id, item_order");
+    auto stmt2 = WorldDatabase.CreateStatement(WORLD_SEL_GOSSIP_MENU_ITEMS);
+    auto resultItems = WorldDatabase.QueryStatement(std::move(stmt2));
+
     if (resultItems == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `gossip_menu_items` is empty!");
@@ -4278,11 +4267,16 @@ void MySQLDataStore::loadCreatureSpawns()
     auto startTime = Util::TimeNow();
     uint32_t count = 0;
 
-    auto creature_spawn_result = getWorldDBQuery("SELECT * FROM creature_spawns WHERE min_build <= %u AND max_build >= %u AND event_entry = 0", getAEVersion(), getAEVersion());
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_SPAWNS_BASE);
+    stmt->Bind(0, static_cast<uint32_t>(getAEVersion()));
+    stmt->Bind(1, static_cast<uint32_t>(getAEVersion()));
+
+    auto creature_spawn_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (creature_spawn_result)
     {
         uint32_t creature_spawn_fields = creature_spawn_result->GetFieldCount();
-        if (creature_spawn_fields != CREATURE_SPAWNS_FIELDCOUNT + 1) // + 1 for additional table loading 'origin'
+        if (creature_spawn_fields != CREATURE_SPAWNS_FIELDCOUNT)
         {
             sLogger.failure("Table `creature_spawns` has {} columns, but needs {} columns! Skipped!", creature_spawn_fields, CREATURE_SPAWNS_FIELDCOUNT);
             return;
@@ -4353,8 +4347,6 @@ void MySQLDataStore::loadCreatureSpawns()
                 cspawn->wander_distance = fields[30].asUint32();
                 cspawn->waypoint_id = fields[31].asUint32();
 
-                cspawn->origine = fields[32].asCString();
-
                 //\todo add flag to declare a spawn as static. E.g. gameobject_spawns
                 /*if (!stricmp((*tableiterator).c_str(), "creature_staticspawns"))
                 {
@@ -4377,11 +4369,16 @@ void MySQLDataStore::loadGameobjectSpawns()
     auto startTime = Util::TimeNow();
     uint32_t count = 0;
 
-    auto gobject_spawn_result = getWorldDBQuery("SELECT * FROM gameobject_spawns WHERE min_build <= %u AND max_build >= %u AND event_entry = 0", VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_SPAWNS_BASE);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    auto gobject_spawn_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (gobject_spawn_result)
     {
         uint32_t gobject_spawn_fields = gobject_spawn_result->GetFieldCount();
-        if (gobject_spawn_fields != GO_SPAWNS_FIELDCOUNT + 1) // + 1 for additional table loading 'origin'
+        if (gobject_spawn_fields != GO_SPAWNS_FIELDCOUNT)
         {
             sLogger.failure("Table `gameobject_spawns` has {} columns, but needs {} columns! Skipped!", gobject_spawn_fields, GO_SPAWNS_FIELDCOUNT);
             return;
@@ -4414,7 +4411,6 @@ void MySQLDataStore::loadGameobjectSpawns()
                 go_spawn->spawntimesecs = fields[14].asUint32();
                 go_spawn->state = GameObject_State(fields[15].asUint32());
                 //event_entry = 16
-                go_spawn->origine = fields[17].asCString();
 
                 if (go_spawn->phase == 0)
                     go_spawn->phase = 0xFFFFFFFF;
@@ -4435,7 +4431,12 @@ void MySQLDataStore::loadRecallTable()
 
     _recallStore.clear();
 
-    auto recall_result = getWorldDBQuery("SELECT id, name, MapId, positionX, positionY, positionZ, Orientation FROM recall WHERE min_build <= %u AND max_build >= %u", VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_RECALL);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    auto recall_result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (recall_result)
     {
         do
@@ -4463,7 +4464,12 @@ void MySQLDataStore::loadCreatureAIScriptsTable()
 
     _creatureAIScriptStore.clear();
 
-    auto result = WorldDatabase.Query("SELECT * FROM creature_ai_scripts WHERE min_build <= %u AND max_build >= %u ORDER BY entry, event", VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_AI_SCRIPTS);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `creature_ai_scripts` is empty!");
@@ -4545,7 +4551,9 @@ void MySQLDataStore::loadSpawnGroupIds()
 
     _spawnGroupDataStore.clear();
 
-    auto result = WorldDatabase.Query("SELECT * FROM spawn_group_id ORDER BY groupId");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPAWN_GROUP_ID);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `spawn_group_id` is empty!");
@@ -4592,7 +4600,9 @@ void MySQLDataStore::loadCreatureGroupSpawns()
 
     _spawnGroupMapStore.clear();
 
-    auto result = WorldDatabase.Query("SELECT * FROM creature_group_spawn ORDER BY groupId");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_CREATURE_GROUP_SPAWN);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `creature_group_spawn` is empty!");
@@ -4693,14 +4703,18 @@ void MySQLDataStore::loadCreatureSplineChains()
 
     _splineChainsStore.clear();
 
-    auto resultMeta = WorldDatabase.Query("SELECT entry, chainId, splineId, expectedDuration, msUntilNext, velocity FROM script_spline_chain_meta ORDER BY entry asc, chainId asc, splineId asc");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SCRIPT_SPLINE_CHAIN_META);
+    auto resultMeta = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (resultMeta == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `script_spline_chain_meta` is empty!");
         return;
     }
 
-    auto resultWp = WorldDatabase.Query("SELECT entry, chainId, splineId, wpId, x, y, z FROM script_spline_chain_waypoints ORDER BY entry asc, chainId asc, splineId asc, wpId asc");
+    auto stmt2 = WorldDatabase.CreateStatement(WORLD_SEL_SCRIPT_SPLINE_CHAIN_WAYPOINTS);
+    auto resultWp = WorldDatabase.QueryStatement(std::move(stmt2));
+
     if (resultMeta == nullptr)
     {
         sLogger.info("MySQLDataLoads : Table `script_spline_chain_waypoints` is empty!");

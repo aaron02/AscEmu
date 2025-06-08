@@ -73,7 +73,6 @@ struct LevelInfo;
 class SpeedCheatDetector;
 struct GuildMember;
 
-class QueryBuffer;
 struct QuestProperties;
 struct SpellShapeshiftForm;
 class Instance;
@@ -911,7 +910,7 @@ protected:
     void _addCategoryCooldown(uint32_t categoryId, uint32_t time, uint32_t SpellId, uint32_t ItemId);
     void _addCooldown(uint32_t type, uint32_t mis, uint32_t time, uint32_t SpellId, uint32_t ItemId);
     void _loadPlayerCooldowns(QueryResult* result);
-    void _savePlayerCooldowns(QueryBuffer* buf);
+    void _savePlayerCooldowns();
 
     uint32_t m_lastPotionId = 0;
     PlayerCooldownMap m_cooldownMap[NUM_COOLDOWN_TYPES];
@@ -1970,15 +1969,34 @@ public:
     void saveToDB(bool newCharacter);
     void saveAuras(std::stringstream&);
     bool loadFromDB(uint32_t guid);
-    void loadFromDBProc(QueryResultVector& results);
 
-    bool saveSpells(bool newCharacter, QueryBuffer* buf);
+    void loadFromDBProc(std::vector<std::unique_ptr<QueryResult>> results);
+    void loadBasicCharacterDataFromDB(std::unique_ptr<QueryResult> result);
+    void loadTutorialsFromDB(std::unique_ptr<QueryResult> result);
+    void loadCooldownsFromDB(std::unique_ptr<QueryResult> result);
+    void loadQuestLogFromDB(std::unique_ptr<QueryResult> result);
+    void loadItemsFromDB(std::unique_ptr<QueryResult> result);
+    void loadPetsFromDB(std::unique_ptr<QueryResult> result);
+    void loadSummonSpellsFromDB(std::unique_ptr<QueryResult> result);
+    void loadMailboxFromDB(std::unique_ptr<QueryResult> result);
+    void loadSocialFriendsFromDB(std::unique_ptr<QueryResult> result);
+    void loadSocialFriendsForFromDB(std::unique_ptr<QueryResult> result);
+    void loadSocialIgnoresFromDB(std::unique_ptr<QueryResult> result);
+    void loadEquipmentSetsFromDB(std::unique_ptr<QueryResult> result);
+    void loadReputationsFromDB(std::unique_ptr<QueryResult> result);
+    void loadSpellsFromDB(std::unique_ptr<QueryResult> result);
+    void loadDeletedSpellsFromDB(std::unique_ptr<QueryResult> result);
+    void loadSkillsFromDB(std::unique_ptr<QueryResult> result);
+    void loadAchievementsFromDB(std::unique_ptr<QueryResult> result);
+    void loadAchievementProgressFromDB(std::unique_ptr<QueryResult> result);
+
+    bool saveSpells(bool newCharacter);
 
     bool loadDeletedSpells(QueryResult* result);
-    bool saveDeletedSpells(bool newCharacter, QueryBuffer* buf);
+    bool saveDeletedSpells(bool newCharacter);
 
-    bool saveReputations(bool newCharacter, QueryBuffer* buf);
-    bool saveSkills(bool newCharacter, QueryBuffer* buf);
+    bool saveReputations(bool newCharacter);
+    bool saveSkills(bool newCharacter);
 
     bool m_firstLogin = false;
 
@@ -2192,13 +2210,13 @@ public:
     bool isAttacking() { return m_attacking; }
 
 protected:
-    void _saveQuestLogEntry(QueryBuffer* buf);
+    void _saveQuestLogEntry();
     void _loadQuestLogEntry(QueryResult* result);
 
     void _loadPet(QueryResult* result);
     void _loadPetSpells(QueryResult* result);
-    void _savePet(QueryBuffer* buf, bool updateCurrentPetCache = false, Pet* currentPet = nullptr);
-    void _savePetSpells(QueryBuffer* buf);
+    void _savePet(bool updateCurrentPetCache = false, Pet* currentPet = nullptr);
+    void _savePetSpells();
 
     void _eventAttack(bool offhand);
 

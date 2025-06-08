@@ -1191,9 +1191,11 @@ void SpellMgr::loadTalentRanks()
 
 void SpellMgr::loadSpellCoefficientOverride()
 {
-    //                                            0           1                     2
-    auto result = WorldDatabase.Query("SELECT spell_id, direct_coefficient, overtime_coefficient "
-                                            "FROM spell_coefficient_override WHERE min_build <= %u AND max_build >= %u", VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_COEFF_OVERRIDE);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (result == nullptr)
     {
@@ -1227,8 +1229,9 @@ void SpellMgr::loadSpellCoefficientOverride()
 
 void SpellMgr::loadSpellCustomOverride()
 {
-    //                                                   0                1                         2                     3
-    const auto result = WorldDatabase.Query("SELECT `spell_id`, `assign_on_target_flag`, `assign_self_cast_only`, `assign_c_is_flag` FROM spell_custom_override");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_CUSTOM_OVERRIDE);
+    const auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.debug("SpellMgr::loadSpellCustomOverride : Your `spell_custom_override` table is empty!");
@@ -1321,7 +1324,9 @@ void SpellMgr::loadSpellCustomOverride()
 
 void SpellMgr::loadSpellAIThreat()
 {
-    const auto result = WorldDatabase.Query("SELECT * FROM ai_threattospellid");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_AI_THREAT_TO_SPELLID);
+    const auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.debug("SpellMgr::loadSpellAIThreat : Your `ai_threattospellid` table is empty!");
@@ -1352,7 +1357,9 @@ void SpellMgr::loadSpellAIThreat()
 
 void SpellMgr::loadSpellEffectOverride()
 {
-    const auto result = WorldDatabase.Query("SELECT * FROM spell_effects_override");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_EFFECTS_OVERRIDE);
+    const auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.debug("SpellMgr::loadSpellEffectOverride : Your `spell_effects_override` table is empty!");
@@ -1427,8 +1434,9 @@ void SpellMgr::loadSpellAreas()
     mSpellAreaForQuestEndMap.clear();
     mSpellAreaForAuraMap.clear();
 
-    //                                                0     1         2              3               4           5          6        7        8
-    const auto result = WorldDatabase.Query("SELECT spell, area, quest_start, quest_start_active, quest_end, aura_spell, racemask, gender, autocast FROM spell_area");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_AREA);
+    const auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.debug("SpellMgr::loadSpellAreas : Your `spell_area` table is empty!");
@@ -1618,8 +1626,9 @@ void SpellMgr::loadSpellRequired()
     mSpellsRequiringSpell.clear();
     mSpellRequired.clear();
 
-    //                                                   0         1
-    const auto result = WorldDatabase.Query("SELECT spell_id, req_spell FROM spell_required");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_REQUIRED);
+    const auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.debug("SpellMgr : Loaded 0 spell required records. DB table `spell_required` is empty.");
@@ -1665,7 +1674,9 @@ void SpellMgr::loadSpellRequired()
 
 void SpellMgr::loadSpellTargetConstraints()
 {
-    const auto result = WorldDatabase.Query("SELECT * FROM spelltargetconstraints WHERE SpellID > 0 ORDER BY SpellID");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_TARGET_CONSTRAINTS);
+    const auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result != nullptr)
     {
         uint32_t oldspellId = 0;
@@ -1727,7 +1738,9 @@ void SpellMgr::loadSpellTargetConstraints()
 
 void SpellMgr::loadSpellDisabled()
 {
-    const auto result = WorldDatabase.Query("SELECT * FROM spell_disable");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_DISABLE);
+    const auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result != nullptr)
     {
         do
@@ -1746,9 +1759,10 @@ void SpellMgr::loadSpellRanks()
     loadTalentRanks();
 #endif
 
-    //                                                  0             1          2
-    const auto result = WorldDatabase.Query("SELECT `spell_id`, `first_spell`, `rank` "
-        "FROM spell_ranks WHERE `min_build` <= %u AND `max_build` >= %u ORDER BY `first_spell`, `rank`", VERSION_STRING, VERSION_STRING);
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_SPELL_RANKS);
+    stmt->Bind(0, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(1, static_cast<uint32_t>(VERSION_STRING));
+    const auto result = WorldDatabase.QueryStatement(std::move(stmt));
 
     if (result == nullptr)
     {

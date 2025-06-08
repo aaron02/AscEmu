@@ -2054,7 +2054,11 @@ void WorldMap::callScriptUpdate()
 void WorldMap::loadRespawnTimes()
 {
     // Load Saved Respawns
-    auto result = CharacterDatabase.Query("SELECT type, spawnId, respawnTime FROM respawn WHERE mapId = %u AND instanceId = %u", getBaseMap()->getMapId(), getInstanceId());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_SEL_RESPAWN_BY_MAP_AND_INSTANCE);
+    stmt->Bind(0, getBaseMap()->getMapId());
+    stmt->Bind(1, getInstanceId());
+
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
     if (!result)
         return;
 
@@ -2152,7 +2156,14 @@ void WorldMap::saveRespawnTime(SpawnObjectType type, uint32_t spawnId, uint32_t 
 
 void WorldMap::saveRespawnDB(RespawnInfo const& info)
 {
-    CharacterDatabase.Execute("REPLACE INTO respawn (type, spawnId, respawnTime, mapId, instanceId) VALUES (%u, %u, %u, %u, %u)", info.type, info.spawnId, uint64_t(info.time), getBaseMap()->getMapId(), getInstanceId());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_REPLACE_RESPAWN);
+    stmt->Bind(0, info.type);
+    stmt->Bind(1, info.spawnId);
+    stmt->Bind(2, uint64_t(info.time));
+    stmt->Bind(3, getBaseMap()->getMapId());
+    stmt->Bind(4, getInstanceId());
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 bool WorldMap::addRespawn(RespawnInfo const& info)
@@ -2233,12 +2244,22 @@ void WorldMap::deleteRespawn(RespawnInfo const* info)
 
 void WorldMap::deleteRespawnTimesInDB(uint32_t mapId, uint32_t instanceId)
 {
-    CharacterDatabase.Execute("DELETE FROM respawn WHERE mapId = %u AND instanceId = %u", mapId, instanceId);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_RESPAWN_BY_MAP_AND_INSTANCE);
+    stmt->Bind(0, mapId);
+    stmt->Bind(1, instanceId);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void WorldMap::deleteRespawnFromDB(SpawnObjectType type, uint32_t spawnId)
 {
-    CharacterDatabase.Execute("DELETE FROM respawn WHERE type = %u AND spawnId = %u AND mapId = %u AND instanceId = %u", type, spawnId, getBaseMap()->getMapId(), getInstanceId());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_DEL_RESPAWN_BY_ALL_KEYS);
+    stmt->Bind(0, type);
+    stmt->Bind(1, spawnId);
+    stmt->Bind(2, getBaseMap()->getMapId());
+    stmt->Bind(3, getInstanceId());
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 bool WorldMap::checkRespawn(RespawnInfo* info)

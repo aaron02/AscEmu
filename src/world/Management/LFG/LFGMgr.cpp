@@ -92,7 +92,9 @@ void LfgMgr::LoadRewards()
     m_RewardMap.clear();
 
     // ORDER BY is very important for GetRandomDungeonReward!
-    auto result = WorldDatabase.Query("SELECT dungeon_id, max_level, quest_id_1, money_var_1, xp_var_1, quest_id_2, money_var_2, xp_var_2 FROM lfg_dungeon_rewards ORDER BY dungeon_id, max_level ASC");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LFG_DUNGEON_REWARDS);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result == nullptr)
     {
         sLogger.failure("Loaded 0 lfg dungeon rewards.DB table `lfg_dungeon_rewards` is empty!\n");

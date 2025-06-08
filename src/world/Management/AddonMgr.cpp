@@ -10,7 +10,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/LogonCommClient/LogonCommHandler.h"
 #include "Cryptography/MD5.hpp"
 #include "Database/Field.hpp"
-#include "Database/Database.h"
+#include "Database/Database.hpp"
 #include "Logging/Logger.hpp"
 #include "Server/DatabaseDefinition.hpp"
 #include "Server/Opcodes.hpp"
@@ -253,62 +253,50 @@ bool AddonMgr::AppendPublicKey(WorldPacket & data, std::string & AddonName, uint
 
 void AddonMgr::LoadFromDB()
 {
-    const char* loadClientAddons = "SELECT id, name, crc, banned, showinlist FROM clientaddons";
-    bool success = false;
-    auto result = CharacterDatabase.Query(&success, loadClientAddons);
-    if (!success)
-    {
-        sLogger.failure("Query failed: {}", loadClientAddons);
-        return;
-    }
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_CLIENT_ADDONS_SELECT_ALL);
+    auto result = CharacterDatabase.QueryStatement(std::move(stmt));
+
     if (!result)
     {
         sLogger.info("AddonMgr : No defined ClientAddons");
         return;
     }
 
-    Field* field;
-
     do
     {
-        field = result->Fetch();
+        Field* field = result->Fetch();
         auto ent = std::make_unique<AddonEntry>();
 
         ent->name = field[1].asCString();
         ent->crc = field[2].asUint64();
-        ent->banned = (field[3].asUint32() > 0 ? true : false);
+        ent->banned = field[3].asUint32() > 0;
         ent->isNew = false;
 
-        // To avoid crashes for stilly nubs who don't update table :P
         if (result->GetFieldCount() == 5)
-            ent->showinlist = (field[4].asUint32() > 0 ? true : false);
+            ent->showinlist = field[4].asUint32() > 0;
 
         mKnownAddons.try_emplace(ent->name, std::move(ent));
-
-    }
-    while(result->NextRow());
+    } while (result->NextRow());
 }
 
 void AddonMgr::SaveToDB()
 {
     sLogger.info("AddonMgr: Saving any new addons discovered in this session to database.");
 
-    KnownAddonsItr itr;
-
-    for (itr = mKnownAddons.begin(); itr != mKnownAddons.end(); ++itr)
+    for (const auto& [_, addon] : mKnownAddons)
     {
-        if (itr->second->isNew)
-        {
-            sLogger.info("Saving new addon {}", itr->second->name);
-            std::stringstream ss;
-            ss << "INSERT INTO clientaddons (name, crc, banned, showinlist) VALUES(\""
-               << CharacterDatabase.EscapeString(itr->second->name) << "\",\""
-               << itr->second->crc << "\",\""
-               << itr->second->banned << "\",\""
-               << itr->second->showinlist << "\");";
+        if (!addon->isNew)
+            continue;
 
-            CharacterDatabase.Execute(ss.str().c_str());
-        }
+        sLogger.info("Saving new addon {}", addon->name);
+
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_CLIENT_ADDON_INSERT);
+        stmt->Bind(0, addon->name);
+        stmt->Bind(1, addon->crc);
+        stmt->Bind(2, static_cast<uint8_t>(addon->banned));
+        stmt->Bind(3, static_cast<uint8_t>(addon->showinlist));
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
     }
 }
 #endif
@@ -319,64 +307,78 @@ void AddonMgr::LoadFromDB()
 {
     auto startTime = Util::TimeNow();
 
-    auto clientAddonsResult = CharacterDatabase.Query("SELECT name, crc FROM clientaddons");
-    if (clientAddonsResult)
     {
-        uint32_t knownAddonsCount = 0;
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_CLIENT_ADDON_SELECT);
+        auto clientAddonsResult = CharacterDatabase.QueryStatement(std::move(stmt));
 
-        do
+        if (clientAddonsResult)
         {
-            Field* fields = clientAddonsResult->Fetch();
+            uint32_t knownAddonsCount = 0;
 
-            std::string name = fields[0].asCString();
-            uint32_t crc = fields[1].asUint32();
+            do
+            {
+                Field* fields = clientAddonsResult->Fetch();
 
-            mKnownAddons.emplace_back(SavedAddon(name, crc));
+                std::string name = fields[0].asCString();
+                uint32_t crc = fields[1].asUint32();
 
-            ++knownAddonsCount;
-        } while (clientAddonsResult->NextRow());
+                mKnownAddons.emplace_back(SavedAddon(name, crc));
+                ++knownAddonsCount;
+            } while (clientAddonsResult->NextRow());
 
-        sLogger.debug("Loaded {} known addons from table `clientaddons` in {} ms", knownAddonsCount, static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)) );
+            sLogger.debug("Loaded {} known addons from table `clientaddons` in {} ms",
+                knownAddonsCount,
+                static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+        }
+        else
+        {
+            sLogger.debug("Loaded 0 known addons, table `clientaddons` is empty");
+        }
     }
-    else
-    {
-        sLogger.debug("Loaded 0 known addons, table `clientaddons` is empty");
-    }
-
 
     startTime = Util::TimeNow();
-    clientAddonsResult = CharacterDatabase.Query("SELECT id, name, banned, UNIX_TIMESTAMP(timestamp), version FROM clientaddons WHERE banned = 1");
-    if (clientAddonsResult)
+
     {
-        uint32_t bannedAddonsCount = 0;
-        uint32_t dbcMaxBannedAddon = sBannedAddOnsStore.getNumRows();
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_CLIENT_ADDON_BANNED_SELECT);
+        auto clientAddonsResult = CharacterDatabase.QueryStatement(std::move(stmt));
 
-        do
+        if (clientAddonsResult)
         {
-            Field* fields = clientAddonsResult->Fetch();
+            uint32_t bannedAddonsCount = 0;
+            uint32_t dbcMaxBannedAddon = sBannedAddOnsStore.getNumRows();
 
-            BannedAddon addon;
-            addon.id = fields[0].asUint32() + dbcMaxBannedAddon;
-            addon.timestamp = uint32_t(fields[2].asUint64());
+            do
+            {
+                Field* fields = clientAddonsResult->Fetch();
 
-            std::string name = fields[1].asCString();
-            std::string version = fields[3].asCString();
+                BannedAddon addon;
+                addon.id = fields[0].asUint32() + dbcMaxBannedAddon;
+                addon.timestamp = uint32_t(fields[2].asUint64());
 
-            MD5(reinterpret_cast<uint8_t const*>(name.c_str()), name.length(), addon.nameMD5);//
-            MD5(reinterpret_cast<uint8_t const*>(version.c_str()), version.length(), addon.versionMD5);//
+                std::string name = fields[1].asCString();
+                std::string version = fields[4].asCString();
 
-            mBannedAddons.push_back(addon);
+                MD5(reinterpret_cast<uint8_t const*>(name.c_str()), name.length(), addon.nameMD5);
+                MD5(reinterpret_cast<uint8_t const*>(version.c_str()), version.length(), addon.versionMD5);
 
-            ++bannedAddonsCount;
-        } while (clientAddonsResult->NextRow());
+                mBannedAddons.push_back(addon);
+                ++bannedAddonsCount;
+            } while (clientAddonsResult->NextRow());
 
-        sLogger.debug("Loaded {} banned addons from table `clientaddons` in {} ms", bannedAddonsCount, static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+            sLogger.debug("Loaded {} banned addons from table `clientaddons` in {} ms",
+                bannedAddonsCount,
+                static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+        }
     }
 }
 
 void AddonMgr::SaveAddon(AddonEntry const& addon)
 {
-    CharacterDatabase.Execute("REPLACE INTO clientaddons(name, crc) VALUES('%s', %u )", addon.name.c_str(), addon.crc);
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_CLIENT_ADDON_REPLACE);
+    stmt->Bind(0, addon.name);
+    stmt->Bind(1, addon.crc);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 
     mKnownAddons.emplace_back(SavedAddon(addon.name, addon.crc));
 }

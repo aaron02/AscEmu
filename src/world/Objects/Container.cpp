@@ -92,14 +92,14 @@ void Container::loadFromDB(Field* fields)
     }
 }
 
-void Container::saveToDB(int8_t slot, bool first, QueryBuffer* buf)
+void Container::saveToDB(int8_t slot, bool first)
 {
-    Item::saveToDB(INVENTORY_SLOT_NOT_SET, slot, first, buf);
+    Item::saveToDB(INVENTORY_SLOT_NOT_SET, slot, first);
 
     for (uint8_t i = 0; i < m_itemProperties->ContainerSlots; ++i)
     {
         if (m_Slot[i] && !((m_Slot[i]->getItemProperties()->Flags) & 2))
-            m_Slot[i]->saveToDB(slot, static_cast<int8_t>(i), first, buf);
+            m_Slot[i]->saveToDB(slot, static_cast<int8_t>(i), first);
     }
 }
 

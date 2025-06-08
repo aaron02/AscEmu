@@ -227,7 +227,12 @@ void InstanceScript::saveToDB()
     if (data.empty())
         return;
 
-    CharacterDatabase.Execute("UPDATE instance SET completedEncounters=%u, data=\'%s\' WHERE id=%u", getCompletedEncounterMask(), data.c_str(), mInstance->getInstanceId());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_UPD_INSTANCE_DATA);
+    stmt->Bind(0, getCompletedEncounterMask());
+    stmt->Bind(1, data);
+    stmt->Bind(2, mInstance->getInstanceId());
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void InstanceScript::loadSavedInstanceData(char const* data)

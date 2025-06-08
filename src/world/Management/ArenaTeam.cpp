@@ -103,53 +103,57 @@ ArenaTeam::~ArenaTeam() = default;
 
 void ArenaTeam::saveToDB()
 {
-    std::stringstream ss;
-    uint32_t i;
-
-    ss << "DELETE FROM arenateams WHERE id = ";
-    ss << m_id;
-    ss << ";";
-
-    CharacterDatabase.ExecuteNA(ss.str().c_str());
-
-    ss.rdbuf()->str("");
-
-    ss << "INSERT INTO arenateams VALUES("
-        << m_id << ","
-        << m_type << ","
-        << m_leader << ",'"
-        << m_name << "',"
-        << m_emblem.emblemStyle << ","
-        << m_emblem.emblemColour << ","
-        << m_emblem.borderStyle << ","
-        << m_emblem.borderColour << ","
-        << m_emblem.backgroundColour << ","
-        << m_stats.rating << ",'"
-        << m_stats.played_week << " " << m_stats.won_week << " "
-        << m_stats.played_season << " " << m_stats.won_season << "',"
-        << m_stats.ranking;
-
-    for (i = 0; i < m_memberCount; ++i)
+    // Vorheriges Team entfernen
     {
-        if (m_members[i].Info)
+        auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ARENA_TEAM_DELETE);
+        stmt->Bind(0, m_id);
+
+        CharacterDatabase.ExecuteStatement(std::move(stmt));
+    }
+
+    // Neues Team einfügen
+    auto stmt = CharacterDatabase.CreateStatement(CHARACTER_ARENA_TEAM_SAVE);
+
+    stmt->Bind(0, m_id);
+    stmt->Bind(1, m_type);
+    stmt->Bind(2, m_leader);
+    stmt->Bind(3, m_name);
+    stmt->Bind(4, m_emblem.emblemStyle);
+    stmt->Bind(5, m_emblem.emblemColour);
+    stmt->Bind(6, m_emblem.borderStyle);
+    stmt->Bind(7, m_emblem.borderColour);
+    stmt->Bind(8, m_emblem.backgroundColour);
+    stmt->Bind(9, m_stats.rating);
+
+    // Teamstatistik als String
+    std::stringstream stats;
+    stats << m_stats.played_week << " " << m_stats.won_week << " "
+        << m_stats.played_season << " " << m_stats.won_season;
+    stmt->Bind(10, stats.str());
+
+    stmt->Bind(11, m_stats.ranking);
+
+    // Mitglieder: bis zu 10 Slots
+    for (uint32_t i = 0; i < 10; ++i)
+    {
+        std::stringstream member;
+        if (i < m_memberCount && m_members[i].Info)
         {
-            ss << ",'" << m_members[i].Info->guid << " " << m_members[i].Played_ThisWeek << " "
-                << m_members[i].Won_ThisWeek << " " << m_members[i].Played_ThisSeason << " "
-                << m_members[i].Won_ThisSeason << " " << m_members[i].PersonalRating << "'";
+            member << m_members[i].Info->guid << " "
+                << m_members[i].Played_ThisWeek << " "
+                << m_members[i].Won_ThisWeek << " "
+                << m_members[i].Played_ThisSeason << " "
+                << m_members[i].Won_ThisSeason << " "
+                << m_members[i].PersonalRating;
         }
         else
         {
-            ss << ",'0 0 0 0 0 0'";
+            member << "0 0 0 0 0 0";
         }
+        stmt->Bind(12 + i, member.str());
     }
 
-    for (; i < 10; ++i)
-    {
-        ss << ",'0 0 0 0 0 0'";
-    }
-
-    ss << ")";
-    CharacterDatabase.Execute(ss.str().c_str());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void ArenaTeam::destroy()

@@ -57,10 +57,16 @@ void GuildNewsLogEntry::setSticky(bool isSticky)
 
 void GuildNewsLogEntry::saveGuildLogToDB() const
 {
-    CharacterDatabase.Execute("DELETE FROM guild_news_log WHERE guildId = %u AND logGuid = %u", mGuildId, getGUID());
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_NEWS_LOG_REPLACE);
+    stmt->Bind(0, mGuildId);
+    stmt->Bind(1, getGUID());
+    stmt->Bind(2, static_cast<uint32_t>(getType()));
+    stmt->Bind(3, static_cast<uint32_t>(getPlayerGuid()));
+    stmt->Bind(4, getFlags());
+    stmt->Bind(5, getValue());
+    stmt->Bind(6, getTimestamp());
 
-    CharacterDatabase.Execute("INSERT INTO guild_news_log VALUES('%u', '%u', '%u', '%u', '%u', '%u', '%llu')",
-        mGuildId, getGUID(), static_cast<uint32_t>(getType()), static_cast<uint32_t>(getPlayerGuid()), getFlags(), getValue(), getTimestamp());
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void GuildNewsLogEntry::writeGuildLogPacket(WorldPacket& data, ByteBuffer&) const

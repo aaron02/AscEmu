@@ -6,7 +6,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "GuildEmblemInfo.hpp"
 
 #include "Server/DatabaseDefinition.hpp"
-#include "Database/Database.h"
+#include "Database/Database.hpp"
 #include "WorldPacket.h"
 
 
@@ -25,8 +25,15 @@ void EmblemInfo::loadEmblemInfoFromDB(Field* fields)
 
 void EmblemInfo::saveEmblemInfoToDB(uint32_t guildId) const
 {
-    CharacterDatabase.Execute("UPDATE guilds SET emblemStyle = %u, emblemColor = %u, borderStyle = %u, borderColor = %u, backgroundColor = %u WHERE guildId = %u",
-        mStyle, mColor, mBorderStyle, mBorderColor, mBackgroundColor, guildId);
+    auto stmt = CharacterDatabase.CreateStatement(CHAR_GUILD_EMBLEM_UPDATE);
+    stmt->Bind(0, mStyle);
+    stmt->Bind(1, mColor);
+    stmt->Bind(2, mBorderStyle);
+    stmt->Bind(3, mBorderColor);
+    stmt->Bind(4, mBackgroundColor);
+    stmt->Bind(5, guildId);
+
+    CharacterDatabase.ExecuteStatement(std::move(stmt));
 }
 
 void EmblemInfo::readEmblemInfoFromPacket(WorldPacket& recv_data)

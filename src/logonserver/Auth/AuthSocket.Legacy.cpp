@@ -27,7 +27,7 @@
 #include <Realm/RealmManager.hpp>
 
 #include "Cryptography/MD5.hpp"
-#include "Database/Database.hpp"
+#include "Database/LogonDatabaseConnection.hpp"
 
 enum _errors
 {
@@ -447,7 +447,11 @@ void AuthSocket::HandleProof()
     m_authenticated = true;
 
     // Don't update when IP banned, but update anyway if it's an account ban
-    sLogonSQL->Execute("UPDATE accounts SET lastlogin=NOW(), lastip='%s' WHERE id = %u;", GetRemoteIP().c_str(), m_account->AccountId);
+    auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_LOGIN_INFO);
+    stmt->Bind(0, GetRemoteIP());
+    stmt->Bind(1, m_account->AccountId);
+
+    sLogonSQL->ExecuteStatement(std::move(stmt));
 }
 
 void AuthSocket::SendChallengeError(uint8_t Error)
@@ -714,7 +718,11 @@ void AuthSocket::HandleReconnectProof()
         return;
 
     // Don't update when IP banned, but update anyway if it's an account ban
-    sLogonSQL->Execute("UPDATE accounts SET lastlogin = NOW(), lastip = '%s' WHERE id = %u;", GetRemoteIP().c_str(), m_account->AccountId);
+    auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_LASTLOGIN);
+    stmt->Bind(0, GetRemoteIP());
+    stmt->Bind(1, m_account->AccountId);
+
+    sLogonSQL->ExecuteStatement(std::move(stmt));
     //RemoveReadBufferBytes(GetReadBufferSize(), true);
     readBuffer.Remove(readBuffer.GetSize());
 

@@ -31,7 +31,7 @@
 #include "WorldPacket.h"
 #include "Server/AccountMgr.h"
 #include "Cryptography/Sha1.hpp"
-#include "Database/Database.hpp"
+#include "Database/LogonDatabaseConnection.hpp"
 #include "Utilities/Strings.hpp"
 #include "Server/IpBanMgr.h"
 
@@ -444,7 +444,12 @@ void LogonCommServerSocket::HandleTestConsoleLogin(WorldPacket & recvData)
     pass.assign(accountname);
     pass.push_back(':');
     pass.append(password);
-    auto checkPassQuery = sLogonSQL->Query("SELECT acc_name, encrypted_password FROM accounts WHERE encrypted_password = SHA(UPPER('%s')) AND acc_name = '%s'", pass.c_str(), accountname.c_str());
+
+    auto stmt = sLogonSQL->CreateStatement(LOGON_SEL_ACCOUNT_BY_NAME_AND_PASSWORD);
+    stmt->Bind(0, pass);
+    stmt->Bind(1, accountname);
+
+    auto checkPassQuery = sLogonSQL->QueryStatement(std::move(stmt));
     if (!checkPassQuery)
     {
         data << uint32_t(0);
@@ -482,8 +487,12 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             pAccount->Banned = duration;
 
             // update it in the sql (duh)
-            sLogonSQL->Execute("UPDATE accounts SET banned = %u, banreason = '%s' WHERE acc_name = \"%s\"", duration, sLogonSQL->EscapeString(banreason).c_str(), sLogonSQL->EscapeString(account).c_str());
+            auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_BANSTATUS);
+            stmt->Bind(0, duration);
+            stmt->Bind(1, banreason);
+            stmt->Bind(2, account);
 
+            sLogonSQL->ExecuteStatement(std::move(stmt));
         }
         break;
 
@@ -526,7 +535,11 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             pAccount->Muted = duration;
 
             // update it in the sql (duh)
-            sLogonSQL->Execute("UPDATE accounts SET muted = %u WHERE acc_name = \"%s\"", duration, sLogonSQL->EscapeString(account).c_str());
+            auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_MUTE);
+            stmt->Bind(0, duration);
+            stmt->Bind(1, account);
+
+            sLogonSQL->ExecuteStatement(std::move(stmt));
         }
         break;
 
@@ -541,8 +554,14 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             recvData >> banreason;
 
             if (sIpBanMgr.add(ip, duration))
-                sLogonSQL->Execute("INSERT INTO ipbans VALUES(\"%s\", %u, \"%s\")", sLogonSQL->EscapeString(ip).c_str(), duration, sLogonSQL->EscapeString(banreason).c_str());
+            {
+                auto stmt = sLogonSQL->CreateStatement(LOGON_INS_IPBAN);
+                stmt->Bind(0, ip);
+                stmt->Bind(1, duration);
+                stmt->Bind(2, banreason);
 
+                sLogonSQL->ExecuteStatement(std::move(stmt));
+            }
         }
         break;
 
@@ -552,8 +571,12 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             recvData >> ip;
 
             if (sIpBanMgr.remove(ip))
-                sLogonSQL->Execute("DELETE FROM ipbans WHERE ip = \"%s\"", sLogonSQL->EscapeString(ip).c_str());
+            {
+                auto stmt = sLogonSQL->CreateStatement(LOGON_DEL_IPBAN_BY_IP);
+                stmt->Bind(0, ip);
 
+                sLogonSQL->ExecuteStatement(std::move(stmt));
+            }
         }
         break;
         case Method_Account_Change_PW:
@@ -574,8 +597,12 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             pass.assign(account_name);
             pass.push_back(':');
             pass.append(old_password);
-            auto check_oldpass_query = sLogonSQL->Query("SELECT acc_name, encrypted_password FROM accounts WHERE encrypted_password = SHA(UPPER('%s')) AND acc_name = '%s'", pass.c_str(), account_name.c_str());
 
+            auto stmt = sLogonSQL->CreateStatement(LOGON_SEL_ACCOUNT_VERIFY_PASSWORD);
+            stmt->Bind(0, pass);
+            stmt->Bind(1, account_name);
+
+            auto check_oldpass_query = sLogonSQL->QueryStatement(std::move(stmt));
             if (!check_oldpass_query)
             {
                 // Send packet back... Your current password matches not your input!
@@ -645,7 +672,11 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
                 pass.push_back(':');
                 pass.append(password);
 
-                sLogonSQL->Query("INSERT INTO `accounts`(`acc_name`,`encrypted_password`,`banned`,`email`,`flags`,`banreason`) VALUES ('%s', SHA(UPPER('%s')),'0','','24','')", name_save.c_str(), pass.c_str());
+                auto stmt = sLogonSQL->CreateStatement(LOGON_INS_ACCOUNT_CREATE);
+                stmt->Bind(0, name_save);
+                stmt->Bind(1, name_save + ":" + pass);
+
+                auto result = sLogonSQL->ExecuteStatement(std::move(stmt));
 
                 result = Result_Account_Finished;
 

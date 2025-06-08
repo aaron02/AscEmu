@@ -279,6 +279,7 @@ void WorldDatabaseConnection::PrepareStatements()
     RegisterStatement(WORLD_GAMEOBJECT_SPAWN_PHASE_UPDATE, "UPDATE gameobject_spawns SET phase = ? WHERE id = ? AND min_build <= ? AND max_build >= ?");
     RegisterStatement(WORLD_GAMEOBJECT_SPAWN_STATE_UPDATE, "UPDATE gameobject_spawns SET state = ? WHERE id = ? AND min_build <= ? AND max_build >= ?");
     RegisterStatement(WORLD_SEL_GAMEOBJECT_QUEST_PICKUP_BINDING, "SELECT entry, quest, required_count FROM gameobject_quest_pickup_binding;");
+    RegisterStatement(WORLD_SEL_GAMEOBJECT_TELEPORTS, "SELECT entry, mapid, x_pos, y_pos, z_pos, orientation, required_level, required_class, required_achievement FROM gameobject_teleports");
 
     // Vehicles
     RegisterStatement(WORLD_VEHICLE_ACCESSORY_SELECT_ALL, "SELECT entry, accessory_entry, seat_id, minion, summontype, summontimer FROM vehicle_accessories");
@@ -327,5 +328,12 @@ void WorldDatabaseConnection::PrepareStatements()
     RegisterStatement(WORLD_SEL_SPELL_RANKS, "SELECT spell_id, first_spell, `rank` FROM spell_ranks WHERE min_build <= ? AND max_build >= ? ORDER BY first_spell, `rank`");
     RegisterStatement(WORLD_SEL_SPELL_DISABLE, "SELECT spellid, replacement_spellid FROM spell_disable");
 
+    // LUA LOOT
+    RegisterStatement(WORLD_SEL_LOOT_ITEM_ENTRY_ITEM, "SELECT * FROM loot_items WHERE entryid = ? AND itemid = ?");
+    RegisterStatement(WORLD_REP_LOOT_ITEM, "REPLACE INTO loot_items VALUES (?, ?, ?, 0, 0, 0, ?, ?)");
+    RegisterStatement(WORLD_SEL_LOOT_GAMEOBJECT_ENTRY_ITEM, "SELECT * FROM loot_gameobjects WHERE entryid = ? AND itemid = ?");
+    RegisterStatement(WORLD_REP_LOOT_GAMEOBJECT, "REPLACE INTO loot_gameobjects VALUES (?, ?, ?, 0, 0, 0, ?, ?)");
+    RegisterStatement(WORLD_SEL_LOOT_CREATURE_ENTRY_ITEM, "SELECT * FROM loot_creatures WHERE entryid = ? AND itemid = ?");
+    RegisterStatement(WORLD_REP_LOOT_CREATURE, "REPLACE INTO loot_creatures VALUES (?, ?, ?, 0, 0, 0, ?, ?)");
 
 }

@@ -29,7 +29,7 @@
 #include <sstream>
 #include <Utilities/Strings.hpp>
 
-#include "Database/Database.hpp"
+#include "Database/LogonDatabaseConnection.hpp"
 #include "Threading/LegacyThreading.h"
 
 LogonConsole& LogonConsole::getInstance()
@@ -274,14 +274,14 @@ void LogonConsole::AccountCreate(char* str)
     pass.push_back(':');
     pass.append(password);
 
-    std::stringstream query;
-    query << "INSERT INTO `accounts`( `acc_name`,`encrypted_password`,`banned`,`email`,`flags`,`banreason`) VALUES ( '";
-    query << name << "',";
-    query << "SHA( UPPER( '" << pass << "' ) ),'0','";
-    query << email << "','";
-    query << AE_EXPANSION_VERSION << "','' );";
+    auto stmt = sLogonSQL->CreateStatement(LOGON_INS_NEW_ACCOUNT);
+    stmt->Bind(0, name);
+    stmt->Bind(1, pass);
+    stmt->Bind(2, 0);
+    stmt->Bind(3, email);
+    stmt->Bind(4, AE_EXPANSION_VERSION);
 
-    if (!sLogonSQL->WaitExecuteNA(query.str().c_str()))
+    if (!sLogonSQL->ExecuteStatement(std::move(stmt)))
     {
         std::cout << "Couldn't save new account to database. Aborting." << std::endl;
         return;
@@ -306,11 +306,10 @@ void LogonConsole::AccountDelete(char* str)
 
     checkAccountName(name, ACC_NAME_DO_EXIST);
 
-    std::stringstream query;
-    query << "DELETE FROM `accounts` WHERE `acc_name` = '";
-    query << name << "';";
+    auto stmt = sLogonSQL->CreateStatement(LOGON_DEL_ACCOUNT_BY_NAME);
+    stmt->Bind(0, name);
 
-    if (!sLogonSQL->WaitExecuteNA(query.str().c_str()))
+    if (!sLogonSQL->ExecuteStatement(std::move(stmt)))
     {
         std::cout << "Couldn't delete account. Aborting." << std::endl;
         return;
@@ -341,16 +340,16 @@ void LogonConsole::AccountSetPassword(char* str)
     pass.push_back(':');
     pass.append(password);
 
-    std::stringstream query;
-    query << "UPDATE `accounts` SET `encrypted_password` = ";
-    query << "SHA( UPPER( '" << pass << "' ) ) WHERE `acc_name` = '";
-    query << name << "'";
+    auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_PASSWORD);
+    stmt->Bind(0, pass);
+    stmt->Bind(1, name);
 
-    if (!sLogonSQL->WaitExecuteNA(query.str().c_str()))
+    if (!sLogonSQL->ExecuteStatement(std::move(stmt)))
     {
         std::cout << "Couldn't update password in database. Aborting." << std::endl;
         return;
     }
+
 
     sAccountMgr.reloadAccounts(true);
 
@@ -385,7 +384,11 @@ void LogonConsole::AccountChangePassword(char* str)
     pass.push_back(':');
     pass.append(old_password);
 
-    auto check_oldpass_query = sLogonSQL->Query("SELECT acc_name, encrypted_password FROM accounts WHERE encrypted_password = SHA(UPPER('%s')) AND acc_name = '%s'", pass.c_str(), std::string(account_name).c_str());
+    auto stmt = sLogonSQL->CreateStatement(LOGON_SEL_ACCOUNT_BY_PASS_AND_NAME);
+    stmt->Bind(0, pass);
+    stmt->Bind(1, account_name);
+
+    auto check_oldpass_query = sLogonSQL->QueryStatement(std::move(stmt));
 
     if (!check_oldpass_query)
     {
@@ -399,7 +402,13 @@ void LogonConsole::AccountChangePassword(char* str)
         new_pass.push_back(':');
         new_pass.append(new_password_1);
 
-        auto new_pass_query = sLogonSQL->Query("UPDATE accounts SET encrypted_password = SHA(UPPER('%s')) WHERE acc_name = '%s'", new_pass.c_str(), std::string(account_name).c_str());
+        std::string fullPass = std::string(account_name) + ":" + new_pass;
+
+        auto stmt2 = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_PASSWORD_BY_NAME);
+        stmt2->Bind(0, fullPass);
+        stmt2->Bind(1, account_name);
+
+        auto new_pass_query = sLogonSQL->QueryStatement(std::move(stmt2));
 
         if (!new_pass_query)
         {

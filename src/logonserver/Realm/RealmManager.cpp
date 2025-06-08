@@ -13,7 +13,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include <WorldPacket.h>
 #include <LogonCommServer/LogonCommServer.h>
 #include "Auth/AuthSocket.h"
-#include "Database/Database.hpp"
+#include "Database/LogonDatabaseConnection.hpp"
 
 namespace AscEmu::Realm
 {
@@ -44,7 +44,8 @@ namespace AscEmu::Realm
 
     void RealmManager::loadRealms()
     {
-        const auto result = sLogonSQL->Query("SELECT id, password, status FROM realms");
+        auto stmt = sLogonSQL->CreateStatement(LOGON_SEL_REALM_INFO);
+        const auto result = sLogonSQL->QueryStatement(std::move(stmt));
         if (result != nullptr)
         {
             do
@@ -87,7 +88,11 @@ namespace AscEmu::Realm
 
             this->realms.push_back(std::move(realm));
 
-            sLogonSQL->Query("REPLACE INTO realms(id, status, status_change_time) VALUES(%u, %u, NOW())", status, uint32_t(realm_id));
+            auto stmt = sLogonSQL->CreateStatement(LOGON_REP_REALM_STATUS);
+            stmt->Bind(0, static_cast<uint32_t>(realm_id));
+            stmt->Bind(1, status);
+
+            sLogonSQL->ExecuteStatement(std::move(stmt));
         }
         else
         {
@@ -97,7 +102,11 @@ namespace AscEmu::Realm
                     realm->status = status;
             }
 
-            sLogonSQL->Query("UPDATE realms SET status = %u WHERE id = %u", status, uint32_t(realm_id));
+            auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_REALM_STATUS);
+            stmt->Bind(0, status);
+            stmt->Bind(1, static_cast<uint32_t>(realm_id));
+
+            sLogonSQL->ExecuteStatement(std::move(stmt));
         }
     }
 
@@ -123,7 +132,10 @@ namespace AscEmu::Realm
             {
                 realm->status = 0;
                 sLogger.info("Realm {} status gets set to 0 (offline) since there was no ping the last 2 minutes ({}).", uint32_t(realm->id), ::Util::GetTimeDifferenceToNow(realm->lastPing));
-                sLogonSQL->Query("UPDATE realms SET status = 0 WHERE id = %u", uint32_t(realm->id));
+                auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_REALM_SET_OFFLINE);
+                stmt->Bind(0, static_cast<uint32_t>(realm->id));
+
+                sLogonSQL->ExecuteStatement(std::move(stmt));
             }
         }
     }
@@ -284,7 +296,10 @@ namespace AscEmu::Realm
             realm->flags = RealmFlag::OFFLINE | RealmFlag::INVALID;
             realm->_characterMap.clear();
             sLogger.info("[RealmManager] Realm {} is now offline (socket close).", realm_id);
-            sLogonSQL->Query("UPDATE realms SET status = 0 WHERE id = %u", uint32_t(realm->id));
+            auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_REALM_STATUS_RESET);
+            stmt->Bind(0, static_cast<uint32_t>(realm->id));
+
+            sLogonSQL->QueryStatement(std::move(stmt));
         }
     }
 

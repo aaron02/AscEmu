@@ -83,7 +83,9 @@ public:
 
 void InitializeGameObjectTeleportTable(ScriptMgr* mgr)
 {
-    auto result = WorldDatabase.Query("SELECT entry, mapid, x_pos, y_pos, z_pos, orientation, required_level, required_class, required_achievement FROM gameobject_teleports");
+    auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_GAMEOBJECT_TELEPORTS);
+    auto result = WorldDatabase.QueryStatement(std::move(stmt));
+
     if (result != NULL)
     {
         // Check if the SQL table is setup correctly

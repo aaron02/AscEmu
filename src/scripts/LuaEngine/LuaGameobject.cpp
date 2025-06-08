@@ -992,9 +992,22 @@ int LuaGameObject::AddLoot(lua_State* L, GameObject* ptr)
     bool perm = ((luaL_optinteger(L, 4, 0) == 1) ? true : false);
     if (perm)
     {
-        auto result = WorldDatabase.Query("SELECT * FROM loot_gameobjects WHERE entryid = %u, itemid = %u", ptr->getEntry(), itemid);
+        auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOOT_GAMEOBJECT_ENTRY_ITEM);
+        stmt->Bind(0, ptr->getEntry());
+        stmt->Bind(1, itemid);
+
+        auto result = WorldDatabase.QueryStatement(std::move(stmt));
         if (!result)
-        WorldDatabase.Execute("REPLACE INTO loot_gameobjects VALUES (%u, %u, %f, 0, 0, 0, %u, %u )", ptr->getEntry(), itemid, chance, mincount, maxcount);
+        {
+            auto repStmt = WorldDatabase.CreateStatement(WORLD_REP_LOOT_GAMEOBJECT);
+            repStmt->Bind(0, ptr->getEntry());
+            repStmt->Bind(1, itemid);
+            repStmt->Bind(2, chance);
+            repStmt->Bind(3, mincount);
+            repStmt->Bind(4, maxcount);
+
+            WorldDatabase.ExecuteStatement(std::move(repStmt));
+        }
     }
     sLootMgr.addLoot(&lt->loot, itemid, ichance, mincount, maxcount, ptr->getWorldMap()->getDifficulty());
     return 0;

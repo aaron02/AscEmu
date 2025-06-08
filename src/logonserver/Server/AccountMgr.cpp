@@ -8,7 +8,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include <Logging/Log.hpp>
 #include <Cryptography/BigNumber.h>
 #include <Utilities/Strings.hpp>
-#include <Database/Database.hpp>
+#include <Database/LogonDatabaseConnection.hpp>
 #include "Master.hpp"
 
 AccountMgr& AccountMgr::getInstance()
@@ -55,7 +55,11 @@ void AccountMgr::addAccount(Field* field)
     {
         account->Banned = 0;
         sLogger.debug("Account {}'s ban has expired.", accountName);
-        sLogonSQL->Execute("UPDATE accounts SET banned = 0 WHERE id = %u", account->AccountId);
+
+        auto stmt = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_UNBAN);
+        stmt->Bind(0, account->AccountId);
+
+        sLogonSQL->ExecuteStatement(std::move(stmt));
     }
     
     if (account->forcedLanguage != "enUS")
@@ -67,7 +71,11 @@ void AccountMgr::addAccount(Field* field)
     {
         account->Muted = 0;
         sLogger.debug("Account {}'s mute has expired.", accountName);
-        sLogonSQL->Execute("UPDATE accounts SET muted = 0 WHERE id = %u", account->AccountId);
+
+        auto stmt2 = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_UNMUTE);
+        stmt2->Bind(0, account->AccountId);
+
+        sLogonSQL->ExecuteStatement(std::move(stmt2));
     }
 
     if (encryptedPassword.size() == 40)
@@ -117,7 +125,11 @@ void AccountMgr::updateAccount(Account* account, Field* field) const
     if (id != account->AccountId)
     {
         sLogger.failure("AccountMgr : deleting duplicate account {} [{}]...", id, accountName);
-        sLogonSQL->Execute("DELETE FROM accounts WHERE id = %u", id);
+        
+        auto stmt = sLogonSQL->CreateStatement(LOGON_DEL_ACCOUNT_BY_ID);
+        stmt->Bind(0, id);
+
+        sLogonSQL->ExecuteStatement(std::move(stmt));
         return;
     }
 
@@ -130,7 +142,11 @@ void AccountMgr::updateAccount(Account* account, Field* field) const
     {
         account->Banned = 0;
         sLogger.debug("Account {}'s ban has expired.", accountName);
-        sLogonSQL->Execute("UPDATE accounts SET banned = 0 WHERE id = %u", account->AccountId);
+        
+        auto stmt2 = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_UNBAN);
+        stmt2->Bind(0, account->AccountId);
+
+        sLogonSQL->ExecuteStatement(std::move(stmt2));
     }
 
     if (account->forcedLanguage != "enUS")
@@ -142,7 +158,11 @@ void AccountMgr::updateAccount(Account* account, Field* field) const
     {
         account->Muted = 0;
         sLogger.debug("Account {}'s mute has expired.", accountName);
-        sLogonSQL->Execute("UPDATE accounts SET muted = 0 WHERE id = %u", account->AccountId);
+        
+        auto stmt3 = sLogonSQL->CreateStatement(LOGON_UPD_ACCOUNT_UNMUTE);
+        stmt3->Bind(0, account->AccountId);
+
+        sLogonSQL->ExecuteStatement(std::move(stmt3));
     }
 
     if (encryptedPassword.size() == 40)
@@ -179,7 +199,9 @@ void AccountMgr::reloadAccounts(bool silent)
 
     std::set<std::string> account_list;
 
-    auto result = sLogonSQL->Query("SELECT id, acc_name, encrypted_password, flags, banned, forceLanguage, muted FROM accounts");
+    auto stmt = sLogonSQL->CreateStatement(LOGON_SEL_ACCOUNTS_ALL);
+    auto result = sLogonSQL->QueryStatement(std::move(stmt));
+
     if (result)
     {
         do

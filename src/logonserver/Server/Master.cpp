@@ -23,7 +23,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "git_version.hpp"
 #include "Console/LogonConsole.h"
 #include "LogonConf.hpp"
-#include "Database/Database.h"
+#include "Database/LogonDatabaseConnection.hpp"
 #include "Utilities/Strings.hpp"
 #include "Threading/LegacyThreading.h"
 
@@ -169,7 +169,6 @@ void MasterLogon::Run(int /*argc*/, char** /*argv*/)
 
     // kill db
     sLogger.info("Waiting for database to close..");
-    sLogonSQL->EndThreads();
     sLogonSQL->Shutdown();
     sLogonSQL = nullptr;
 
@@ -324,12 +323,10 @@ bool MasterLogon::StartDb()
         return false;
     }
 
-    sLogonSQL = Database::CreateDatabaseInterface();
+    sLogonSQL = std::make_unique< LogonDatabaseConnection>();
 
     // Initialize it
-    if (!sLogonSQL->Initialize(dbHostname.c_str(), (unsigned int)dbPort, dbUsername.c_str(),
-        dbPassword.c_str(), dbDatabase.c_str(), logonConfig.logonDb.connections,
-        16384, logonConfig.logonDb.isLegacyAuth))
+    if (!sLogonSQL->Initialize(dbHostname.c_str(), (unsigned int)dbPort, dbUsername.c_str(), dbPassword.c_str(), dbDatabase.c_str(), logonConfig.logonDb.connections, logonConfig.logonDb.isLegacyAuth))
     {
         sLogger.fatal("sql: Logon database initialization failed. Exiting.");
         return false;
@@ -340,7 +337,8 @@ bool MasterLogon::StartDb()
 
 bool MasterLogon::CheckDBVersion()
 {
-    auto cqr = sLogonSQL->QueryNA("SELECT LastUpdate FROM logon_db_version ORDER BY id DESC LIMIT 1;");
+    auto stmt = sLogonSQL->CreateStatement(LOGON_VERSION_LAST_UPDATE);
+    auto cqr = sLogonSQL->QueryStatement(std::move(stmt));
     if (cqr == nullptr)
     {
         sLogger.failure("Database : logon database is missing the table `logon_db_version` OR the table doesn't contain any rows. Can't validate database version. Exiting.");

@@ -2026,14 +2026,23 @@ int LuaUnit::QuestAddStarter(lua_State* L, Unit* ptr)
 
     const uint32_t quest_giver = unit->getEntry();
 
-    char my_query1[200];
-    sprintf(my_query1, "SELECT id FROM creature_quest_starter WHERE id = %d AND quest = %d AND min_build <= %u AND max_build >= %u", quest_giver, quest_id, VERSION_STRING, VERSION_STRING);
-    const auto selectResult1 = WorldDatabase.Query(my_query1);
-    if (selectResult1 == nullptr)
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_STARTER_SELECT);
+    stmt->Bind(0, quest_giver);
+    stmt->Bind(1, quest_id);
+    stmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+    stmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+    const auto selectResult1 = WorldDatabase.QueryStatement(std::move(stmt));
+    if (!selectResult1)
     {
-        char my_insert1[200];
-        sprintf(my_insert1, "INSERT INTO creature_quest_starter (id, quest) VALUES (%d,%d,%u,%u)", quest_giver, quest_id, VERSION_STRING, VERSION_STRING);
-        WorldDatabase.Execute(my_insert1);
+        // INSERT
+        auto insertStmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_STARTER_INSERT);
+        insertStmt->Bind(0, quest_giver);
+        insertStmt->Bind(1, quest_id);
+        insertStmt->Bind(2, static_cast<uint32_t>(VERSION_STRING));
+        insertStmt->Bind(3, static_cast<uint32_t>(VERSION_STRING));
+
+        WorldDatabase.ExecuteStatement(std::move(insertStmt));
     }
 
     sQuestMgr.LoadExtraQuestStuff();
@@ -2071,14 +2080,22 @@ int LuaUnit::QuestAddFinisher(lua_State* L, Unit* ptr)
 
     const uint32_t quest_giver = unit->getEntry();
 
-    char my_query1[200];
-    sprintf(my_query1, "SELECT id FROM creature_quest_finisher WHERE id = %d AND quest = %d AND min_build <= %u AND max_build >= %u", quest_giver, quest_id, VERSION_STRING, VERSION_STRING);
-    const auto selectResult1 = WorldDatabase.Query(my_query1);
-    if (selectResult1 == nullptr)
+    auto stmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_FINISHER_EXISTS);
+    stmt->Bind(0, quest_giver);
+    stmt->Bind(1, quest_id);
+    stmt->Bind(2, VERSION_STRING);
+    stmt->Bind(3, VERSION_STRING);
+
+    const auto selectResult1 = WorldDatabase.QueryStatement(std::move(stmt));
+    if (!selectResult1)
     {
-        char my_insert1[200];
-        sprintf(my_insert1, "INSERT INTO creature_quest_finisher (id, quest, min_build, max_build) VALUES (%d,%d,%u,%u)", quest_giver, quest_id, VERSION_STRING, VERSION_STRING);
-        WorldDatabase.Execute(my_insert1);
+        auto insertStmt = WorldDatabase.CreateStatement(WORLD_CREATURE_QUEST_FINISHER_INSERT);
+        insertStmt->Bind(0, quest_giver);
+        insertStmt->Bind(1, quest_id);
+        insertStmt->Bind(2, VERSION_STRING);
+        insertStmt->Bind(3, VERSION_STRING);
+
+        WorldDatabase.ExecuteStatement(std::move(insertStmt));
     }
 
     sQuestMgr.LoadExtraQuestStuff();
@@ -4629,9 +4646,22 @@ int LuaUnit::AddLoot(lua_State* L, Unit* ptr)
     const bool perm = ((luaL_optinteger(L, 4, 0) == 1) ? true : false);
     if (perm)
     {
-        const auto result = WorldDatabase.Query("SELECT * FROM loot_creatures WHERE entryid = %u, itemid = %u", ptr->getEntry(), itemid);
+        auto stmt = WorldDatabase.CreateStatement(WORLD_SEL_LOOT_CREATURE_ENTRY_ITEM);
+        stmt->Bind(0, ptr->getEntry());
+        stmt->Bind(1, itemid);
+
+        auto result = WorldDatabase.QueryStatement(std::move(stmt));
         if (!result)
-            WorldDatabase.Execute("REPLACE INTO loot_creatures VALUES (%u, %u, %f, 0, 0, 0, %u, %u )", ptr->getEntry(), itemid, chance, mincount, maxcount);
+        {
+            auto insert = WorldDatabase.CreateStatement(WORLD_REP_LOOT_CREATURE);
+            insert->Bind(0, ptr->getEntry());
+            insert->Bind(1, itemid);
+            insert->Bind(2, chance);
+            insert->Bind(3, mincount);
+            insert->Bind(4, maxcount);
+
+            WorldDatabase.ExecuteStatement(std::move(insert));
+        }
     }
     sLootMgr.addLoot(&ptr->loot, itemid, ichance, mincount, maxcount, ptr->getWorldMap()->getDifficulty());
     return 0;

@@ -6,7 +6,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "IpBanMgr.h"
 #include <utility>
 #include <Logging/Logger.hpp>
-#include <Database/Database.hpp>
+#include <Database/LogonDatabaseConnection.hpp>
 #include "Server/Master.hpp"
 #include <Logging/Log.hpp>
 
@@ -32,7 +32,9 @@ void IpBanMgr::reload()
     std::lock_guard lock(ipBanMutex);
     _ipBanList.clear();
 
-    auto result = sLogonSQL->Query("SELECT ip, expire FROM ipbans");
+    auto stmt = sLogonSQL->CreateStatement(LOGON_SEL_IP_BANS);
+    auto result = sLogonSQL->QueryStatement(std::move(stmt));
+
     if (result)
     {
         do
@@ -131,7 +133,12 @@ IpBanStatus IpBanMgr::getBanStatus(in_addr ip_address)
 
             if (static_cast<uint32_t>(UNIXTIME) >= bannedIp->Expire)
             {
-                sLogonSQL->Execute("DELETE FROM ipbans WHERE expire = %u AND ip = \"%s\"", bannedIp->Expire, sLogonSQL->EscapeString(bannedIp->db_ip).c_str());
+                auto stmt = sLogonSQL->CreateStatement(LOGON_DEL_IP_BAN_EXACT);
+                stmt->Bind(0, bannedIp->Expire);
+                stmt->Bind(1, bannedIp->db_ip);
+
+                sLogonSQL->ExecuteStatement(std::move(stmt));
+
                 _ipBanList.erase(bannedIp);
             }
             else

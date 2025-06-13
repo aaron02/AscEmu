@@ -801,8 +801,6 @@ void MySQLDataStore::loadCreaturePropertiesTable()
 
         creatureProperties.gossipId = fields[75].asUint32();
 
-        sLogger.info("MySQLDataLoads : Loaded {} creature proto from table creature_properties", creatureProperties.Id);
-
         auto movement = getCreaturePropertiesMovement(entry);
         if (movement)
         {

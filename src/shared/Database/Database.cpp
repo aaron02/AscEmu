@@ -129,8 +129,8 @@ void Database::PrepareStatementsForConnection(MYSQL* mysql, std::unordered_map<u
 
         if (mysql_stmt_prepare(stmt, sql.c_str(), static_cast<unsigned long>(sql.length())) != 0)
         {
-            mysql_stmt_close(stmt);
             sLogger.failure("Failed to prepare statement: " + sql + " error: " + mysql_stmt_error(stmt));
+            mysql_stmt_close(stmt);
         }
 
         stmtMap[index] = stmt;
@@ -167,9 +167,10 @@ bool Database::ExecuteStatement(std::shared_ptr<PreparedStatement> stmt)
     mysql_stmt_free_result(native);
     mysql_stmt_reset(native);
 
-    std::vector<MYSQL_BIND> binds = stmt->BindToMYSQL();
+    stmt->prepareMYSQLBinds();
+    const auto& binds = stmt->getMYSQLBinds();
 
-    if (!binds.empty() && mysql_stmt_bind_param(native, binds.data()) != 0)
+    if (!binds.empty() && mysql_stmt_bind_param(native, const_cast<MYSQL_BIND*>(binds.data())) != 0)
     {
         std::cerr << "[MySQL] Bind failed: " << mysql_stmt_error(native) << "\n";
         return false;
@@ -193,16 +194,7 @@ std::unique_ptr<QueryResult> Database::QueryStatement(std::shared_ptr<PreparedSt
     if (!native)
         return nullptr;
 
-    std::vector<MYSQL_BIND> binds = stmt->BindToMYSQL();
-
-    if (!binds.empty() && mysql_stmt_bind_param(native, binds.data()) != 0)
-    {
-        std::cerr << "[MySQL] Bind failed: " << mysql_stmt_error(native) << "\n";
-        return nullptr;
-    }
-
     auto rows = QueryStatementRaw(native, stmt.get());
-
     if (rows.empty())
         return nullptr;
 
@@ -212,31 +204,21 @@ std::unique_ptr<QueryResult> Database::QueryStatement(std::shared_ptr<PreparedSt
 
 std::unique_ptr<QueryResult> Database::QueryStatement(bool* success, std::shared_ptr<PreparedStatement> stmt)
 {
-    if (success)
-        *success = false;
-
     LockedConnection conn = GetFreeConnection();
     std::unique_lock<std::mutex>& guard = conn.lock;
 
     MYSQL_STMT* native = GetPreparedStatement(conn.GetConnection(), stmt->GetIndex());
     if (!native)
-        return nullptr;
-
-    std::vector<MYSQL_BIND> binds = stmt->BindToMYSQL();
-
-    if (!binds.empty() && mysql_stmt_bind_param(native, binds.data()) != 0)
     {
-        std::cerr << "[MySQL] Bind failed: " << mysql_stmt_error(native) << "\n";
+        *success = false;
         return nullptr;
     }
+
+    *success = true;
 
     auto rows = QueryStatementRaw(native, stmt.get());
     if (rows.empty())
-    {
-        if (success)
-            *success = true;
         return nullptr;
-    }
 
     uint32_t fieldCount = rows.empty() ? 0 : static_cast<uint32_t>(rows[0].size());
     return std::make_unique<PreparedQueryResult>(std::move(rows), fieldCount);
@@ -286,8 +268,10 @@ QueryResultRows Database::QueryStatementRaw(MYSQL_STMT* stmtHandle, PreparedStat
     mysql_stmt_reset(stmtHandle);
 
     // Bind input parameters
-    std::vector<MYSQL_BIND> binds = stmt->BindToMYSQL();
-    if (!binds.empty() && mysql_stmt_bind_param(stmtHandle, binds.data()) != 0)
+    stmt->prepareMYSQLBinds();
+    const auto& binds = stmt->getMYSQLBinds();
+
+    if (!binds.empty() && mysql_stmt_bind_param(stmtHandle, const_cast<MYSQL_BIND*>(binds.data())) != 0)
     {
         std::cerr << "[MySQL] Bind failed: " << mysql_stmt_error(stmtHandle) << "\n";
         return result;
@@ -445,7 +429,7 @@ LockedConnection Database::GetFreeConnection()
             if (lock.owns_lock())
                 return LockedConnection(conn.get(), std::move(lock));
         }
-
+        sLogger.info("no worker available");
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }

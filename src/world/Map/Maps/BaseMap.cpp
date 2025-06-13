@@ -16,6 +16,9 @@ This file is released under the MIT license. See README-MIT for more information
 BaseMap::BaseMap(uint32_t mapId, MySQLStructure::MapInfo const* mapInfo, WDB::Structures::MapEntry const* mapEntry) :
         _mapEntry(mapEntry), _mapInfo(mapInfo), _mapId(mapId)
 {
+    CreatureSpawnCount = 0;
+    GameObjectSpawnCount = 0;
+
     //new stuff Load Spawns
     loadSpawns(false);
 

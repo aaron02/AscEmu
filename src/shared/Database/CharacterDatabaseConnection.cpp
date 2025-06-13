@@ -19,8 +19,8 @@ void CharacterDatabaseConnection::PrepareStatements()
 
     // Account
     RegisterStatement(CHAR_UPD_ACCOUNT_DATA, "UPDATE account_data SET uiconfig0 = ?, uiconfig1 = ?, uiconfig2 = ?, uiconfig3 = ?, uiconfig4 = ?, uiconfig5 = ?, uiconfig6 = ?, uiconfig7 = ? WHERE acct = ?");
-    RegisterStatement(CHAR_SEL_ACCOUNT_INFO, "SELECT acct, login, gm, email, lastip, muted FROM accounts WHERE acct = ?"); // Table not in Character Database
-    RegisterStatement(CHAR_SEL_ACCT_BY_NAME, "SELECT acct FROM characters WHERE name = ?"); // Table not in Character Database
+    //RegisterStatement(CHAR_SEL_ACCOUNT_INFO, "SELECT acct, login, gm, email, lastip, muted FROM accounts WHERE acct = ?"); // Table not in Character Database
+    RegisterStatement(CHAR_SEL_ACCT_BY_NAME, "SELECT acct FROM characters WHERE name = ?");
 
     // Survey
     RegisterStatement(CHAR_SEL_MAX_GM_SURVEY_ID, "SELECT MAX(survey_id) FROM gm_survey");
@@ -67,6 +67,13 @@ void CharacterDatabaseConnection::PrepareStatements()
     RegisterStatement(CHARACTER_CLIENT_ADDON_BANNED_SELECT, "SELECT id, name, banned, UNIX_TIMESTAMP(timestamp), version FROM clientaddons WHERE banned = 1");
 
     // Character
+    RegisterStatement(CHAR_SEL_CHARACTER_ENUM, 
+        "SELECT guid, level, race, class, gender, bytes, bytes2, name, positionX, positionY, "
+        "positionZ, mapId, zoneId, banned, restState, deathstate, login_flags, player_flags, guild_members.guildId "
+        "FROM characters "
+        "LEFT JOIN guild_members ON characters.guid = guild_members.playerid "
+        "WHERE acct = ? "
+        "ORDER BY guid LIMIT 10");
     RegisterStatement(CHAR_CHARACTER_NAME_UPDATE, "UPDATE characters SET name = ? WHERE guid = ?");
     RegisterStatement(CHAR_CHARACTER_LOGIN_FLAGS_UPDATE, "UPDATE characters SET login_flags = ? WHERE guid = ?");
     RegisterStatement(CHAR_BANNED_NAME_INSERT, "INSERT INTO banned_names VALUES (?)");

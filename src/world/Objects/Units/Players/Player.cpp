@@ -15500,75 +15500,92 @@ void Player::loadFromDBProc(std::vector<std::unique_ptr<QueryResult>> results)
 
 void Player::loadBasicCharacterDataFromDB(std::unique_ptr<QueryResult> result)
 {
-
+    sLogger.info("loadBasicCharacterDataFromDB:");
 }
 
 void Player::loadTutorialsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadTutorialsFromDB:");
 }
 
 void Player::loadCooldownsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadCooldownsFromDB:");
 }
 
 void Player::loadQuestLogFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadQuestLogFromDB:");
 }
 
 void Player::loadItemsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadItemsFromDB:");
 }
 
 void Player::loadPetsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadPetsFromDB:");
 }
 
 void Player::loadSummonSpellsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadSummonSpellsFromDB:");
 }
 
 void Player::loadMailboxFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadMailboxFromDB:");
 }
 
 void Player::loadSocialFriendsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadSocialFriendsFromDB:");
 }
 
 void Player::loadSocialFriendsForFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadSocialFriendsForFromDB:");
 }
 
 void Player::loadSocialIgnoresFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadSocialIgnoresFromDB:");
 }
 
 void Player::loadEquipmentSetsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadEquipmentSetsFromDB:");
 }
 
 void Player::loadReputationsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadReputationsFromDB:");
 }
 
 void Player::loadSpellsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadSpellsFromDB:");
 }
 
 void Player::loadDeletedSpellsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadDeletedSpellsFromDB:");
 }
 
 void Player::loadSkillsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadSkillsFromDB:");
 }
 
 void Player::loadAchievementsFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadAchievementsFromDB:");
 }
 
 void Player::loadAchievementProgressFromDB(std::unique_ptr<QueryResult> result)
 {
+    sLogger.info("loadAchievementProgressFromDB:");
 }
 
 void Player::_loadQuestLogEntry(QueryResult* result)

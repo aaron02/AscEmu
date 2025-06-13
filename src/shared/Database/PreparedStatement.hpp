@@ -35,7 +35,8 @@ class PreparedStatement
 public:
     explicit PreparedStatement(uint32_t index);
 
-    std::vector<MYSQL_BIND> BindToMYSQL();
+    void prepareMYSQLBinds();
+    const std::vector<MYSQL_BIND>& getMYSQLBinds() const;
 
     void Bind(size_t index, const BindValue& value);
 
@@ -45,6 +46,8 @@ public:
 private:
     uint32_t m_index;
     std::vector<BindValue> m_bindValues;
+    std::vector<MYSQL_BIND> m_binds;
     std::vector<std::shared_ptr<void>> m_bindStorage;
+
     bool m_trueLiteral = true;
 };

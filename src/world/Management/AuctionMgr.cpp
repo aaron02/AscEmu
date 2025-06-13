@@ -47,6 +47,7 @@ void AuctionMgr::loadAuctionHouses()
             const uint32_t period = (rowCount / 20) + 1;
             uint32_t c = 0;
 
+            m_auctionHouses.reserve(rowCount);
             do
             {
                 uint32_t ahgroup = res->Fetch()[0].asUint32();

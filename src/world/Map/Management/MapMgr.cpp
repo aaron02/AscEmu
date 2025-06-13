@@ -121,25 +121,27 @@ void MapMgr::update()
 
 void MapMgr::createBaseMap(uint32_t mapId)
 {
-    std::scoped_lock<std::mutex> lock(m_mapsLock);
-
     BaseMap* map = findBaseMap(mapId);
-    if (map != nullptr)
-        return;
 
-    const auto mapEntry = sMapStore.lookupEntry(mapId);
-    if (mapEntry == nullptr)
-        return;
-
-    const auto mapInfo = sMySQLStore.getWorldMapInfo(mapId);
-    if (mapInfo == nullptr)
-        return;
-
-    m_BaseMaps.insert_or_assign(mapId, std::make_unique<BaseMap>(mapId, mapInfo, mapEntry));
-
-    if (!mapEntry->instanceable())
+    if (map == nullptr)
     {
-        m_WorldMaps.insert_or_assign(mapId, createWorldMap(mapId, worldConfig.server.mapUnloadTime * 1000));
+        std::scoped_lock<std::mutex> lock(m_mapsLock);
+
+        // Only Create Valid Maps
+        const auto mapEntry = sMapStore.lookupEntry(mapId);
+        if (mapEntry == nullptr)
+            return;
+
+        const auto mapInfo = sMySQLStore.getWorldMapInfo(mapId);
+        if (mapInfo == nullptr)
+            return;
+
+        m_BaseMaps.insert_or_assign(mapId, std::make_unique<BaseMap>(mapId, mapInfo, mapEntry));
+
+        if (!mapEntry->instanceable())
+        {
+            m_WorldMaps.insert_or_assign(mapId, createWorldMap(mapId, worldConfig.server.mapUnloadTime * 1000));
+        }
     }
 }
 

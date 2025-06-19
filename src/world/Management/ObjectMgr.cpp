@@ -519,7 +519,7 @@ void ObjectMgr::loadCorpsesForInstance(WorldMap* _worldMap)
             corpse->setZoneId(fields[5].asUint32());
             corpse->SetMapId(fields[6].asUint32());
             corpse->SetInstanceID(fields[7].asUint32());
-            corpse->setCorpseDataFromDbString(fields[8].asCString());
+            corpse->setCorpseDataFromDbString(fields[8].asString());
 
             if (corpse->getDisplayId() == 0)
                 continue;
@@ -547,7 +547,7 @@ Corpse* ObjectMgr::loadCorpseByGuid(const uint32_t _corpseGuid)
         corpse->SetPosition(field[1].asFloat(), field[2].asFloat(), field[3].asFloat(), field[4].asFloat());
         corpse->setZoneId(field[5].asUint32());
         corpse->SetMapId(field[6].asUint32());
-        corpse->setCorpseDataFromDbString(field[7].asCString());
+        corpse->setCorpseDataFromDbString(field[7].asString());
 
         if (corpse->getDisplayId() == 0)
             return nullptr;
@@ -748,8 +748,8 @@ void ObjectMgr::loadAchievementRewards()
         reward.titel_H = fields[3].asUint32();
         reward.itemId = fields[4].asUint32();
         reward.sender = fields[5].asUint32();
-        reward.subject = fields[6].asCString() ? fields[6].asCString() : "";
-        reward.text = fields[7].asCString() ? fields[7].asCString() : "";
+        reward.subject = fields[6].asString();
+        reward.text = fields[7].asString();
 
         if (reward.gender > GENDER_NONE)
         {
@@ -1834,7 +1834,7 @@ void ObjectMgr::loadTrainers()
             if (!trainer->Cannot_Train_GossipTextId)
                 trainer->Cannot_Train_GossipTextId = 1;
 
-            std::string temp = fields[9].asCString();
+            std::string temp = fields[9].asString();
             if (temp.length())
                 trainer->UIMessage = temp;
             else
@@ -1997,7 +1997,7 @@ void ObjectMgr::loadInstanceEncounters()
         auto creditType = fields[1].asUint8();
         auto creditEntry = fields[2].asUint32();
         auto lastEncounterDungeon = fields[3].asUint16();
-        auto dungeonEncounterName = fields[4].asCString();
+        auto dungeonEncounterName = fields[4].asString();
 
 #if VERSION_STRING <= TBC
         auto mapId = fields[5].asUint32();
@@ -2248,7 +2248,7 @@ void ObjectMgr::loadCreatureTimedEmotes()
         const auto& timedEmotes = timedEmoteItr->second->emplace_back(std::make_unique<SpawnTimedEmotes>());
         timedEmotes->type = field[2].asUint8();
         timedEmotes->value = field[3].asUint32();
-        timedEmotes->msg = field[4].asCString();
+        timedEmotes->msg = field[4].asString();
         timedEmotes->msg_type = field[5].asUint8();
         timedEmotes->msg_lang = field[6].asUint8();
         timedEmotes->expire_after = field[7].asUint32();

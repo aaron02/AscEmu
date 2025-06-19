@@ -1173,13 +1173,13 @@ void Guild::sendLoginInfo(WorldSession* session)
 bool Guild::loadGuildFromDB(Field* fields)
 {
     m_id = fields[0].asUint32();
-    m_name = fields[1].asCString();
+    m_name = fields[1].asString();
     m_leaderGuid = WoWGuid(fields[2].asUint32(), 0, HIGHGUID_TYPE_PLAYER).getRawGuid();
 
     m_emblemInfo.loadEmblemInfoFromDB(fields);
 
-    m_info = fields[8].asCString();
-    m_motd = fields[9].asCString();
+    m_info = fields[8].asString();
+    m_motd = fields[9].asString();
     m_createdDate = time_t(fields[10].asUint32());
     m_bankMoney = fields[11].asUint64();
 #if VERSION_STRING >= Cata
@@ -2774,8 +2774,8 @@ bool Guild::GuildMember::loadGuildMembersFromDB(Field* fields, Field* fields2)
 
     plr->m_guild = fields[0].asUint32();
     plr->guildRank = fields[2].asUint32();
-    mPublicNote = fields[3].asCString();
-    mOfficerNote = fields[4].asCString();
+    mPublicNote = fields[3].asString();
+    mOfficerNote = fields[4].asString();
 
     for (uint8_t i = 0; i <= MAX_GUILD_BANK_TABS; ++i)
         mBankWithdraw[i] = fields2[1 + i].asUint32();

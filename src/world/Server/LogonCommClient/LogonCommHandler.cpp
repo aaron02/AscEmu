@@ -109,7 +109,7 @@ void LogonCommHandler::loadAccountPermissions()
         do
         {
             uint32_t id = result->Fetch()[0].asUint32();
-            std::string dbPermission = result->Fetch()[1].asCString();
+            std::string dbPermission = result->Fetch()[1].asString();
             if (AscEmu::Util::Strings::isEqual(dbPermission, "az"))
                 dbPermission = "12stulfbvrjiqdmwcogenaz";
 

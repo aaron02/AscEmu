@@ -18,7 +18,7 @@ Charter::Charter(Field const* _field)
     m_charterId = _field[0].asUint32();
     m_charterType = _field[1].asUint8();
     m_leaderGuid = _field[2].asUint32();
-    m_guildName = _field[3].asCString();
+    m_guildName = _field[3].asString();
     m_itemGuid = _field[4].asUint64();
 
     m_availableSlots = getNumberOfAvailableSlots();

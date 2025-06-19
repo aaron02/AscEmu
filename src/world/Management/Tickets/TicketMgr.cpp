@@ -31,17 +31,17 @@ GM_Ticket::GM_Ticket(Field const* fields)
 {
     guid = fields[0].asUint64();
     playerGuid = fields[1].asUint64();
-    name = fields[2].asCString();
+    name = fields[2].asString();
     level = fields[3].asUint32();
     map = fields[4].asUint32();
     posX = fields[5].asFloat();
     posY = fields[6].asFloat();
     posZ = fields[7].asFloat();
-    message = fields[8].asCString();
+    message = fields[8].asString();
     timestamp = fields[9].asUint32();
     deleted = fields[10].asUint32() == 1;
     assignedToPlayer = fields[11].asUint64();
-    comment = fields[12].asCString();
+    comment = fields[12].asString();
 }
 
 TicketMgr& TicketMgr::getInstance()

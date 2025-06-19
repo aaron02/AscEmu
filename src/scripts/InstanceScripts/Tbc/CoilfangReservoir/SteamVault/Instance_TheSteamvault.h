@@ -64,7 +64,7 @@ enum CreatureSpells
 {
     // CoilfangEngineerAI
     BOMB                        = 22334,    //40332 // AOE
-    NET                         = 6533,     //38338 // Should stay for 5 or 8 sec?
+    NET2                         = 6533,     //38338 // Should stay for 5 or 8 sec?
 
     // CoilfangOracleAI
     FROST_SHOCK                 = 22582,    //34353

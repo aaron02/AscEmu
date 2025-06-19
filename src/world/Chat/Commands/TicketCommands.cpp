@@ -35,7 +35,7 @@ bool ChatHandler::HandleTicketListCommand(const char* /*args*/, WorldSession* m_
     {
         Field* fields = result->Fetch();
         sstext << "TicketID: " << fields[0].asUint16()
-            << " | Player: " << fields[2].asCString()
+            << " | Player: " << fields[2].asString()
             << " | Opened: " << Util::GetDateStringFromSeconds((uint32_t)UNIXTIME - fields[9].asUint32())
             << '\n';
     } while (result->NextRow());
@@ -59,7 +59,7 @@ bool ChatHandler::HandleTicketListAllCommand(const char* /*args*/, WorldSession*
     {
         Field* fields = result->Fetch();
         sstext << "TicketID: " << fields[0].asUint16()
-            << " | Player: " << fields[2].asCString()
+            << " | Player: " << fields[2].asString()
             << " | Opened: " << Util::GetDateStringFromSeconds((uint32_t)UNIXTIME - fields[9].asUint32())
             << '\n';
     } while (result->NextRow());
@@ -89,9 +89,9 @@ bool ChatHandler::HandleTicketGetCommand(const char* args, WorldSession* m_sessi
     Field* fields = result->Fetch();
 
     sstext << "Ticket ID: " << ticketID
-        << " | Player: " << fields[2].asCString() << '\n'
+        << " | Player: " << fields[2].asString() << '\n'
         << "======= Content =======" << '\n'
-        << fields[8].asCString() << '\n';
+        << fields[8].asString() << '\n';
 
     SendMultilineMessage(m_session, sstext.str().c_str());
     return true;

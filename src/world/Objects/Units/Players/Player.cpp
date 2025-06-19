@@ -175,7 +175,7 @@ CachedCharacterInfo::CachedCharacterInfo(Field const* fields)
 {
     guid = fields[0].asUint32();
 
-    std::string characterNameDB = fields[1].asCString();
+    std::string characterNameDB = fields[1].asString();
     AscEmu::Util::Strings::capitalize(characterNameDB);
 
     name = characterNameDB;
@@ -9152,7 +9152,7 @@ void Player::loadFriendList()
 
             auto* const socialField = result->Fetch();
             socialFriend.friendGuid = socialField[0].asUint32();
-            socialFriend.note = socialField[1].asCString();
+            socialFriend.note = socialField[1].asString();
 
             m_socialIFriends.push_back(socialFriend);
 
@@ -14152,7 +14152,7 @@ void Player::_loadPet(QueryResult* result)
         auto pet = std::make_unique<PetCache>();
         pet->number = fields[1].asUint8();
         pet->type = fields[2].asUint8();
-        pet->name = fields[3].asCString();
+        pet->name = fields[3].asString();
         pet->entry = fields[4].asUint32();
 
         // Check that creature properties exist
@@ -14166,7 +14166,7 @@ void Player::_loadPet(QueryResult* result)
         pet->slot = fields[8].asUint8();
         pet->active = fields[9].asBool();
         pet->alive = fields[10].asBool();
-        pet->actionbar = fields[11].asCString();
+        pet->actionbar = fields[11].asString();
         pet->reset_time = fields[12].asUint32();
         pet->reset_cost = fields[13].asUint32();
         pet->spellid = fields[14].asUint32();

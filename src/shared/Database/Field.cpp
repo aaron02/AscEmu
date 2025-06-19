@@ -10,7 +10,7 @@ This file is released under the MIT license. See README-MIT for more information
 bool Field::isSet() const { return m_value ? true : false; }
 void Field::setValue(const char* value) { m_value = value; }
 
-const char* Field::asCString() const { return m_value ? m_value : ""; }
+std::string Field::asString() const { return m_value ? std::string(m_value) : std::string(); }
 
 float Field::asFloat() const { return m_value ? Util::stringToFloat(m_value) : 0.0f; }
 

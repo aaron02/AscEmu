@@ -1744,27 +1744,27 @@ void WorldSession::handleWhoIsOpcode(WorldPacket& recvPacket)
     }
 
     Field* fields = accountInfoResult->Fetch();
-    std::string acctID = fields[0].asCString();
+    std::string acctID = fields[0].asString();
     if (acctID.empty())
         acctID = "Unknown";
 
-    std::string acctName = fields[1].asCString();
+    std::string acctName = fields[1].asString();
     if (acctName.empty())
         acctName = "Unknown";
 
-    std::string acctPerms = fields[2].asCString();
+    std::string acctPerms = fields[2].asString();
     if (acctPerms.empty())
         acctPerms = "Unknown";
 
-    std::string acctEmail = fields[3].asCString();
+    std::string acctEmail = fields[3].asString();
     if (acctEmail.empty())
         acctEmail = "Unknown";
 
-    std::string acctIP = fields[4].asCString();
+    std::string acctIP = fields[4].asString();
     if (acctIP.empty())
         acctIP = "Unknown";
 
-    std::string acctMuted = fields[5].asCString();
+    std::string acctMuted = fields[5].asString();
     if (acctMuted.empty())
         acctMuted = "Unknown";
 

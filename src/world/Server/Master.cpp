@@ -558,17 +558,17 @@ bool Master::ValidateDatabaseVersion(Database& db, const uint32_t stmtIndex, con
         return false;
     }
 
-    const char* version = result->Fetch()[0].asCString();
-    sLogger.info("Database : Last {} database update: {}", dbName, version);
+    std::string versionStr = result->Fetch()[0].asString();
+    sLogger.info("Database : Last {} database update: {}", dbName, versionStr);
 
-    int cmp = std::strcmp(version, requiredVersion);
+    int cmp = std::strcmp(versionStr.c_str(), requiredVersion);
     if (cmp != 0)
     {
         sLogger.fatal("Database : Last {} database update doesn't match required version: {}.", dbName, requiredVersion);
 
         if (cmp < 0)
         {
-            sLogger.fatal("Database : You need to apply the {} update queries newer than {}. Exiting.", dbName, version);
+            sLogger.fatal("Database : You need to apply the {} update queries newer than {}. Exiting.", dbName, versionStr);
             sLogger.fatal("Database : You can find them in the sql/{}_updates sub-directory.", dbName);
         }
         else

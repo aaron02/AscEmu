@@ -34,8 +34,8 @@ void CalendarMgr::loadFromDB()
 
             uint64_t entry = fields[0].asUint32();
             uint32_t creator = fields[1].asUint32();
-            std::string title = fields[2].asCString();
-            std::string description = fields[3].asCString();
+            std::string title = fields[2].asString();
+            std::string description = fields[3].asString();
             auto type = static_cast<CalendarEventType>(fields[4].asUint32());
             uint32_t dungeon = fields[5].asUint32();
             time_t date = fields[6].asUint32();
@@ -75,7 +75,7 @@ void CalendarMgr::loadFromDB()
             auto status = static_cast<CalendarInviteStatus>(fields[4].asUint32());
             time_t statustime = fields[5].asUint32();
             uint32_t rank = fields[6].asUint32();
-            std::string text = fields[7].asCString();
+            std::string text = fields[7].asString();
 
             m_invites[event].emplace_back(std::make_unique<CalendarInvite>(
                 invite_id, event, invitee, sender, status, statustime, rank, text));

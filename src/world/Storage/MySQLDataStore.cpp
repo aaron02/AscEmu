@@ -192,7 +192,7 @@ void MySQLDataStore::loadItemPagesTable()
     {
         Field* fields = itempages_result->Fetch();
 
-        addItemPage(fields[0].asUint32(), fields[1].asCString(), fields[2].asUint32());
+        addItemPage(fields[0].asUint32(), fields[1].asString(), fields[2].asUint32());
 
         ++itempages_count;
     } while (itempages_result->NextRow());
@@ -259,7 +259,7 @@ void MySQLDataStore::loadItemPropertiesTable()
         itemProperties.Class = fields[2].asUint32();
         itemProperties.SubClass = fields[3].asUint16();
         itemProperties.unknown_bc = fields[4].asUint32(true);
-        itemProperties.Name = fields[5].asCString();
+        itemProperties.Name = fields[5].asString();
         itemProperties.DisplayInfoID = fields[6].asUint32();
         itemProperties.Quality = fields[7].asUint32();
         itemProperties.Flags = fields[8].asUint32();
@@ -322,7 +322,7 @@ void MySQLDataStore::loadItemPropertiesTable()
         }
 
         itemProperties.Bonding = fields[96].asUint32();
-        itemProperties.Description = fields[97].asCString();
+        itemProperties.Description = fields[97].asString();
         uint32_t page_id = fields[98].asUint32();
         if (page_id != 0)
         {
@@ -634,15 +634,15 @@ void MySQLDataStore::loadCreaturePropertiesTable()
             }
         }
 
-        creatureProperties.Name = fields[7].asCString();
+        creatureProperties.Name = fields[7].asString();
 
         //lowercase
         std::string lower_case_name = creatureProperties.Name;
         AscEmu::Util::Strings::toLowerCase(lower_case_name);
         creatureProperties.lowercase_name = lower_case_name;
 
-        creatureProperties.SubName = fields[8].asCString();
-        creatureProperties.icon_name = fields[9].asCString();
+        creatureProperties.SubName = fields[8].asString();
+        creatureProperties.icon_name = fields[9].asString();
         creatureProperties.typeFlags = fields[10].asUint32();
         creatureProperties.Type = fields[11].asUint32();
         creatureProperties.Family = fields[12].asUint32();
@@ -730,7 +730,7 @@ void MySQLDataStore::loadCreaturePropertiesTable()
 
         creatureProperties.CombatReach = fields[42].asFloat();
         creatureProperties.BoundingRadius = fields[43].asFloat();
-        creatureProperties.aura_string = fields[44].asCString();
+        creatureProperties.aura_string = fields[44].asString();
         creatureProperties.isBoss = fields[45].asBool();
         creatureProperties.money = fields[46].asUint32();
         creatureProperties.isTriggerNpc = fields[47].asBool();
@@ -944,10 +944,10 @@ void MySQLDataStore::loadGameObjectPropertiesTable()
         gameobjecProperties.entry = entry;
         gameobjecProperties.type = fields[1].asUint32();
         gameobjecProperties.display_id = fields[2].asUint32();
-        gameobjecProperties.name = fields[3].asCString();
-        gameobjecProperties.category_name = fields[4].asCString();
-        gameobjecProperties.cast_bar_text = fields[5].asCString();
-        gameobjecProperties.Unkstr = fields[6].asCString();
+        gameobjecProperties.name = fields[3].asString();
+        gameobjecProperties.category_name = fields[4].asString();
+        gameobjecProperties.cast_bar_text = fields[5].asString();
+        gameobjecProperties.Unkstr = fields[6].asString();
 
         gameobjecProperties.raw.parameter_0 = fields[7].asUint32();
         gameobjecProperties.raw.parameter_1 = fields[8].asUint32();
@@ -1156,16 +1156,16 @@ void MySQLDataStore::loadQuestPropertiesTable()
         questInfo.srcitem = fields[17].asUint32();
         questInfo.srcitemcount = fields[18].asUint32();
 
-        questInfo.title = fields[19].asCString();
-        questInfo.details = fields[20].asCString();
-        questInfo.objectives = fields[21].asCString();
-        questInfo.completiontext = fields[22].asCString();
-        questInfo.incompletetext = fields[23].asCString();
-        questInfo.endtext = fields[24].asCString();
+        questInfo.title = fields[19].asString();
+        questInfo.details = fields[20].asString();
+        questInfo.objectives = fields[21].asString();
+        questInfo.completiontext = fields[22].asString();
+        questInfo.incompletetext = fields[23].asString();
+        questInfo.endtext = fields[24].asString();
 
         for (uint8_t i = 0; i < 4; ++i)
         {
-            questInfo.objectivetexts[i] = fields[25 + i].asCString();
+            questInfo.objectivetexts[i] = fields[25 + i].asString();
         }
 
         for (uint8_t i = 0; i < MAX_REQUIRED_QUEST_ITEM; ++i)
@@ -1247,14 +1247,14 @@ void MySQLDataStore::loadQuestPropertiesTable()
             questInfo.required_triggers[i] = fields[102 + i].asUint32();
         }
 
-        questInfo.x_or_y_quest_string = fields[106].asCString();
+        questInfo.x_or_y_quest_string = fields[106].asString();
 
         for (uint8_t i = 0; i < 4; ++i)
         {
             questInfo.required_quests[i] = fields[107 + i].asUint32();
         }
 
-        questInfo.remove_quests = fields[111].asCString();
+        questInfo.remove_quests = fields[111].asString();
 
         for (uint8_t i = 0; i < 4; ++i)
         {
@@ -1602,7 +1602,7 @@ void MySQLDataStore::loadNpcTextTable()
 
             for (uint8_t j = 0; j < 2; ++j)
             {
-                npcText.textHolder[i].texts[j] = fields[2 + j].asCString();
+                npcText.textHolder[i].texts[j] = fields[2 + j].asString();
             }
 
             npcText.textHolder[i].language = fields[4].asUint32();
@@ -1659,7 +1659,7 @@ void MySQLDataStore::loadNpcScriptTextTable()
         MySQLStructure::NpcScriptText& npcScriptText = _npcScriptTextStore[entry];
 
         npcScriptText.id = entry;
-        npcScriptText.text = fields[1].asCString();
+        npcScriptText.text = fields[1].asString();
         npcScriptText.creature_entry = fields[2].asUint32();
         npcScriptText.text_id = fields[3].asUint32();
         npcScriptText.type = fields[4].asUint8();
@@ -1734,7 +1734,7 @@ void MySQLDataStore::loadGossipMenuOptionTable()
         MySQLStructure::GossipMenuOption& gossipMenuOptionText = _gossipMenuOptionStore[entry];
 
         gossipMenuOptionText.id = entry;
-        gossipMenuOptionText.text = fields[1].asCString();
+        gossipMenuOptionText.text = fields[1].asString();
 
         ++gossip_menu_optiont_count;
     } while (gossip_menu_optiont_result->NextRow());
@@ -1932,7 +1932,7 @@ void MySQLDataStore::loadWorldMapInfoTable()
         mapInfo.repopy = fields[7].asFloat();
         mapInfo.repopz = fields[8].asFloat();
         mapInfo.repopmapid = fields[9].asUint32();
-        mapInfo.name = fields[10].asCString();
+        mapInfo.name = fields[10].asString();
         mapInfo.flags = fields[11].asUint32();
         mapInfo.cooldown = fields[12].asUint32();
         mapInfo.lvl_mod_a = fields[13].asUint32();
@@ -2190,7 +2190,7 @@ void MySQLDataStore::loadWorldStringsTable()
         MySQLStructure::WorldStringTable& worldString = _worldStringsStore[entry];
 
         worldString.id = entry;
-        worldString.text = fields[1].asCString();
+        worldString.text = fields[1].asString();
 
         ++worldstring_tables_count;
     } while (worldstring_tables_result->NextRow());
@@ -2239,7 +2239,7 @@ void MySQLDataStore::loadPointsOfInterestTable()
         pointOfInterest.icon = fields[3].asUint32();
         pointOfInterest.flags = fields[4].asUint32();
         pointOfInterest.data = fields[5].asUint32();
-        pointOfInterest.iconName = fields[6].asCString();
+        pointOfInterest.iconName = fields[6].asString();
 
         ++points_of_interest_count;
     } while (points_of_interest_result->NextRow());
@@ -3076,7 +3076,7 @@ void MySQLDataStore::loadBroadcastTable()
         uint32_t random_interval = fields[2].asUint32();
         broadcast.randomInterval = random_interval * 60;
         broadcast.nextUpdate = broadcast.interval + (uint32_t)UNIXTIME;
-        broadcast.text = fields[3].asCString();
+        broadcast.text = fields[3].asString();
 
         ++broadcast_count;
 
@@ -3121,7 +3121,7 @@ void MySQLDataStore::loadAreaTriggerTable()
         areaTrigger.type = fields[1].asUint8();
         areaTrigger.mapId = fields[2].asUint16();
         areaTrigger.pendingScreen = fields[3].asUint32();
-        areaTrigger.name = fields[4].asCString();
+        areaTrigger.name = fields[4].asString();
         areaTrigger.x = fields[5].asFloat();
         areaTrigger.y = fields[6].asFloat();
         areaTrigger.z = fields[7].asFloat();
@@ -3269,8 +3269,8 @@ void MySQLDataStore::loadWordFilterCharacterNames()
         Field* fields = filter_character_names_result->Fetch();
 
         MySQLStructure::WordFilterCharacterNames wfCharacterNames;
-        wfCharacterNames.name = fields[0].asCString();
-        wfCharacterNames.nameReplace = fields[1].asCString();
+        wfCharacterNames.name = fields[0].asString();
+        wfCharacterNames.nameReplace = fields[1].asString();
         if (wfCharacterNames.nameReplace.empty())
         {
             wfCharacterNames.nameReplace = "?%$?%$";
@@ -3323,8 +3323,8 @@ void MySQLDataStore::loadWordFilterChat()
         Field* fields = filter_chat_result->Fetch();
 
         MySQLStructure::WordFilterChat wfChat;
-        wfChat.word = fields[0].asCString();
-        wfChat.wordReplace = fields[1].asCString();
+        wfChat.word = fields[0].asString();
+        wfChat.wordReplace = fields[1].asString();
         if (wfChat.wordReplace.empty())
         {
             wfChat.blockMessage = true;
@@ -3372,10 +3372,10 @@ void MySQLDataStore::loadLocalesCreature()
         MySQLStructure::LocalesCreature& localCreature = _localesCreatureStore[i];
 
         localCreature.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localCreature.languageCode = Util::getLanguagesIdFromString(locString);
-        localCreature.name = strdup(fields[2].asCString());
-        localCreature.subName = strdup(fields[3].asCString());
+        localCreature.name = strdup(fields[2].asString().c_str());
+        localCreature.subName = strdup(fields[3].asString().c_str());
 
         ++load_count;
 
@@ -3426,9 +3426,9 @@ void MySQLDataStore::loadLocalesGameobject()
         MySQLStructure::LocalesGameobject& localGameobject = _localesGameobjectStore[i];
 
         localGameobject.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localGameobject.languageCode = Util::getLanguagesIdFromString(locString);
-        localGameobject.name = strdup(fields[2].asCString());
+        localGameobject.name = strdup(fields[2].asString().c_str());
 
         ++load_count;
 
@@ -3479,9 +3479,9 @@ void MySQLDataStore::loadLocalesGossipMenuOption()
         MySQLStructure::LocalesGossipMenuOption& localGossipMenuOption = _localesGossipMenuOptionStore[1];
 
         localGossipMenuOption.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localGossipMenuOption.languageCode = Util::getLanguagesIdFromString(locString);
-        localGossipMenuOption.name = strdup(fields[2].asCString());
+        localGossipMenuOption.name = strdup(fields[2].asString().c_str());
 
         ++load_count;
 
@@ -3532,10 +3532,10 @@ void MySQLDataStore::loadLocalesItem()
         MySQLStructure::LocalesItem& localItem = _localesItemStore[i];
 
         localItem.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localItem.languageCode = Util::getLanguagesIdFromString(locString);
-        localItem.name = strdup(fields[2].asCString());
-        localItem.description = strdup(fields[3].asCString());
+        localItem.name = strdup(fields[2].asString().c_str());
+        localItem.description = strdup(fields[3].asString().c_str());
 
         ++load_count;
 
@@ -3607,9 +3607,9 @@ void MySQLDataStore::loadLocalesItemPages()
         MySQLStructure::LocalesItemPages& localesItemPages = _localesItemPagesStore[i];
 
         localesItemPages.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localesItemPages.languageCode = Util::getLanguagesIdFromString(locString);
-        localesItemPages.text = strdup(fields[2].asCString());
+        localesItemPages.text = strdup(fields[2].asString().c_str());
 
         ++load_count;
 
@@ -3660,9 +3660,9 @@ void MySQLDataStore::loadLocalesNpcScriptText()
         MySQLStructure::LocalesNpcScriptText& localNpcScriptText = _localesNpcScriptTextStore[i];
 
         localNpcScriptText.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localNpcScriptText.languageCode = Util::getLanguagesIdFromString(locString);
-        localNpcScriptText.text = strdup(fields[2].asCString());
+        localNpcScriptText.text = strdup(fields[2].asString().c_str());
 
         ++load_count;
 
@@ -3713,13 +3713,13 @@ void MySQLDataStore::loadLocalesNpcText()
         MySQLStructure::LocalesNpcGossipText& localNpcGossipText = _localesNpcGossipTextStore[i];
 
         localNpcGossipText.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localNpcGossipText.languageCode = Util::getLanguagesIdFromString(locString);
 
         for (uint8_t j = 0; j < 8; ++j)
         {
-            localNpcGossipText.texts[j][0] = strdup(fields[2 + (2 * j)].asCString());
-            localNpcGossipText.texts[j][1] = strdup(fields[3 + (2 * j)].asCString());
+            localNpcGossipText.texts[j][0] = strdup(fields[2 + (2 * j)].asString().c_str());
+            localNpcGossipText.texts[j][1] = strdup(fields[3 + (2 * j)].asString().c_str());
         }
 
         ++load_count;
@@ -3771,18 +3771,18 @@ void MySQLDataStore::loadLocalesQuest()
         MySQLStructure::LocalesQuest& localQuest = _localesQuestStore[i];
 
         localQuest.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localQuest.languageCode = Util::getLanguagesIdFromString(locString);
-        localQuest.title = strdup(fields[2].asCString());
-        localQuest.details = strdup(fields[3].asCString());
-        localQuest.objectives = strdup(fields[4].asCString());
-        localQuest.completionText = strdup(fields[5].asCString());
-        localQuest.incompleteText = strdup(fields[6].asCString());
-        localQuest.endText = strdup(fields[7].asCString());
-        localQuest.objectiveText[0] = strdup(fields[8].asCString());
-        localQuest.objectiveText[1] = strdup(fields[9].asCString());
-        localQuest.objectiveText[2] = strdup(fields[10].asCString());
-        localQuest.objectiveText[3] = strdup(fields[11].asCString());
+        localQuest.title = strdup(fields[2].asString().c_str());
+        localQuest.details = strdup(fields[3].asString().c_str());
+        localQuest.objectives = strdup(fields[4].asString().c_str());
+        localQuest.completionText = strdup(fields[5].asString().c_str());
+        localQuest.incompleteText = strdup(fields[6].asString().c_str());
+        localQuest.endText = strdup(fields[7].asString().c_str());
+        localQuest.objectiveText[0] = strdup(fields[8].asString().c_str());
+        localQuest.objectiveText[1] = strdup(fields[9].asString().c_str());
+        localQuest.objectiveText[2] = strdup(fields[10].asString().c_str());
+        localQuest.objectiveText[3] = strdup(fields[11].asString().c_str());
 
         ++load_count;
 
@@ -3833,9 +3833,9 @@ void MySQLDataStore::loadLocalesWorldbroadcast()
         MySQLStructure::LocalesWorldbroadcast& localWorldbroadcast = _localesWorldbroadcastStore[i];
 
         localWorldbroadcast.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localWorldbroadcast.languageCode = Util::getLanguagesIdFromString(locString);
-        localWorldbroadcast.text = strdup(fields[2].asCString());
+        localWorldbroadcast.text = strdup(fields[2].asString().c_str());
 
         ++load_count;
 
@@ -3886,9 +3886,9 @@ void MySQLDataStore::loadLocalesWorldmapInfo()
         MySQLStructure::LocalesWorldmapInfo& localWorldmapInfo = _localesWorldmapInfoStore[i];
 
         localWorldmapInfo.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localWorldmapInfo.languageCode = Util::getLanguagesIdFromString(locString);
-        localWorldmapInfo.text = strdup(fields[2].asCString());
+        localWorldmapInfo.text = strdup(fields[2].asString().c_str());
 
         ++load_count;
 
@@ -3939,9 +3939,9 @@ void MySQLDataStore::loadLocalesWorldStringTable()
         MySQLStructure::LocalesWorldStringTable& localWorldStringTable = _localesWorldStringTableStore[i];
 
         localWorldStringTable.entry = fields[0].asUint32();
-        std::string locString = fields[1].asCString();
+        std::string locString = fields[1].asString();
         localWorldStringTable.languageCode = Util::getLanguagesIdFromString(locString);
-        localWorldStringTable.text = strdup(fields[2].asCString());
+        localWorldStringTable.text = strdup(fields[2].asString().c_str());
 
         ++load_count;
 
@@ -4119,7 +4119,7 @@ void MySQLDataStore::loadTransportDataTable()
 
         MySQLStructure::TransportData& transportData = _transportDataStore[entry];
         transportData.entry = entry;
-        transportData.name = fields[1].asCString();
+        transportData.name = fields[1].asString();
 
         ++load_count;
 
@@ -4442,7 +4442,7 @@ void MySQLDataStore::loadRecallTable()
             Field* fields = recall_result->Fetch();
             const auto& teleCoords = _recallStore.emplace_back(std::make_unique<MySQLStructure::RecallStruct>());
 
-            teleCoords->name = fields[1].asCString();
+            teleCoords->name = fields[1].asString();
             teleCoords->mapId = fields[2].asUint32();
             teleCoords->location.x = fields[3].asFloat();
             teleCoords->location.y = fields[4].asFloat();
@@ -4569,7 +4569,7 @@ void MySQLDataStore::loadSpawnGroupIds()
         SpawnGroupTemplateData& spawnGroup = _spawnGroupDataStore[groupId];
 
         spawnGroup.groupId = groupId;
-        spawnGroup.name = fields[1].asCString();
+        spawnGroup.name = fields[1].asString();
         spawnGroup.mapId = 0xFFFFFFFF;
         uint32_t flags = fields[2].asUint8();
         if (flags & ~SPAWNGROUP_FLAGS_ALL)

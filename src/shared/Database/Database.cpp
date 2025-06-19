@@ -10,6 +10,12 @@ This file is released under the MIT license. See README-MIT for more information
 
 using SystemTimePoint = std::chrono::system_clock::time_point;
 
+#ifdef _WIN32
+#define LOCALTIME_SAFE(t, result) localtime_s(result, t)
+#else
+#define LOCALTIME_SAFE(t, result) localtime_r(t, result)
+#endif
+
 Database::Database() = default;
 
 Database::~Database() 
@@ -401,7 +407,7 @@ std::string Database::ConvertFieldToString(const MYSQL_FIELD& field, const MYSQL
 
             std::time_t time = std::chrono::system_clock::to_time_t(tp);
             std::tm tm_buf{};
-            localtime_s(&tm_buf, &time);
+            LOCALTIME_SAFE(&time, &tm_buf);
 
             std::stringstream ss;
             ss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S");

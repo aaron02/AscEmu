@@ -347,7 +347,8 @@ bool MasterLogon::CheckDBVersion()
     }
 
     Field* f = cqr->Fetch();
-    const char *LogonDBVersion = f->asCString();
+    std::string LogonDBVersionStr = f->asString();
+    const char* LogonDBVersion = LogonDBVersionStr.c_str();
 
     sLogger.info("Database : Last logon database update: {}", LogonDBVersion);
     int result = strcmp(LogonDBVersion, REQUIRED_LOGON_DB_VERSION);

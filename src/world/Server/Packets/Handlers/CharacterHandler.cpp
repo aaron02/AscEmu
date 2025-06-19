@@ -331,7 +331,7 @@ uint8_t WorldSession::deleteCharacter(WoWGuid guid)
         if (!result)
             return E_CHAR_DELETE_FAILED;
         
-        std::string name = result->Fetch()[0].asCString();
+        std::string name = result->Fetch()[0].asString();
 
         if (playerInfo->m_guild)
         {
@@ -942,7 +942,7 @@ void WorldSession::characterEnumProc(QueryResult* result)
             charEnum.gender = fields[4].asUint8();
             charEnum.bytes = fields[5].asUint32();
             charEnum.bytes2 = fields[6].asUint32();
-            charEnum.name = fields[7].asCString();
+            charEnum.name = fields[7].asString();
             charEnum.x = fields[8].asFloat();
             charEnum.y = fields[9].asFloat();
             charEnum.z = fields[10].asFloat();
@@ -1037,7 +1037,7 @@ void WorldSession::characterEnumProc(QueryResult* result)
                         charEnum.player_items[item_slot].displayId = itemProperties->DisplayInfoID;
                         charEnum.player_items[item_slot].inventoryType = static_cast<uint8_t>(itemProperties->InventoryType);
 
-                        std::string enchant_field = item_db_result->Fetch()[2].asCString();
+                        std::string enchant_field = item_db_result->Fetch()[2].asString();
                         if (!enchant_field.empty())
                         {
                             std::vector<std::string> enchants = AscEmu::Util::Strings::split(enchant_field, ";");
@@ -1109,7 +1109,7 @@ void WorldSession::loadAccountDataProc(QueryResult* result)
 
     for (uint8_t i = 0; i < 7; ++i)
     {
-        const char* accountData = result->Fetch()[1 + i].asCString();
+        const char* accountData = result->Fetch()[1 + i].asString().c_str();
         const size_t length = accountData ? strlen(accountData) : 0;
         if (length > 1)
         {

@@ -54,7 +54,7 @@ ArenaTeam::ArenaTeam(Field* field)
     m_id = field[z++].asUint32();
     m_type = field[z++].asUint8();
     m_leader = field[z++].asUint32();
-    m_name = field[z++].asCString();
+    m_name = field[z++].asString();
     m_emblem.emblemStyle = field[z++].asUint32();
     m_emblem.emblemColour = field[z++].asUint32();
     m_emblem.borderStyle = field[z++].asUint32();
@@ -70,14 +70,14 @@ ArenaTeam::ArenaTeam(Field* field)
     m_stats.won_week = 0;
     m_stats.ranking = 0;
 
-    if (sscanf(field[z++].asCString(), "%u %u %u %u", &m_stats.played_week, &m_stats.won_week, &m_stats.played_season, &m_stats.won_season) != 3)
+    if (sscanf(field[z++].asString().c_str(), "%u %u %u %u", &m_stats.played_week, &m_stats.won_week, &m_stats.played_season, &m_stats.won_season) != 3)
         return;
 
     m_stats.ranking = field[z++].asUint32();
     for (uint32_t i = 0; i < m_slots; ++i)
     {
         uint32_t guid;
-        const char* data = field[z++].asCString();
+        const char* data = field[z++].asString().c_str();
         int ret = sscanf(data, "%u %u %u %u %u %u", &guid, &m_members[i].Played_ThisWeek, &m_members[i].Won_ThisWeek,
                          &m_members[i].Played_ThisSeason, &m_members[i].Won_ThisSeason, &m_members[i].PersonalRating);
         if (ret >= 5)

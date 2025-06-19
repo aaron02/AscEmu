@@ -596,7 +596,7 @@ bool ChatHandler::HandleQuestGiverCommand(const char* args, WorldSession* m_sess
 
                 std::string spawnId = "N/A";
                 if (spawnResult)
-                    spawnId = spawnResult->Fetch()[0].asCString();
+                    spawnId = spawnResult->Fetch()[0].asString();
 
                 recout = "|cff00ccffQuest Starter found: creature id, spawnid, name\n\n";
                 SendMultilineMessage(m_session, recout.c_str());
@@ -645,7 +645,7 @@ bool ChatHandler::HandleQuestGiverCommand(const char* args, WorldSession* m_sess
 
                 std::string spawnId = "N/A";
                 if (spawnResult)
-                    spawnId = spawnResult->Fetch()[0].asCString();
+                    spawnId = spawnResult->Fetch()[0].asString();
 
                 recout = "|cff00ccffQuest starter found: object id, spawnid, name\n\n";
                 SendMultilineMessage(m_session, recout.c_str());
@@ -1140,7 +1140,7 @@ bool ChatHandler::HandleQuestFinisherCommand(const char* args, WorldSession* m_s
 
             auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt2));
 
-            std::string spawnId = spawnResult ? spawnResult->Fetch()[0].asCString() : "N/A";
+            std::string spawnId = spawnResult ? spawnResult->Fetch()[0].asString() : "N/A";
 
             recout = "|cff00ccffQuest Finisher found: creature id, spawnid, name\n\n";
             SendMultilineMessage(m_session, recout.c_str());
@@ -1180,7 +1180,7 @@ bool ChatHandler::HandleQuestFinisherCommand(const char* args, WorldSession* m_s
 
             auto spawnResult = WorldDatabase.QueryStatement(std::move(stmt2));
 
-            std::string spawnId = spawnResult ? spawnResult->Fetch()[0].asCString() : "N/A";
+            std::string spawnId = spawnResult ? spawnResult->Fetch()[0].asString() : "N/A";
 
             recout = "|cff00ccffQuest Finisher found: object id, spawnid, name\n\n";
             SendMultilineMessage(m_session, recout.c_str());

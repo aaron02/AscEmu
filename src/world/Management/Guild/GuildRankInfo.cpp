@@ -27,7 +27,7 @@ GuildRankInfo::GuildRankInfo(uint32_t guildId, uint8_t rankId, std::string const
 void GuildRankInfo::loadGuildRankFromDB(Field* fields)
 {
     mRankId = fields[1].asUint8();
-    mName = fields[2].asCString();
+    mName = fields[2].asString();
     mRights = fields[3].asUint32();
     mBankMoneyPerDay = fields[4].asUint32();
 

@@ -28,9 +28,9 @@ GuildBankTab::GuildBankTab(uint32_t guildId, uint8_t tabId) : mGuildId(guildId),
 
 void GuildBankTab::loadGuildBankTabFromDB(Field* fields)
 {
-    mName = fields[2].asCString();
-    mIcon = fields[3].asCString();
-    mText = fields[4].asCString();
+    mName = fields[2].asString();
+    mIcon = fields[3].asString();
+    mText = fields[4].asString();
 }
 
 bool GuildBankTab::loadGuildBankTabItemFromDB(Field* fields)

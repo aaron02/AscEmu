@@ -298,7 +298,7 @@ void InstanceMap::createInstanceData(bool load)
         if (auto result = CharacterDatabase.QueryStatement(std::move(stmt)))
         {
             const auto* fields = result->Fetch();
-            std::string data = fields[0].asCString();
+            std::string data = fields[0].asString();
 
             getScript()->setCompletedEncountersMask(fields[1].asUint32());
 

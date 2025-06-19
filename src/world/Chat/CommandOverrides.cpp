@@ -19,8 +19,8 @@ void CommandOverrides::loadOverrides()
 
     do
     {
-        std::string command(result->Fetch()[0].asCString());
-        std::string permission(result->Fetch()[1].asCString());
+        std::string command(result->Fetch()[0].asString());
+        std::string permission(result->Fetch()[1].asString());
 
         overrides[command] = permission;
     } while (result->NextRow());

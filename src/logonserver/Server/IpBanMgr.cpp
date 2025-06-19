@@ -39,7 +39,7 @@ void IpBanMgr::reload()
     {
         do
         {
-            std::string ipString = result->Fetch()[0].asCString();
+            std::string ipString = result->Fetch()[0].asString();
             const uint32_t expireTime = result->Fetch()[1].asUint32();
 
             std::string smask = "32";

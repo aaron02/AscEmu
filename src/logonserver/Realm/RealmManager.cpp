@@ -56,7 +56,7 @@ namespace AscEmu::Realm
 
                 auto realm = std::make_unique<Realm>();
                 realm->id = field[0].asUint32();
-                realm->password = field[1].asCString();
+                realm->password = field[1].asString();
                 realm->status = field[2].asUint8();
                 realm->lastPing = ::Util::TimeNow();
 

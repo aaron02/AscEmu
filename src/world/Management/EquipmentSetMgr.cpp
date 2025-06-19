@@ -36,8 +36,8 @@ namespace Arcemu
     {
         SetGUID = fields[1].asUint32();
         SetID = fields[2].asUint32();
-        SetName = fields[3].asCString();
-        IconName = fields[4].asCString();
+        SetName = fields[3].asString();
+        IconName = fields[4].asString();
         for (uint32_t i = 0; i < ItemGUID.size(); ++i)
             ItemGUID[i] = fields[5 + i].asUint32();
     }

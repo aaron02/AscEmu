@@ -69,7 +69,7 @@ int LuaSqlApi::GetString(lua_State* L, Field* field)
     if (field == nullptr)
         lua_pushnil(L);
     else
-        lua_pushstring(L, field->asCString());
+        lua_pushstring(L, field->asString().c_str());
     return 1;
 }
 

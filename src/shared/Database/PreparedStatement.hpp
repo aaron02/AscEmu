@@ -5,8 +5,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 #pragma once
 
-#include <winsock2.h>
-#include <windows.h>
+#include "Network/NetworkIncludes.hpp"
 #include <mysql.h>
 
 #include <string>

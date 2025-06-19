@@ -129,8 +129,8 @@ void CommandTableStorage::Load()
 
     do
     {
-        const char* name = result->Fetch()[0].asCString();
-        const char* level = result->Fetch()[1].asCString();
+        const char* name = result->Fetch()[0].asString().c_str();
+        const char* level = result->Fetch()[1].asString().c_str();
         Override(name, level);
     } while (result->NextRow());
 }

@@ -267,7 +267,7 @@ void AddonMgr::LoadFromDB()
         Field* field = result->Fetch();
         auto ent = std::make_unique<AddonEntry>();
 
-        ent->name = field[1].asCString();
+        ent->name = field[1].asString();
         ent->crc = field[2].asUint64();
         ent->banned = field[3].asUint32() > 0;
         ent->isNew = false;

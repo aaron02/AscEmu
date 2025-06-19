@@ -758,7 +758,7 @@ void WorldSocket::InformationRetreiveCallback(WorldPacket & recvData, uint32_t r
         {
             for (uint8_t i = 0; i < 8; ++i)
             {
-                const char* data = pResult->Fetch()[1 + i].asCString();
+                const char* data = pResult->Fetch()[1 + i].asString().c_str();
                 size_t len = data ? strlen(data) : 0;
                 if (len > 1)
                 {

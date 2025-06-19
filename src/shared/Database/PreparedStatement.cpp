@@ -9,6 +9,12 @@ This file is released under the MIT license. See README-MIT for more information
 #include <cstring>
 #include <ctime>
 
+#ifdef _WIN32
+#define LOCALTIME_SAFE(t, result) localtime_s(result, t)
+#else
+#define LOCALTIME_SAFE(t, result) localtime_r(t, result)
+#endif
+
 namespace
 {
     template <typename T>
@@ -89,7 +95,7 @@ void PreparedStatement::prepareMYSQLBinds()
                     auto tmPtr = std::make_shared<MYSQL_TIME>();
                     std::time_t t = std::chrono::system_clock::to_time_t(arg);
                     std::tm tm;
-                    localtime_s(&tm, &t);
+                    LOCALTIME_SAFE(&t, &tm);
 
                     tmPtr->year = tm.tm_year + 1900;
                     tmPtr->month = tm.tm_mon + 1;

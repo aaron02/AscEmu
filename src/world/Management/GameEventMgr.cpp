@@ -85,7 +85,7 @@ void GameEventMgr::LoadFromDB()
             dbResult.occurence = field[3].asUint32();
             dbResult.length = field[4].asUint32();
             dbResult.holiday_id = HolidayIds(field[5].asUint32());
-            dbResult.description = field[6].asCString();
+            dbResult.description = field[6].asString();
             dbResult.world_event = GameEventState(field[7].asUint8());
             dbResult.announce = field[8].asUint8();
 

@@ -43,12 +43,12 @@ void AccountMgr::addAccount(Field* field)
 
     account->AccountId = field[0].asUint32();
 
-    std::string accountName = field[1].asCString();
-    std::string encryptedPassword = field[2].asCString();
+    std::string accountName = field[1].asString();
+    std::string encryptedPassword = field[2].asString();
 
     account->AccountFlags = field[3].asUint8();
     account->Banned = field[4].asUint32();
-    account->forcedLanguage = field[5].asCString();
+    account->forcedLanguage = field[5].asString();
     account->Muted = field[6].asUint32();
 
     if (static_cast<uint32_t>(UNIXTIME) > account->Banned && account->Banned != 0 && account->Banned != 1)
@@ -119,8 +119,8 @@ Account* AccountMgr::getAccountByName(std::string const& Name) const
 void AccountMgr::updateAccount(Account* account, Field* field) const
 {
     const uint32_t id = field[0].asUint32();
-    std::string accountName = field[1].asCString();
-    std::string encryptedPassword = field[2].asCString();
+    std::string accountName = field[1].asString();
+    std::string encryptedPassword = field[2].asString();
 
     if (id != account->AccountId)
     {
@@ -135,7 +135,7 @@ void AccountMgr::updateAccount(Account* account, Field* field) const
 
     account->AccountFlags = field[3].asUint8();
     account->Banned = field[4].asUint32();
-    account->forcedLanguage = field[5].asCString();
+    account->forcedLanguage = field[5].asString();
     account->Muted = field[6].asUint32();
 
     if (static_cast<uint32_t>(UNIXTIME) > account->Banned && account->Banned != 0 && account->Banned != 1)
@@ -207,7 +207,7 @@ void AccountMgr::reloadAccounts(bool silent)
         do
         {
             Field* field = result->Fetch();
-            std::string accountName = field[1].asCString();
+            std::string accountName = field[1].asString();
 
             AscEmu::Util::Strings::toUpperCase(accountName);
 

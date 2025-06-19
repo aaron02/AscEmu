@@ -1290,7 +1290,7 @@ void Item::loadFromDB(Field* fields, Player* plr, bool light)
     if (light)
         return;
 
-    std::string enchant_field = fields[15].asCString();
+    std::string enchant_field = fields[15].asString();
     if (!enchant_field.empty())
     {
         std::vector<std::string> enchants = AscEmu::Util::Strings::split(enchant_field, ";");
@@ -1323,7 +1323,7 @@ void Item::loadFromDB(Field* fields, Player* plr, bool light)
             m_owner->getItemInterface()->AddRefundable(this, refundentry.second, refundentry.first);
     }
 
-    m_text = fields[19].asCString();
+    m_text = fields[19].asString();
 
     applyRandomProperties(false);
 

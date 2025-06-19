@@ -13,7 +13,7 @@ public:
     bool isSet() const;
     void setValue(const char* value);
 
-    const char* asCString() const;
+    std::string asString() const;
 
     float asFloat() const;
     double asDouble() const;

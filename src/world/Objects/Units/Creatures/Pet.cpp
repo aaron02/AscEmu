@@ -926,7 +926,7 @@ void Pet::_setNameForEntry(uint32_t entry, SpellInfo const* createdBySpell)
             auto result = CharacterDatabase.QueryStatement(std::move(stmt));
             if (result != nullptr)
             {
-                m_petName.assign(result->Fetch()->asCString());
+                m_petName.assign(result->Fetch()->asString());
             }
             else
             {

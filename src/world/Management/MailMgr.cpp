@@ -206,31 +206,20 @@ void Mailbox::Load(QueryResult* result)
         msg.message_type = fields[i++].asUint32();
         msg.player_guid = fields[i++].asUint32();
         msg.sender_guid = fields[i++].asUint32();
-        msg.subject = fields[i++].asCString();
-        msg.body = fields[i++].asCString();
+        msg.subject = fields[i++].asString();
+        msg.body = fields[i++].asString();
         msg.money = fields[i++].asUint32();
-        str = (char*)fields[i++].asCString();
-        p = strchr(str, ',');
-        if (p == NULL)
+
+        std::string str = fields[i++].asString();
+
+        std::stringstream ss(str);
+        std::string token;
+
+        while (std::getline(ss, token, ','))
         {
-            itemguid = atoi(str);
+            int itemguid = std::atoi(token.c_str());
             if (itemguid != 0)
                 msg.items.push_back(itemguid);
-        }
-        else
-        {
-            while (p)
-            {
-                *p = 0;
-                p++;
-
-                itemguid = atoi(str);
-                if (itemguid != 0)
-                    msg.items.push_back(itemguid);
-
-                str = p;
-                p = strchr(str, ',');
-            }
         }
 
         msg.cod = fields[i++].asUint32();

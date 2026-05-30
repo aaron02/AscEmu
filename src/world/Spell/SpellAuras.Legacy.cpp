@@ -81,7 +81,7 @@ Player* Aura::GetPlayerCaster()
     }
 
     if (m_target->getWorldMap())
-        return m_target->getWorldMap()->getPlayer(WoWGuid::getGuidLowPartFromUInt64(m_casterGuid));
+        return m_target->getWorldMapPlayer(m_casterGuid);
 
     return nullptr;
 }
@@ -110,7 +110,7 @@ Unit* Aura::GetUnitCaster()
         return m_target;
 
     if (m_target->getWorldMap())
-        return m_target->getWorldMap()->getUnit(m_casterGuid);
+        return m_target->getWorldMapUnit(m_casterGuid);
 
     return nullptr;
 }
@@ -301,7 +301,7 @@ void Aura::EventUpdateGroupAA(AuraEffectModifier* /*aurEff*/, float r)
         AreaAuraList::iterator itr2 = itr;
         ++itr;
 
-        Player* tp = m_target->getWorldMap()->getPlayer(WoWGuid::getGuidLowPartFromUInt64(*itr2));
+        Player* tp = m_target->getWorldMapPlayer(*itr2);
 
         bool removable = false;
         if (tp == nullptr)
@@ -412,7 +412,7 @@ void Aura::EventUpdateRaidAA(AuraEffectModifier* /*aurEff*/, float r)
         AreaAuraList::iterator itr2 = itr;
         ++itr;
 
-        Player* tp = m_target->getWorldMap()->getPlayer(WoWGuid::getGuidLowPartFromUInt64(*itr2));
+        Player* tp = m_target->getWorldMapPlayer(*itr2);
         bool removable = false;
 
         if (tp == nullptr)
@@ -466,42 +466,41 @@ void Aura::EventUpdateFriendAA(AuraEffectModifier* /*aurEff*/, float r)
     if (u == nullptr)
         return;
 
-    for (const auto& itr : u->getInRangeObjectsSet())
-    {
-        Object* o = itr;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-        if (!o || !o->isCreatureOrPlayer())
-            continue;
+    u->getWorldMap()->getSpatialIndex().collectNearGuidsCached(u->GetNewGUID(), 2, s_guids);
+    u->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
+        {
+            if (u->getDistanceSq(&unit) > r)
+                return;
 
-        Unit* ou = static_cast<Unit*>(o);
+            if ((u->GetPhase() & unit.GetPhase()) == 0)
+                return;
 
-        if (u->getDistanceSq(ou) > r)
-            continue;
+            if (!unit.isAlive())
+                return;
 
-        if ((u->GetPhase() & ou->GetPhase()) == 0)
-            continue;
+            if (u->isHostileTo(&unit))
+                return;
 
-        if (!ou->isAlive())
-            continue;
+            if (u->isNeutralTo(&unit))
+                return;
 
-        if (u->isHostileTo(ou))
-            continue;
+            if (unit.hasAurasWithId(m_spellInfo->getId()))
+                return;
 
-        if (u->isNeutralTo(ou))
-            continue;
-
-        if (ou->hasAurasWithId(m_spellInfo->getId()))
-            continue;
-
-        targets.insert(ou->getGuid());
-    }
+            targets.insert(unit.getGuid());
+        });
 
     for (AreaAuraList::iterator itr = targets.begin(); itr != targets.end();)
     {
         AreaAuraList::iterator itr2 = itr;
         ++itr;
 
-        Unit* tu = u->getWorldMap()->getUnit(*itr2);
+        Unit* tu = u->getWorldMapUnit(*itr2);
         bool removable = false;
 
         if (tu == nullptr)
@@ -536,39 +535,38 @@ void Aura::EventUpdateEnemyAA(AuraEffectModifier* /*aurEff*/, float r)
     if (u == nullptr)
         return;
 
-    for (const auto& itr : u->getInRangeObjectsSet())
-    {
-        Object* o = itr;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-        if (!o || !o->isCreatureOrPlayer())
-            continue;
+    u->getWorldMap()->getSpatialIndex().collectNearGuidsCached(u->GetNewGUID(), 2, s_guids);
+    u->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
+        {
+            if (u->getDistanceSq(&unit) > r)
+                return;
 
-        Unit* ou = static_cast<Unit*>(o);
+            if ((u->GetPhase() & unit.GetPhase()) == 0)
+                return;
 
-        if (u->getDistanceSq(ou) > r)
-            continue;
+            if (!unit.isAlive())
+                return;
 
-        if ((u->GetPhase() & ou->GetPhase()) == 0)
-            continue;
+            if (!u->isHostileTo(&unit))
+                return;
 
-        if (!ou->isAlive())
-            continue;
+            if (unit.hasAurasWithId(m_spellInfo->getId()))
+                return;
 
-        if (!u->isHostileTo(ou))
-            continue;
-
-        if (ou->hasAurasWithId(m_spellInfo->getId()))
-            continue;
-
-        targets.insert(ou->getGuid());
-    }
+            targets.insert(unit.getGuid());
+        });
 
     for (AreaAuraList::iterator itr = targets.begin(); itr != targets.end();)
     {
         AreaAuraList::iterator itr2 = itr;
         ++itr;
 
-        Unit* tu = u->getWorldMap()->getUnit(*itr2);
+        Unit* tu = u->getWorldMapUnit(*itr2);
         bool removable = false;
 
         if (tu == nullptr)
@@ -690,7 +688,7 @@ void Aura::EventUpdateAreaAura(uint8_t effIndex, float r)
 
     for (AreaAuraList::iterator itr = targets.begin(); itr != targets.end(); ++itr)
     {
-        auto unit = m_target->getWorldMap()->getUnit(*itr);
+        auto unit = m_target->getWorldMapUnit(*itr);
         if (unit == nullptr)
             return;
 
@@ -710,7 +708,7 @@ void Aura::ClearAATargets()
 
     for (AreaAuraList::iterator itr = targets.begin(); itr != targets.end(); ++itr)
     {
-        Unit* tu = m_target->getWorldMap()->getUnit(*itr);
+        Unit* tu = m_target->getWorldMapUnit(*itr);
 
         if (tu == nullptr)
             continue;
@@ -728,7 +726,7 @@ void Aura::ClearAATargets()
 #if VERSION_STRING >= TBC
     if (m_spellInfo->hasEffect(SPELL_EFFECT_APPLY_OWNER_AREA_AURA))
     {
-        Unit* u = m_target->getWorldMap()->getUnit(m_target->getCreatedByGuid());
+        Unit* u = m_target->getWorldMapUnit(m_target->getCreatedByGuid());
 
         if (u != nullptr)
             u->removeAllAurasById(spellid);
@@ -1460,30 +1458,31 @@ void Aura::SpellAuraModStealth(AuraEffectModifier* aurEff, bool apply)
                 case 55964:
                 case 71400:
                 {
-                    for (const auto& iter : m_target->getInRangeObjectsSet())
-                    {
-                        if (iter == nullptr || !iter->isCreatureOrPlayer())
-                            continue;
+                    thread_local std::vector<WoWGuid> s_guids;
+                    s_guids.clear();
+                    s_guids.reserve(64);
 
-                        Unit* _unit = static_cast<Unit*>(iter);
-                        if (!_unit->isAlive())
-                            continue;
-
-                        if (_unit->isCastingSpell())
+                    m_target->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_target->GetNewGUID(), 2, s_guids);
+                    m_target->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+                        [&](Unit& unit)
                         {
-                            for (uint8_t i = 0; i < CURRENT_SPELL_MAX; ++i)
+                            if (!unit.isAlive())
+                                return;
+
+                            if (unit.isCastingSpell())
                             {
-                                Spell* curSpell = _unit->getCurrentSpell(CurrentSpellType(i));
-                                if (curSpell != nullptr && curSpell->getUnitTarget() == m_target)
+                                for (uint8_t i = 0; i < CURRENT_SPELL_MAX; ++i)
                                 {
-                                    _unit->interruptSpellWithSpellType(CurrentSpellType(i));
+                                    Spell* curSpell = unit.getCurrentSpell(CurrentSpellType(i));
+                                    if (curSpell != nullptr && curSpell->getUnitTarget() == m_target)
+                                    {
+                                        unit.interruptSpellWithSpellType(CurrentSpellType(i));
+                                    }
                                 }
                             }
-                        }
-                        if(_unit->getThreatManager().canHaveThreatList())
-                            _unit->getThreatManager().clearThreat(m_target);
-
-                    }
+                            if (unit.getThreatManager().canHaveThreatList())
+                                unit.getThreatManager().clearThreat(m_target);
+                        });
 
                     m_target->getCombatHandler().clearCombat();
 
@@ -2818,28 +2817,33 @@ void Aura::SpellAuraFeignDeath(AuraEffectModifier* /*aurEff*/, bool apply)
             p_target->addDynamicFlags(U_DYN_FLAG_DEAD);
 
             //now get rid of mobs agro. pTarget->m_combatStatusHandler.AttackersForgetHate() - this works only for already attacking mobs
-            for (const auto& itr : p_target->getInRangeObjectsSet())
-            {
-                if (itr && itr->isCreatureOrPlayer() && static_cast<Unit*>(itr)->isAlive())
-                {
-                    Unit* u = static_cast<Unit*>(itr);
-                    if (isFeignDeathResisted(p_target->getLevel(), u->getLevel()))
-                    {
-                        removeAura();
-                        return;
-                    }
-                    if (u->isCreature())
-                        u->getThreatManager().clearThreat(p_target);
+            thread_local std::vector<WoWGuid> s_guids;
+            s_guids.clear();
+            s_guids.reserve(64);
 
-                    //if this is player and targeting us then we interrupt cast
-                    if (u->isPlayer())
+            p_target->getWorldMap()->getSpatialIndex().collectNearGuidsCached(p_target->GetNewGUID(), 2, s_guids);
+            p_target->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+                [&](Unit& unit)
+                {
+                    if (!unit.isAlive())
                     {
-                        Player* plr = static_cast<Player*>(itr);
-                        if (plr->isCastingSpell())
-                            plr->interruptSpell(); // cancel current casting spell
+                        if (isFeignDeathResisted(p_target->getLevel(), unit.getLevel()))
+                        {
+                            removeAura();
+                            return;
+                        }
+                        if (unit.isCreature())
+                            unit.getThreatManager().clearThreat(p_target);
+
+                        //if this is player and targeting us then we interrupt cast
+                        if (unit.isPlayer())
+                        {
+                            Player* plr = static_cast<Player*>(&unit);
+                            if (plr->isCastingSpell())
+                                plr->interruptSpell(); // cancel current casting spell
+                        }
                     }
-                }
-            }
+                });
 
             // this looks awkward!
             p_target->sendMirrorTimer(MIRROR_TYPE_FIRE, getTimeLeft(), getTimeLeft(), 0xFFFFFFFF);
@@ -3076,7 +3080,7 @@ void Aura::SpellAuraMechanicImmunity(AuraEffectModifier* aurEff, bool apply)
         // Demonic Circle hack
         if (m_spellInfo->getId() == 48020 && m_target->isPlayer() && m_target->hasAurasWithId(62388))
         {
-            GameObject* obj = m_target->getWorldMap()->getGameObject(m_target->m_objectSlots[0]);
+            GameObject* obj = m_target->getWorldMapGameObject(m_target->m_objectSlots[0].getRawGuid());
 
             if (obj != nullptr)
             {
@@ -3418,7 +3422,7 @@ void Aura::SpellAuraChannelDeathItem(AuraEffectModifier* aurEff, bool apply)
 
             if (m_target->isDead())
             {
-                Player* pCaster = m_target->getWorldMap()->getPlayer((uint32_t)m_casterGuid);
+                Player* pCaster = m_target->getWorldMapPlayer(m_casterGuid);
                 if (!pCaster)
                     return;
                 /*int32_t delta=pCaster->getLevel()-m_target->getLevel();
@@ -5700,7 +5704,7 @@ void Aura::HandleAuraControlVehicle(AuraEffectModifier* aurEff, bool apply)
         if (getSpellId() == 53111) // Devour Humanoid
         {
             if (caster->getObjectTypeId() == TYPEID_UNIT)
-                caster->ToCreature()->Despawn(0, 0);
+                caster->ToCreature()->despawn(0, 0);
         }
 
         if (seatId == m_target->getVehicleKit()->getSeatForNumberPassenger(caster))

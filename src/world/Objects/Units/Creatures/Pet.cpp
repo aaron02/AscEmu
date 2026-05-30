@@ -114,15 +114,6 @@ void Pet::Update(unsigned long time_passed)
 #endif
 }
 
-void Pet::OnPushToWorld()
-{
-    Summon::OnPushToWorld();
-
-    // Cast pet related spells
-    if (auto* plrOwner = getPlayerOwner())
-        plrOwner->eventSummonPet(this);
-}
-
 void Pet::PrepareForRemove()
 {
     Summon::PrepareForRemove();
@@ -152,18 +143,27 @@ void Pet::PrepareForRemove()
     m_isScheduledForDeletion = false;
     m_isScheduledForTemporaryUnsummon = false;
 
-    if (IsInWorld() && IsActive())
+    if (IsInWorld() && isActive())
         deactivate(m_WorldMap);
 }
 
-void Pet::SafeDelete()
+void Pet::onAttachToWorld()
+{
+    // Cast pet related spells
+    if (auto* plrOwner = getPlayerOwner())
+        plrOwner->eventSummonPet(this);
+
+    Summon::onAttachToWorld();
+}
+
+void Pet::onPreDetachFromWorld()
 {
     sEventMgr.RemoveEvents(this);
 
     if (m_unitOwner != nullptr)
         m_unitOwner->addGarbagePet(this);
-    else
-        delete this;
+
+    Summon::onPreDetachFromWorld();
 }
 
 void Pet::setDeathState(DeathState s)
@@ -814,7 +814,6 @@ bool Pet::_preparePetForPush(PetCache const* petCache)
 
     UpdateSpellList(false);
 
-    PushToWorld(m_unitOwner->getWorldMap());
     if (!IsInWorld())
     {
         sLogger.failure("Pet::_preparePetForPush : Pet was pushed to world but it is not in world, aborting");
@@ -2319,7 +2318,7 @@ void Pet::die(Unit* pAttacker, uint32_t /*damage*/, uint32_t spellid)
                 if (spl->getSpellInfo()->getEffect(i) == SPELL_EFFECT_PERSISTENT_AREA_AURA)
                 {
                     uint64_t guid = getChannelObjectGuid();
-                    DynamicObject* dObj = getWorldMap()->getDynamicObject(WoWGuid::getGuidLowPartFromUInt64(guid));
+                    DynamicObject* dObj = getWorldMapDynamicObject(guid);
                     if (!dObj)
                         return;
 
@@ -2333,10 +2332,18 @@ void Pet::die(Unit* pAttacker, uint32_t /*damage*/, uint32_t spellid)
     }
 
     // Stop players from casting
-    for (const auto& itr : getInRangePlayersSet())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+    m_WorldMap->getVisibilitySystem().collectViewersOf(GetNewGUID(), s_guids);
+
+    for (const WoWGuid& id : s_guids)
     {
-        Unit* attacker = static_cast<Unit*>(itr);
-        if (attacker && attacker->isCastingSpell())
+        Player* attacker = m_WorldMap->getRegistry().getPlayer(id);
+        if (!attacker)
+            continue;
+
+        if (attacker->isCastingSpell())
         {
             for (uint8_t i = 0; i < CURRENT_SPELL_MAX; ++i)
             {

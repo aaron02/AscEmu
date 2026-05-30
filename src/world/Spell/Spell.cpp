@@ -445,7 +445,7 @@ void Spell::castMe(const bool doReCheck)
     {
         const auto creature = static_cast<Creature*>(m_caster);
         sLogger.debugFlag(AscEmu::Logging::LF_SPELL, "Spell::castMe : Creature guid {} (entry {}) casted spell {} (id {})",
-            creature->spawnid, creature->getEntry(), getSpellInfo()->getName(), getSpellInfo()->getId());
+            creature->getSpawnId(), creature->getEntry(), getSpellInfo()->getName(), getSpellInfo()->getId());
     }
     else
     {
@@ -512,7 +512,7 @@ void Spell::castMe(const bool doReCheck)
         {
             const auto creatureMagnet = static_cast<Creature*>(magnetTarget);
             if (creatureMagnet->isTotem())
-                creatureMagnet->Despawn(1, 0);
+                creatureMagnet->despawn(1, 0);
         }
         m_magnetTarget = 0;
     }
@@ -1432,7 +1432,7 @@ void Spell::cancel()
                     {
                         auto obj = getPlayerCaster()->getSummonedObject();
                         if (obj->IsInWorld())
-                            obj->RemoveFromWorld(true);
+                            obj->destroy();
 
                         delete obj;
                         getPlayerCaster()->setSummonedObject(nullptr);
@@ -2248,26 +2248,31 @@ SpellCastResult Spell::canCast(const bool secondCheck, uint32_t* parameter1, uin
 
     if (p_caster != nullptr && getSpellInfo()->getRequiresSpellFocus() > 0)
     {
-        auto found = false;
-        for (const auto& itr : p_caster->getInRangeObjectsSet())
-        {
-            if (itr == nullptr || !itr->isGameObject())
-                continue;
+        bool found = false;
 
-            if (const auto obj = dynamic_cast<GameObject*>(itr))
+        thread_local std::vector<WoWGuid> s_guids;
+        s_guids.clear();
+        s_guids.reserve(64);
+
+        p_caster->getWorldMap()->getSpatialIndex().collectNearGuidsCached(p_caster->GetNewGUID(), 2, s_guids);
+        p_caster->getWorldMap()->getRegistry().forEachPinnedByGuidsT<GameObject>(s_guids,
+            [&](GameObject& gameObject)
             {
-                if (obj->getGoType() != GAMEOBJECT_TYPE_SPELL_FOCUS)
-                    continue;
+                if (found)
+                    return;
+
+                if (gameObject.getGoType() != GAMEOBJECT_TYPE_SPELL_FOCUS)
+                    return;
 
                 // Skip objects from other phases
-                if (!(p_caster->GetPhase() & obj->GetPhase()))
-                    continue;
+                if (!(p_caster->GetPhase() & gameObject.GetPhase()))
+                    return;
 
-                const auto gameObjectInfo = obj->GetGameObjectProperties();
+                const auto gameObjectInfo = gameObject.GetGameObjectProperties();
                 if (gameObjectInfo == nullptr)
                 {
-                    sLogger.debugFlag(AscEmu::Logging::LF_SPELL, "Spell::canCast : Found gameobject entry {} with invalid gameobject properties, spawn id {}", obj->getEntry(), obj->getGuidLow());
-                    continue;
+                    sLogger.debugFlag(AscEmu::Logging::LF_SPELL, "Spell::canCast : Found gameobject entry {} with invalid gameobject properties, spawn id {}", gameObject.getEntry(), gameObject.getGuidLow());
+                    return;
                 }
 
                 // Prefer to use range from gameobject_properties instead of spell's range
@@ -2285,16 +2290,15 @@ SpellCastResult Spell::canCast(const bool secondCheck, uint32_t* parameter1, uin
                 }
 
                 // Skip objects which are out of range
-                if (!p_caster->isInRange(obj->GetPositionX(), obj->GetPositionY(), obj->GetPositionZ(), distance))
-                    continue;
+                if (!p_caster->isInRange(gameObject.GetPositionX(), gameObject.GetPositionY(), gameObject.GetPositionZ(), distance))
+                    return;
 
                 if (gameObjectInfo->spell_focus.focus_id == getSpellInfo()->getRequiresSpellFocus())
                 {
                     found = true;
-                    break;
+                    return;
                 }
-            }
-        }
+            });
 
         if (!found)
         {
@@ -6204,13 +6208,13 @@ void Spell::_updateTargetPointers(const uint64_t targetGuid)
             {
                 case HighGuid::Unit:
                 case HighGuid::Vehicle:
-                    m_unitTarget = getCaster()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+                    m_unitTarget = getCaster()->getWorldMapCreature(wowGuid.getRawGuid());
                     break;
                 case HighGuid::Pet:
-                    m_unitTarget = getCaster()->getWorldMap()->getPet(wowGuid.getGuidLowPart());
+                    m_unitTarget = getCaster()->getWorldMapPet(wowGuid.getRawGuid());
                     break;
                 case HighGuid::Player:
-                    m_unitTarget = getCaster()->getWorldMap()->getPlayer(wowGuid.getGuidLowPart());
+                    m_unitTarget = getCaster()->getWorldMapPlayer(wowGuid.getRawGuid());
                     m_playerTarget = dynamic_cast<Player*>(m_unitTarget);
                     break;
                 case HighGuid::Item:
@@ -6218,7 +6222,7 @@ void Spell::_updateTargetPointers(const uint64_t targetGuid)
                         m_itemTarget = getPlayerCaster()->getItemInterface()->GetItemByGUID(targetGuid);
                     break;
                 case HighGuid::GameObject:
-                    m_gameObjTarget = getCaster()->getWorldMap()->getGameObject(wowGuid.getGuidLowPart());
+                    m_gameObjTarget = getCaster()->getWorldMapGameObject(wowGuid.getRawGuid());
                     break;
                 case HighGuid::Corpse:
                     m_corpseTarget = sObjectMgr.getCorpseByGuid(wowGuid.getGuidLowPart());

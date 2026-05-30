@@ -1523,7 +1523,6 @@ void Item::removeFromWorld()
     if (!IsInWorld())
         return;
 
-    m_WorldMap->RemoveObject(this, false);
     m_WorldMap = nullptr;
 
     event_Relocate();

@@ -490,12 +490,14 @@ void ObjectMgr::deleteCachedCharacterInfo(const uint32_t _playerGuid)
 // Corpse
 void ObjectMgr::loadCorpsesForInstance(WorldMap* _worldMap)
 {
+    // todo aaron02 maprework
+    /*
     if (auto result = CharacterDatabase.Query("SELECT * FROM corpses WHERE instanceid = %u", _worldMap->getInstanceId()))
     {
         do
         {
             Field* fields = result->Fetch();
-            auto corpse = std::make_unique<Corpse>(HIGHGUID_TYPE_CORPSE, fields[0].asUint32());
+            auto corpse = std::make_unique<Corpse>((static_cast<uint64_t>(fields[0].asUint32()) << 32 | HIGHGUID_TYPE_CORPSE));
             corpse->SetPosition(fields[1].asFloat(), fields[2].asFloat(), fields[3].asFloat(), fields[4].asFloat());
             corpse->setZoneId(fields[5].asUint32());
             corpse->SetMapId(fields[6].asUint32());
@@ -509,15 +511,17 @@ void ObjectMgr::loadCorpsesForInstance(WorldMap* _worldMap)
             std::lock_guard guard(m_corpseLock);
             m_corpses.try_emplace(corpse->getGuidLow(), std::move(corpse));
         } while (result->NextRow());
-    }
+    }*/
 }
 
 Corpse* ObjectMgr::loadCorpseByGuid(const uint32_t _corpseGuid)
 {
+    // todo aaron02 maprework
+    /*
     if (auto result = CharacterDatabase.Query("SELECT * FROM corpses WHERE guid =%u ", _corpseGuid))
     {
         Field* field = result->Fetch();
-        auto corpse = std::make_unique<Corpse>(HIGHGUID_TYPE_CORPSE, field[0].asUint32());
+        auto corpse = std::make_unique<Corpse>((static_cast<uint64_t>(field[0].asUint32()) << 32 | HIGHGUID_TYPE_CORPSE));
         corpse->SetPosition(field[1].asFloat(), field[2].asFloat(), field[3].asFloat(), field[4].asFloat());
         corpse->setZoneId(field[5].asUint32());
         corpse->SetMapId(field[6].asUint32());
@@ -533,7 +537,7 @@ Corpse* ObjectMgr::loadCorpseByGuid(const uint32_t _corpseGuid)
         std::lock_guard guard(m_corpseLock);
         const auto [itr, _] = m_corpses.try_emplace(corpse->getGuidLow(), std::move(corpse));
         return itr->second.get();
-    }
+    }*/
 
     return nullptr;
 }
@@ -544,7 +548,7 @@ Corpse* ObjectMgr::createCorpse()
 
     std::lock_guard guard(m_corpseLock);
     const auto [corpseItr, _] = m_corpses.try_emplace(corpseGuid, Util::LazyInstanceCreator([corpseGuid] {
-        return std::make_unique<Corpse>(HIGHGUID_TYPE_CORPSE, corpseGuid);
+        return std::make_unique<Corpse>((static_cast<uint64_t>(corpseGuid) << 32 | HIGHGUID_TYPE_CORPSE));
     }));
     return corpseItr->second.get();
 }
@@ -584,15 +588,17 @@ void ObjectMgr::unloadCorpseCollector()
     {
         const auto corpse = corpsePair.second.get();
         if (corpse->IsInWorld())
-            corpse->RemoveFromWorld(false);
+            corpse->destroy();
     }
     m_corpses.clear();
 }
 
 void ObjectMgr::addCorpseDespawnTime(const Corpse* _corpse) const
 {
+    // todo aaron02 maprework
+    /*
     if (_corpse->IsInWorld())
-        _corpse->getWorldMap()->addCorpseDespawn(_corpse->getGuid(), 600000);
+        _corpse->getWorldMap()->addCorpseDespawn(_corpse->getGuid(), 600000);*/
 }
 
 void ObjectMgr::delinkCorpseForPlayer(const Player* _player) const

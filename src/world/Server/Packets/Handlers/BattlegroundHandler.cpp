@@ -47,7 +47,7 @@ void WorldSession::handleInspectHonorStatsOpcode(WorldPacket& recvPacket)
 
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT_HONOR_STATS: {} (guidLow)", srlPacket.guid.getGuidLow());
 
-    const auto player = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
+    const auto player = _player->getWorldMapPlayer(srlPacket.guid.getRawGuid());
     if (player == nullptr)
         return;
 
@@ -162,7 +162,7 @@ void WorldSession::handleBattleMasterHelloOpcode(WorldPacket& recvPacket)
 
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEMASTER_HELLO: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
-    const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
+    const auto creature = _player->getWorldMapCreature(srlPacket.guid.getRawGuid());
     if (creature == nullptr || !creature->isBattleMaster())
         return;
 
@@ -200,7 +200,7 @@ void WorldSession::handleAreaSpiritHealerQueueOpcode(WorldPacket& recvPacket)
 
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREA_SPIRIT_HEALER_QUEUE: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
-    const auto spiritHealer = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
+    const auto spiritHealer = _player->getWorldMapCreature(srlPacket.guid.getRawGuid());
     if (spiritHealer == nullptr)
         return;
 
@@ -220,7 +220,7 @@ void WorldSession::handleAreaSpiritHealerQueryOpcode(WorldPacket& recvPacket)
 
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREA_SPIRIT_HEALER_QUEUE: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
-    const auto spiritHealer = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
+    const auto spiritHealer = _player->getWorldMapCreature(srlPacket.guid.getRawGuid());
     if (spiritHealer == nullptr)
         return;
 

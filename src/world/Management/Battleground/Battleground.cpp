@@ -321,8 +321,13 @@ void Battleground::portPlayer(Player* plr, bool skip_teleport)
     sEventMgr.RemoveEvents(plr, EVENT_BATTLEGROUND_QUEUE_UPDATE);
 
     if (!skip_teleport)
+    {
         if (plr->IsInWorld())
-            plr->removeFromWorld();
+        {
+            plr->getWorldMap()->getObjectFactory().detachFromWorld(plr);
+            plr->getWorldMap()->getObjectFactory().recycleAndDestroy(plr, true, true);
+        }
+    }
 
     plr->setPendingBattleground(nullptr);
     plr->setBattleground(this);
@@ -371,10 +376,8 @@ void Battleground::portPlayer(Player* plr, bool skip_teleport)
 
 GameObject* Battleground::spawnGameObject(uint32_t entry, LocationVector const& v, uint32_t flags, uint32_t faction, float scale)
 {
-    if (GameObject* go = m_mapMgr->createGameObject(entry))
+    if (GameObject* go = m_mapMgr->getSpawnManager().spawnGameObject(entry, v))
     {
-        go->create(entry, m_mapMgr, 0, v, QuaternionData(), GO_STATE_CLOSED);
-
         go->SetFaction(faction);
         go->setScale(scale);
         go->setFlags(flags);
@@ -396,14 +399,10 @@ Creature* Battleground::spawnCreature(uint32_t entry, float x, float y, float z,
         return nullptr;
     }
 
-    if (Creature* c = m_mapMgr->createCreature(entry))
+    if (Creature* c = m_mapMgr->getSpawnManager().spawnCreature(entry, LocationVector(x, y, z, o)))
     {
-        c->Load(cp, x, y, z, o);
-
         if (faction != 0)
             c->setFaction(faction);
-
-        c->PushToWorld(m_mapMgr);
         return c;
     }
 
@@ -785,63 +784,63 @@ Creature* Battleground::spawnSpiritGuide(float x, float y, float z, float o, uin
     if (pInfo == nullptr)
         return nullptr;
 
-    Creature* pCreature = m_mapMgr->createCreature(pInfo->Id);
+    if (Creature* pCreature = m_mapMgr->getSpawnManager().spawnCreature(pInfo->Id, LocationVector(x, y, z, o)))
+    {
 
-    pCreature->Create(m_mapMgr->getBaseMap()->getMapId(), x, y, z, o);
+        pCreature->setEntry(13116 + horde);
+        pCreature->setScale(1.0f);
 
-    pCreature->setEntry(13116 + horde);
-    pCreature->setScale(1.0f);
-
-    pCreature->setMaxHealth(10000);
-    pCreature->setMaxPower(POWER_TYPE_MANA, 4868);
-    pCreature->setMaxPower(POWER_TYPE_FOCUS, 200);
+        pCreature->setMaxHealth(10000);
+        pCreature->setMaxPower(POWER_TYPE_MANA, 4868);
+        pCreature->setMaxPower(POWER_TYPE_FOCUS, 200);
 #if VERSION_STRING < Cata
-    pCreature->setMaxPower(POWER_TYPE_HAPPINESS, 2000000);
+        pCreature->setMaxPower(POWER_TYPE_HAPPINESS, 2000000);
 #endif
 
-    pCreature->setHealth(100000);
-    pCreature->setPower(POWER_TYPE_MANA, 4868);
-    pCreature->setPower(POWER_TYPE_FOCUS, 200);
+        pCreature->setHealth(100000);
+        pCreature->setPower(POWER_TYPE_MANA, 4868);
+        pCreature->setPower(POWER_TYPE_FOCUS, 200);
 #if VERSION_STRING < Cata
-    pCreature->setPower(POWER_TYPE_HAPPINESS, 2000000);
+        pCreature->setPower(POWER_TYPE_HAPPINESS, 2000000);
 #endif
 
-    pCreature->setLevel(60);
-    pCreature->setFaction(84 - horde);
+        pCreature->setLevel(60);
+        pCreature->setFaction(84 - horde);
 
-    pCreature->setRace(0);
-    pCreature->setClass(2);
-    pCreature->setGender(1);
-    pCreature->setPowerType(0);
+        pCreature->setRace(0);
+        pCreature->setClass(2);
+        pCreature->setGender(1);
+        pCreature->setPowerType(0);
 
-    pCreature->setVirtualItemSlotId(MELEE, 22802);
+        pCreature->setVirtualItemSlotId(MELEE, 22802);
 
-    pCreature->setUnitFlags(UNIT_FLAG_PLUS_MOB | UNIT_FLAG_IGNORE_PLAYER_COMBAT | UNIT_FLAG_IGNORE_CREATURE_COMBAT); // 832
-    pCreature->setPvpFlag();
+        pCreature->setUnitFlags(UNIT_FLAG_PLUS_MOB | UNIT_FLAG_IGNORE_PLAYER_COMBAT | UNIT_FLAG_IGNORE_CREATURE_COMBAT); // 832
+        pCreature->setPvpFlag();
 
-    pCreature->setBaseAttackTime(MELEE, 2000);
-    pCreature->setBaseAttackTime(OFFHAND, 2000);
-    pCreature->setBoundingRadius(0.208f);
-    pCreature->setCombatReach(1.5f);
+        pCreature->setBaseAttackTime(MELEE, 2000);
+        pCreature->setBaseAttackTime(OFFHAND, 2000);
+        pCreature->setBoundingRadius(0.208f);
+        pCreature->setCombatReach(1.5f);
 
-    pCreature->setDisplayId(13337 + horde);
-    pCreature->setNativeDisplayId(13337 + horde);
+        pCreature->setDisplayId(13337 + horde);
+        pCreature->setNativeDisplayId(13337 + horde);
 
-    pCreature->setChannelSpellId(22011);
-    pCreature->setModCastSpeed(1.0f);
+        pCreature->setChannelSpellId(22011);
+        pCreature->setModCastSpeed(1.0f);
 
-    pCreature->setNpcFlags(UNIT_NPC_FLAG_SPIRITGUIDE);
-    pCreature->setSheathType(SHEATH_STATE_MELEE);
+        pCreature->setNpcFlags(UNIT_NPC_FLAG_SPIRITGUIDE);
+        pCreature->setSheathType(SHEATH_STATE_MELEE);
 #if VERSION_STRING == TBC
-    pCreature->setPositiveAuraLimit(POS_AURA_LIMIT_CREATURE);
+        pCreature->setPositiveAuraLimit(POS_AURA_LIMIT_CREATURE);
 #endif
 
-    pCreature->setAItoUse(false);
+        pCreature->setAItoUse(false);
 
-    pCreature->SetCreatureProperties(sMySQLStore.getCreatureProperties(pInfo->Id));
+        pCreature->SetCreatureProperties(sMySQLStore.getCreatureProperties(pInfo->Id));
+        return pCreature;
+    }
 
-    pCreature->PushToWorld(m_mapMgr);
-    return pCreature;
+    return nullptr;
 }
 
 Creature* Battleground::spawnSpiritGuide(LocationVector &v, uint32_t faction)
@@ -901,7 +900,7 @@ void Battleground::eventResurrectPlayers()
     {
         for (unsigned int itr : i.second)
         {
-            Player* plr = m_mapMgr->getPlayer(itr);
+            Player* plr = m_mapMgr->getPlayer2(itr);
             if (plr && plr->isDead())
             {
                 WorldPacket data(SMSG_SPELL_START, 50);

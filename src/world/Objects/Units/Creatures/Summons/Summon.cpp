@@ -231,7 +231,7 @@ void Summon::unSummon()
 {
     _onUnsummon();
     // Remove us
-    Despawn(0, 0);
+    despawn(0, 0);
 }
 
 void Summon::dieAndDisappearOnExpire()
@@ -280,16 +280,16 @@ void Summon::setNewLifeTime(uint32_t time)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Override Object functions
-void Summon::OnPushToWorld()
+void Summon::onAttachToWorld()
 {
     // Add summon to owner
     if (m_unitOwner != nullptr && (m_summonProperties != nullptr || isPet()))
         m_unitOwner->getSummonInterface()->addSummonToHandler(this);
 
-    Creature::OnPushToWorld();
+    Creature::onAttachToWorld();
 }
 
-void Summon::OnPreRemoveFromWorld()
+void Summon::onPreDetachFromWorld()
 {
     // Make sure unit is unsummoned properly before removing from world
     if (m_summonActive)
@@ -299,7 +299,7 @@ void Summon::OnPreRemoveFromWorld()
         //plrOwner->sendDestroyObjectPacket(getGuid());
 
     m_unitOwner = nullptr;
-    Creature::OnPreRemoveFromWorld();
+    Creature::onPreDetachFromWorld();
 }
 
 bool Summon::isSummon() const { return true; }
@@ -557,11 +557,16 @@ void TotemSummon::unSummon()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Override Object functions
-void TotemSummon::OnPushToWorld()
+void TotemSummon::onAttachToWorld()
 {
-    Summon::OnPushToWorld();
+    Summon::onAttachToWorld();
 
     setupSpells();
+}
+
+void TotemSummon::onPreDetachFromWorld()
+{
+    Summon::onPreDetachFromWorld();
 }
 
 bool TotemSummon::isTotem() const { return true; }

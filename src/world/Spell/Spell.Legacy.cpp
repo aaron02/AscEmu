@@ -1,4 +1,4 @@
-/*
+﻿/*
  * AscEmu Framework based on ArcEmu MMORPG Server
  * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -111,56 +111,72 @@ void Spell::FillSpecifiedTargetsInArea(uint32_t i, float srcx, float srcy, float
     float r = range * range;
     SpellDidHitResult did_hit_result;
 
-    for (const auto& itr : m_caster->getInRangeObjectsSet())
-    {
-        auto obj = itr;
-        // don't add objects that are not units and that are dead
-        if (!obj || !obj->isCreatureOrPlayer() || !static_cast<Unit*>(obj)->isAlive())
-            continue;
+    const uint32_t maxTargets = getSpellInfo()->getMaxTargets();
+    bool full = (maxTargets && tmpMap->size() >= maxTargets);
 
-        if (getSpellInfo()->getTargetCreatureType())
-        {
-            if (!obj->isCreature())
-                continue;
-            CreatureProperties const* inf = static_cast<Creature*>(obj)->GetCreatureProperties();
-            if (!(1 << (inf->Type - 1) & getSpellInfo()->getTargetCreatureType()))
-                continue;
-        }
+    if (full)
+        return;
 
-        if (obj->isInRange(srcx, srcy, srcz, r))
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    m_caster->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_caster->GetNewGUID(), 2, s_guids);
+    m_caster->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
         {
+            if (full) return;
+
+            if (!unit.isAlive())
+                return;
+
+            if (auto mask = getSpellInfo()->getTargetCreatureType(); mask)
+            {
+                if (!unit.isCreature())
+                    return;
+
+                Creature* c = static_cast<Creature*>(&unit);
+                const CreatureProperties* inf = c->GetCreatureProperties();
+                if (!inf)
+                    return;
+
+                const uint32_t bit = 1u << (inf->Type - 1);
+                if ((bit & mask) == 0)
+                    return;
+            }
+
+            if (!unit.isInRange(srcx, srcy, srcz, r))
+                return;
+
             if (u_caster != nullptr)
             {
-                if (u_caster->isValidTarget(itr, getSpellInfo()))
+                if (u_caster->isValidTarget(&unit, getSpellInfo()))
                 {
-                    did_hit_result = static_cast<SpellDidHitResult>(DidHit(i, static_cast<Unit*>(itr)));
+                    did_hit_result = static_cast<SpellDidHitResult>(DidHit(i, &unit));
                     if (did_hit_result != SPELL_DID_HIT_SUCCESS)
-                        safeAddMissedTarget(itr->getGuid(), did_hit_result, SPELL_DID_HIT_SUCCESS);
+                        safeAddMissedTarget(unit.getGuid(), did_hit_result, SPELL_DID_HIT_SUCCESS);
                     else
-                        SafeAddTarget(tmpMap, itr->getGuid());
+                        SafeAddTarget(tmpMap, unit.getGuid());
                 }
-
             }
-            else //cast from GO
+            else
             {
                 if (g_caster && g_caster->getCreatedByGuid() && g_caster->getUnitOwner())
                 {
-                    //trap, check not to attack owner and friendly
-                    if (g_caster->getUnitOwner()->isValidTarget(itr, getSpellInfo()))
-                        SafeAddTarget(tmpMap, itr->getGuid());
+                    // Trap: nicht Owner/friendly treffen
+                    if (g_caster->getUnitOwner()->isValidTarget(&unit, getSpellInfo()))
+                        SafeAddTarget(tmpMap, unit.getGuid());
                 }
                 else
-                    SafeAddTarget(tmpMap, itr->getGuid());
-            }
-            if (getSpellInfo()->getMaxTargets())
-            {
-                if (getSpellInfo()->getMaxTargets() >= tmpMap->size())
                 {
-                    return;
+                    SafeAddTarget(tmpMap, unit.getGuid());
                 }
             }
-        }
-    }
+
+            // MaxTargets
+            if (maxTargets && tmpMap->size() >= maxTargets)
+                full = true;
+        });
 }
 void Spell::FillAllTargetsInArea(LocationVector & location, uint32_t ind)
 {
@@ -179,47 +195,50 @@ void Spell::FillAllTargetsInArea(uint32_t i, float srcx, float srcy, float srcz,
     float r = range * range;
     SpellDidHitResult did_hit_result;
 
-    for (const auto& itr : m_caster->getInRangeObjectsSet())
-    {
-        if (itr)
-        {
-            auto obj = itr;
-            if (!itr->isCreatureOrPlayer() || !static_cast<Unit*>(itr)->isAlive())      //|| (TO< Creature* >(*itr)->isTotem() && !TO< Unit* >(*itr)->isPlayer())) why shouldn't we fill totems?
-                continue;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-            if (p_caster && (itr)->isPlayer() && p_caster->getGroup() && static_cast<Player*>(itr)->getGroup() && static_cast<Player*>(itr)->getGroup() == p_caster->getGroup())      //Don't attack party members!!
+    m_caster->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_caster->GetNewGUID(), 2, s_guids);
+    m_caster->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
+        {
+            if (!unit.isAlive())      //|| (TO< Creature* >(*itr)->isTotem() && !TO< Unit* >(*itr)->isPlayer())) why shouldn't we fill totems?
+                return;
+
+            if (p_caster && unit.isPlayer() && p_caster->getGroup() && static_cast<Player*>(&unit)->getGroup() && static_cast<Player*>(&unit)->getGroup() == p_caster->getGroup())      //Don't attack party members!!
             {
                 //Dueling - AoE's should still hit the target party member if you're dueling with him
-                if (!p_caster->getDuelPlayer() || p_caster->getDuelPlayer() != static_cast<Player*>(itr))
-                    continue;
+                if (!p_caster->getDuelPlayer() || p_caster->getDuelPlayer() != static_cast<Player*>(&unit))
+                    return;
             }
             if (getSpellInfo()->getTargetCreatureType())
             {
-                if (!itr->isCreature())
-                    continue;
-                CreatureProperties const* inf = static_cast<Creature*>(itr)->GetCreatureProperties();
+                if (!unit.isCreature())
+                    return;
+                CreatureProperties const* inf = static_cast<Creature*>(&unit)->GetCreatureProperties();
                 if (!(1 << (inf->Type - 1) & getSpellInfo()->getTargetCreatureType()))
-                    continue;
+                    return;
             }
-            if (obj->isInRange(srcx, srcy, srcz, r))
+            if (unit.isInRange(srcx, srcy, srcz, r))
             {
                 if (worldConfig.terrainCollision.isCollisionEnabled)
                 {
-                    bool isInLOS = m_caster->IsWithinLOSInMap(itr);
+                    bool isInLOS = m_caster->IsWithinLOSInMap(&unit);
 
-                    if (m_caster->GetMapId() == itr->GetMapId() && !isInLOS)
-                        continue;
+                    if (m_caster->GetMapId() == unit.GetMapId() && !isInLOS)
+                        return;
                 }
 
                 if (u_caster != nullptr)
                 {
-                    if (u_caster->isValidTarget(itr, getSpellInfo()))
+                    if (u_caster->isValidTarget(&unit, getSpellInfo()))
                     {
-                        did_hit_result = static_cast<SpellDidHitResult>(DidHit(i, static_cast<Unit*>(itr)));
+                        did_hit_result = static_cast<SpellDidHitResult>(DidHit(i, &unit));
                         if (did_hit_result == SPELL_DID_HIT_SUCCESS)
-                            SafeAddTarget(tmpMap, itr->getGuid());
+                            SafeAddTarget(tmpMap, unit.getGuid());
                         else
-                            safeAddMissedTarget(itr->getGuid(), did_hit_result, SPELL_DID_HIT_SUCCESS);
+                            safeAddMissedTarget(unit.getGuid(), did_hit_result, SPELL_DID_HIT_SUCCESS);
                     }
                 }
                 else //cast from GO
@@ -227,20 +246,22 @@ void Spell::FillAllTargetsInArea(uint32_t i, float srcx, float srcy, float srcz,
                     if (g_caster != nullptr && g_caster->getCreatedByGuid() && g_caster->getUnitOwner() != nullptr)
                     {
                         //trap, check not to attack owner and friendly
-                        if (g_caster->getUnitOwner()->isValidTarget(itr, getSpellInfo()))
-                            SafeAddTarget(tmpMap, itr->getGuid());
+                        if (g_caster->getUnitOwner()->isValidTarget(&unit, getSpellInfo()))
+                            SafeAddTarget(tmpMap, unit.getGuid());
                     }
                     else
-                        SafeAddTarget(tmpMap, itr->getGuid());
+                        SafeAddTarget(tmpMap, unit.getGuid());
                 }
+
                 if (getSpellInfo()->getMaxTargets())
+                {
                     if (getSpellInfo()->getMaxTargets() == tmpMap->size())
                     {
                         return;
                     }
+                }
             }
-        }
-    }
+        });
 }
 
 // We fill all the targets in the area, including the stealthed ones
@@ -250,42 +271,45 @@ void Spell::FillAllFriendlyInArea(uint32_t i, float srcx, float srcy, float srcz
     float r = range * range;
     SpellDidHitResult did_hit_result;
 
-    for (const auto& itr : m_caster->getInRangeObjectsSet())
-    {
-        if (itr)
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    m_caster->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_caster->GetNewGUID(), 2, s_guids);
+    m_caster->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
         {
-            auto obj = itr;
-            if (!(itr->isCreatureOrPlayer()) || !static_cast<Unit*>(itr)->isAlive())
-                continue;
+            if (!unit.isAlive())
+                return;
 
             if (getSpellInfo()->getTargetCreatureType())
             {
-                if (!itr->isCreature())
-                    continue;
-                CreatureProperties const* inf = static_cast<Creature*>(itr)->GetCreatureProperties();
+                if (!unit.isCreature())
+                    return;
+                CreatureProperties const* inf = static_cast<Creature*>(&unit)->GetCreatureProperties();
                 if (!(1 << (inf->Type - 1) & getSpellInfo()->getTargetCreatureType()))
-                    continue;
+                    return;
             }
 
-            if (obj->isInRange(srcx, srcy, srcz, r))
+            if (unit.isInRange(srcx, srcy, srcz, r))
             {
                 if (worldConfig.terrainCollision.isCollisionEnabled)
                 {
-                    bool isInLOS = m_caster->IsWithinLOSInMap(itr);
+                    bool isInLOS = m_caster->IsWithinLOSInMap(&unit);
 
-                    if (m_caster->GetMapId() == itr->GetMapId() && !isInLOS)
-                        continue;
+                    if (m_caster->GetMapId() == unit.GetMapId() && !isInLOS)
+                        return;
                 }
 
                 if (u_caster != nullptr)
                 {
-                    if (u_caster->isFriendlyTo(itr))
+                    if (u_caster->isFriendlyTo(&unit))
                     {
-                        did_hit_result = static_cast<SpellDidHitResult>(DidHit(i, static_cast<Unit*>(itr)));
+                        did_hit_result = static_cast<SpellDidHitResult>(DidHit(i, &unit));
                         if (did_hit_result == SPELL_DID_HIT_SUCCESS)
-                            SafeAddTarget(tmpMap, itr->getGuid());
+                            SafeAddTarget(tmpMap, unit.getGuid());
                         else
-                            safeAddMissedTarget(itr->getGuid(), did_hit_result, SPELL_DID_HIT_SUCCESS);
+                            safeAddMissedTarget(unit.getGuid(), did_hit_result, SPELL_DID_HIT_SUCCESS);
                     }
                 }
                 else //cast from GO
@@ -293,22 +317,22 @@ void Spell::FillAllFriendlyInArea(uint32_t i, float srcx, float srcy, float srcz
                     if (g_caster != nullptr && g_caster->getCreatedByGuid() && g_caster->getUnitOwner() != nullptr)
                     {
                         //trap, check not to attack owner and friendly
-                        if (g_caster->getUnitOwner()->isFriendlyTo(itr))
-                            SafeAddTarget(tmpMap, itr->getGuid());
+                        if (g_caster->getUnitOwner()->isFriendlyTo(&unit))
+                            SafeAddTarget(tmpMap, unit.getGuid());
                     }
                     else
-                        SafeAddTarget(tmpMap, itr->getGuid());
+                        SafeAddTarget(tmpMap, unit.getGuid());
                 }
                 if (getSpellInfo()->getMaxTargets())
                     if (getSpellInfo()->getMaxTargets() == tmpMap->size())
                         return;
             }
-        }
-    }
+        });
 }
 
 uint64_t Spell::GetSinglePossibleEnemy(uint32_t i, float prange)
 {
+    uint64_t guid = 0;
     float r;
     if (prange)
         r = prange;
@@ -322,47 +346,57 @@ uint64_t Spell::GetSinglePossibleEnemy(uint32_t i, float prange)
     }
     float srcx = m_caster->GetPositionX(), srcy = m_caster->GetPositionY(), srcz = m_caster->GetPositionZ();
 
-    for (const auto& itr : m_caster->getInRangeObjectsSet())
-    {
-        auto obj = itr;
-        if (!obj || !itr->isCreatureOrPlayer() || !static_cast<Unit*>(itr)->isAlive())
-            continue;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-        if (getSpellInfo()->getTargetCreatureType())
+    m_caster->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_caster->GetNewGUID(), 2, s_guids);
+    m_caster->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
         {
-            if (!itr->isCreature())
-                continue;
-            CreatureProperties const* inf = static_cast<Creature*>(itr)->GetCreatureProperties();
-            if (!(1 << (inf->Type - 1) & getSpellInfo()->getTargetCreatureType()))
-                continue;
-        }
-        if (obj->isInRange(srcx, srcy, srcz, r))
-        {
-            if (u_caster != nullptr)
+            if (guid)
+                return;
+
+            if (!unit.isAlive())
+                return;
+
+            if (getSpellInfo()->getTargetCreatureType())
             {
-                if (u_caster->isValidTarget(itr, getSpellInfo()) && DidHit(i, static_cast<Unit*>(itr)) == SPELL_DID_HIT_SUCCESS)
-                {
-                    return itr->getGuid();
-                }
+                if (!unit.isCreature())
+                    return;
+                CreatureProperties const* inf = static_cast<Creature*>(&unit)->GetCreatureProperties();
+                if (!(1 << (inf->Type - 1) & getSpellInfo()->getTargetCreatureType()))
+                    return;
             }
-            else //cast from GO
+            if (unit.isInRange(srcx, srcy, srcz, r))
             {
-                if (g_caster && g_caster->getCreatedByGuid() && g_caster->getUnitOwner())
+                if (u_caster != nullptr)
                 {
-                    //trap, check not to attack owner and friendly
-                    if (g_caster->getUnitOwner()->isValidTarget(itr, getSpellInfo()))
+                    if (u_caster->isValidTarget(&unit, getSpellInfo()) && DidHit(i, &unit) == SPELL_DID_HIT_SUCCESS)
                     {
-                        return itr->getGuid();
+                        guid = unit.getGuid();
+                    }
+                }
+                else //cast from GO
+                {
+                    if (g_caster && g_caster->getCreatedByGuid() && g_caster->getUnitOwner())
+                    {
+                        //trap, check not to attack owner and friendly
+                        if (g_caster->getUnitOwner()->isValidTarget(&unit, getSpellInfo()))
+                        {
+                            guid = unit.getGuid();
+                        }
                     }
                 }
             }
-        }
-    }
-    return 0;
+        });
+
+    return guid;
 }
 
 uint64_t Spell::GetSinglePossibleFriend(uint32_t i, float prange)
 {
+    uint64_t guid = 0;
     float r;
     if (prange)
         r = prange;
@@ -376,42 +410,51 @@ uint64_t Spell::GetSinglePossibleFriend(uint32_t i, float prange)
     }
     float srcx = m_caster->GetPositionX(), srcy = m_caster->GetPositionY(), srcz = m_caster->GetPositionZ();
 
-    for (const auto& itr : m_caster->getInRangeObjectsSet())
-    {
-        auto obj = itr;
-        if (!obj || !itr->isCreatureOrPlayer() || !static_cast<Unit*>(itr)->isAlive())
-            continue;
-        if (getSpellInfo()->getTargetCreatureType())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    m_caster->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_caster->GetNewGUID(), 2, s_guids);
+    m_caster->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
         {
-            if (!itr->isCreature())
-                continue;
-            CreatureProperties const* inf = static_cast<Creature*>(itr)->GetCreatureProperties();
-            if (!(1 << (inf->Type - 1) & getSpellInfo()->getTargetCreatureType()))
-                continue;
-        }
-        if (obj->isInRange(srcx, srcy, srcz, r))
-        {
-            if (u_caster != nullptr)
+            if (guid)
+                return;
+
+            if (!unit.isAlive())
+                return;
+            if (getSpellInfo()->getTargetCreatureType())
             {
-                if (u_caster->isFriendlyTo(itr) && DidHit(i, static_cast<Unit*>(itr)) == SPELL_DID_HIT_SUCCESS)
-                {
-                    return itr->getGuid();
-                }
+                if (!unit.isCreature())
+                    return;
+                CreatureProperties const* inf = static_cast<Creature*>(&unit)->GetCreatureProperties();
+                if (!(1 << (inf->Type - 1) & getSpellInfo()->getTargetCreatureType()))
+                    return;
             }
-            else //cast from GO
+            if (unit.isInRange(srcx, srcy, srcz, r))
             {
-                if (g_caster && g_caster->getCreatedByGuid() && g_caster->getUnitOwner())
+                if (u_caster != nullptr)
                 {
-                    //trap, check not to attack owner and friendly
-                    if (g_caster->getUnitOwner()->isFriendlyTo(itr))
+                    if (u_caster->isFriendlyTo(&unit) && DidHit(i, &unit) == SPELL_DID_HIT_SUCCESS)
                     {
-                        return itr->getGuid();
+                        guid = unit.getGuid();
+                    }
+                }
+                else //cast from GO
+                {
+                    if (g_caster && g_caster->getCreatedByGuid() && g_caster->getUnitOwner())
+                    {
+                        //trap, check not to attack owner and friendly
+                        if (g_caster->getUnitOwner()->isFriendlyTo(&unit))
+                        {
+                            guid = unit.getGuid();
+                        }
                     }
                 }
             }
-        }
-    }
-    return 0;
+        });
+
+    return guid;
 }
 
 uint8_t Spell::DidHit(uint32_t effindex, Unit* target)
@@ -1254,7 +1297,7 @@ void Spell::HandleAddAura(uint64_t guid)
     if (u_caster && u_caster->getGuid() == guid)
         Target = u_caster;
     else if (m_caster->IsInWorld())
-        Target = m_caster->getWorldMap()->getUnit(guid);
+        Target = m_caster->getWorldMapUnit(guid);
 
     if (Target == nullptr)
     {
@@ -1706,7 +1749,7 @@ uint8_t Spell::CanCast(bool /*tolerate*/)
      */
     if (m_caster && m_caster->IsInWorld())
     {
-        Unit* target = m_caster->getWorldMap()->getUnit(m_targets.getUnitTargetGuid());
+        Unit* target = m_caster->getWorldMapUnit(m_targets.getUnitTargetGuid());
 
         /**
          * Check for valid targets
@@ -1832,7 +1875,7 @@ uint8_t Spell::CanCast(bool /*tolerate*/)
      */
     if (m_targets.getUnitTargetGuid())
     {
-        Unit* target = (m_caster->IsInWorld()) ? m_caster->getWorldMap()->getUnit(m_targets.getUnitTargetGuid()) : NULL;
+        Unit* target = (m_caster->IsInWorld()) ? m_caster->getWorldMapUnit(m_targets.getUnitTargetGuid()) : NULL;
 
         if (target)
         {
@@ -2943,7 +2986,7 @@ void Spell::SpellEffectJumpTarget(uint8_t effectIndex)
 
     if (m_targets.getTargetMask() & TARGET_FLAG_UNIT)
     {
-        Object* uobj = m_caster->getWorldMap()->getObject(m_targets.getUnitTargetGuid());
+        Object* uobj = m_caster->getWorldMapObject(m_targets.getUnitTargetGuid());
 
         if (uobj == nullptr || !uobj->isCreatureOrPlayer())
         {
@@ -3036,7 +3079,7 @@ void Spell::SpellEffectJumpBehindTarget(uint8_t effectIndex)
 
     if (m_targets.getTargetMask() & TARGET_FLAG_UNIT)
     {
-        Object* uobj = m_caster->getWorldMap()->getObject(m_targets.getUnitTargetGuid());
+        Object* uobj = m_caster->getWorldMapObject(m_targets.getUnitTargetGuid());
 
         if (uobj == nullptr || !uobj->isCreatureOrPlayer())
             return;

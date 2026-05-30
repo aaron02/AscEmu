@@ -1854,7 +1854,7 @@ void WorldSession::handleSellItemOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    Creature* unit = _player->getWorldMap()->getCreature(srlPacket.vendorGuid.getGuidLowPart());
+    Creature* unit = _player->getWorldMapCreature(srlPacket.vendorGuid.getRawGuid());
     // Check if Vendor exists
     if (unit == nullptr)
     {
@@ -1948,7 +1948,7 @@ void WorldSession::handleBuyItemInSlotOpcode(WorldPacket& recvPacket)
 
     _player->interruptSpell();
 
-    Creature* unit = _player->getWorldMap()->getCreature(srlPacket.srcGuid.getGuidLowPart());
+    Creature* unit = _player->getWorldMapCreature(srlPacket.srcGuid.getRawGuid());
     if (unit == nullptr || !unit->HasItems())
         return;
 
@@ -2121,7 +2121,7 @@ void WorldSession::handleBuyItemOpcode(WorldPacket& recvPacket)
     uint8_t error = 0;
     SlotResult slotResult;
 
-    auto creature = _player->getWorldMap()->getCreature(srlPacket.sourceGuid.getGuidLowPart());
+    auto creature = _player->getWorldMapCreature(srlPacket.sourceGuid.getRawGuid());
     if (creature == nullptr || !creature->HasItems())
         return;
 
@@ -2268,7 +2268,7 @@ void WorldSession::handleListInventoryOpcode(WorldPacket& recvPacket)
     WoWGuid wowGuid;
     wowGuid.Init(srlPacket.guid);
 
-    Creature* unit = _player->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    Creature* unit = _player->getWorldMapCreature(wowGuid.getRawGuid());
     if (unit == nullptr)
         return;
 
@@ -2568,7 +2568,7 @@ void WorldSession::handleRepairItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    Creature* pCreature = _player->getWorldMap()->getCreature(srlPacket.creatureGuid.getGuidLowPart());
+    Creature* pCreature = _player->getWorldMapCreature(srlPacket.creatureGuid.getRawGuid());
     if (pCreature == nullptr)
         return;
 

@@ -289,9 +289,10 @@ void Arena::HookOnPlayerDeath(Player* _player)
 
 void Arena::OnCreate()
 {
+    // todo aaron02 maprework
     // push gates into world
-    for (std::set<GameObject*>::iterator itr = m_gates.begin(); itr != m_gates.end(); ++itr)
-        (*itr)->PushToWorld(m_mapMgr);
+    //for (std::set<GameObject*>::iterator itr = m_gates.begin(); itr != m_gates.end(); ++itr)
+    //    (*itr)->PushToWorld(m_mapMgr);
 }
 
 void Arena::HookOnShadowSight()

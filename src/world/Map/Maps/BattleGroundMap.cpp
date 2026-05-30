@@ -69,7 +69,7 @@ bool BattlegroundMap::addPlayerToMap(Player* player)
 void BattlegroundMap::removePlayerFromMap(Player* player)
 {
     // if last player set unload timer
-    if (!m_unloadTimer && getPlayerCount() == 1)
+    if (!m_unloadTimer && registry_->countPlayers() == 1)
         setUnload();
 
     WorldMap::removePlayerFromMap(player);

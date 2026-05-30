@@ -3,7 +3,6 @@ Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Map/Cells/MapCell.hpp"
 #include "Corpse.hpp"
 
 #include <sstream>
@@ -17,7 +16,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Utilities/Strings.hpp"
 #include "Utilities/Util.hpp"
 
-Corpse::Corpse(uint32_t high, uint32_t low)
+Corpse::Corpse(uint64_t guid)
 {
     m_objectType |= TYPE_CORPSE;
     m_objectTypeId = TYPEID_CORPSE;
@@ -44,7 +43,7 @@ Corpse::Corpse(uint32_t high, uint32_t low)
     m_updateMask.SetCount(getSizeOfStructure(WoWCorpse));
 
     setOType(TYPE_CORPSE | TYPE_OBJECT);
-    setGuid(low, high);
+    setGuid(guid);
 
     setScale(1);
 }
@@ -155,12 +154,6 @@ uint32_t Corpse::getCorpseState() { return m_state; }
 void Corpse::setOwnerNotifyMap(uint64_t guid)
 {
     setOwnerGuid(guid);
-
-    if (guid == 0)
-    {
-        if (MapCell* mapCell = GetMapCell())
-            mapCell->corpseGoneIdle(this);
-    }
 }
 
 void Corpse::generateLoot()
@@ -171,7 +164,7 @@ void Corpse::generateLoot()
 void Corpse::despawn()
 {
     if (this->IsInWorld())
-        RemoveFromWorld(false);
+        destroy();
 }
 
 void Corpse::spawnBones()

@@ -1194,7 +1194,7 @@ void Group::resetInstances(uint8_t method, bool isRaid, Player* SendMsgTo)
             if (instanceSave->canReset())
                 isEmpty = ((InstanceMap*)map)->reset(method);
             else
-                isEmpty = !map->getPlayerCount();
+                isEmpty = !map->getRegistry().countPlayers();
         }
 
         if (SendMsgTo)

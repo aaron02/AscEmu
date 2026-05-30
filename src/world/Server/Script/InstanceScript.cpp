@@ -34,12 +34,17 @@ InstanceScript::InstanceScript(WorldMap* pMapMgr) : mInstance(pMapMgr)
 // Update Achievement Criteria for all players in instance
 void InstanceScript::updateAchievementCriteria(AchievementCriteriaTypes type, uint32_t miscValue1 /*= 0*/, uint32_t miscValue2 /*= 0*/, Unit* unit /*= nullptr*/)
 {
-    if (!getInstance()->getPlayerCount())
+    if (!getInstance()->getRegistry().countPlayers())
         return;
 
-    for (const auto& itr : getInstance()->getPlayers())
-        if (Player* player = itr.second)
-            player->updateAchievementCriteria(type, miscValue1, miscValue2, 0, unit);
+    thread_local std::vector<Player*> s_players;
+    getInstance()->getRegistry().snapshotPlayers(s_players);
+
+    // perm bind all players that are currently inside the instance
+    getInstance()->getRegistry().forEachPinned(s_players, [&](Player& player)
+        {
+            player.updateAchievementCriteria(type, miscValue1, miscValue2, 0, unit);
+        });
 }
 #endif
 
@@ -314,20 +319,24 @@ void InstanceScript::updateEncounterState(EncounterCreditType type, uint32_t cre
 
     if (dungeonId)
     {
-        for (auto const& playersPair : mInstance->getPlayers())
-        {
-            if (Player* player = playersPair.second)
+        if (!getInstance()->getRegistry().countPlayers())
+            return;
+
+        thread_local std::vector<Player*> s_players;
+        getInstance()->getRegistry().snapshotPlayers(s_players);
+
+        // perm bind all players that are currently inside the instance
+        getInstance()->getRegistry().forEachPinned(s_players, [&](Player& player)
             {
-                if (const auto group = player->getGroup())
+                if (const auto group = player.getGroup())
                 {
                     if (group->isLFGGroup())
                     {
-                        sLfgMgr.RewardDungeonDoneFor(dungeonId, player);
+                        sLfgMgr.RewardDungeonDoneFor(dungeonId, &player);
                         return;
                     }
                 }
-            }
-        }
+            });
     }
 }
 
@@ -512,40 +521,6 @@ void InstanceScript::removeUpdateEvent()
 //////////////////////////////////////////////////////////////////////////////////////////
 // misc
 
-void InstanceScript::setCellForcedStates(float xMin, float xMax, float yMin, float yMax, bool forceActive /*true*/)
-{
-    if (xMin == xMax || yMin == yMax)
-        return;
-
-    float Y = yMin;
-    while (xMin < xMax)
-    {
-        while (yMin < yMax)
-        {
-            MapCell* CurrentCell = mInstance->getCellByCoords(xMin, yMin);
-            if (forceActive && CurrentCell == nullptr)
-            {
-                CurrentCell = mInstance->createByCoords(xMin, yMin);
-                if (CurrentCell != nullptr)
-                    CurrentCell->init(mInstance->getPosX(xMin), mInstance->getPosY(yMin), mInstance);
-            }
-
-            if (CurrentCell != nullptr)
-            {
-                if (forceActive)
-                    mInstance->addForcedCell(CurrentCell);
-                else
-                    mInstance->removeForcedCell(CurrentCell);
-            }
-
-            yMin += 40.0f;
-        }
-
-        yMin = Y;
-        xMin += 40.0f;
-    }
-}
-
 Creature* InstanceScript::spawnCreature(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t factionId /* = 0*/)
 {
     CreatureProperties const* creatureProperties = sMySQLStore.getCreatureProperties(entry);
@@ -555,7 +530,7 @@ Creature* InstanceScript::spawnCreature(uint32_t entry, float posX, float posY, 
         return nullptr;
     }
 
-    Creature* creature = mInstance->getInterface()->spawnCreature(entry, LocationVector(posX, posY, posZ, posO), true, true, 0, 0);
+    Creature* creature = mInstance->getInterface()->spawnCreature(entry, LocationVector(posX, posY, posZ, posO));
     if (creature == nullptr)
         return nullptr;
 
@@ -569,30 +544,35 @@ Creature* InstanceScript::spawnCreature(uint32_t entry, float posX, float posY, 
 
 Creature* InstanceScript::getCreatureBySpawnId(uint32_t entry)
 {
-    return mInstance->getSqlIdCreature(entry);
+    // todo aaron02 maprework
+    return nullptr;
+    //return mInstance->getSqlIdCreature(entry);
 }
 
 Creature* InstanceScript::GetCreatureByGuid(uint32_t guid)
 {
-    return mInstance->getCreature(guid);
+    // todo aaron02 maprework
+    return nullptr;
+    //return mInstance->getCreature2(guid);
 }
 
-CreatureSet InstanceScript::getCreatureSetForEntry(uint32_t entry, bool debug /*= false*/, Player* player /*= nullptr*/)
+InstanceScript::CreatureSet InstanceScript::getCreatureSetForEntry(uint32_t entry, bool debug /*= false*/, Player* player /*= nullptr*/)
 {
     CreatureSet creatureSet;
     uint32_t countCreatures = 0;
-    for (auto creature : mInstance->getCreatures())
-    {
-        if (creature != nullptr)
-        {
 
-            if (creature->getEntry() == entry)
+    thread_local std::vector<Creature*> s_creatures;
+    getInstance()->getRegistry().snapshotCreatures(s_creatures);
+
+    // perm bind all creatures that are currently inside the instance
+    getInstance()->getRegistry().forEachPinned(s_creatures, [&](Creature& creature)
+        {
+            if (creature.getEntry() == entry)
             {
-                creatureSet.insert(creature);
+                creatureSet.insert(&creature);
                 ++countCreatures;
             }
-        }
-    }
+        });
 
     if (debug == true)
     {
@@ -603,20 +583,24 @@ CreatureSet InstanceScript::getCreatureSetForEntry(uint32_t entry, bool debug /*
     return creatureSet;
 }
 
-CreatureSet InstanceScript::getCreatureSetForEntries(std::vector<uint32_t> entryVector)
+InstanceScript::CreatureSet InstanceScript::getCreatureSetForEntries(std::vector<uint32_t> entryVector)
 {
     CreatureSet creatureSet;
-    for (auto creature : mInstance->getCreatures())
-    {
-        if (creature != nullptr)
+
+    thread_local std::vector<Creature*> s_creatures;
+    getInstance()->getRegistry().snapshotCreatures(s_creatures);
+    
+    // perm bind all creatures that are currently inside the instance
+    getInstance()->getRegistry().forEachPinned(s_creatures, [&](Creature& creature)
         {
             for (auto entry : entryVector)
             {
-                if (creature->getEntry() == entry)
-                    creatureSet.insert(creature);
+                if (creature.getEntry() == entry)
+                {
+                    creatureSet.insert(&creature);
+                }
             }
-        }
-    }
+        });
 
     return creatureSet;
 }
@@ -629,18 +613,22 @@ Creature* InstanceScript::findNearestCreature(Object* pObject, uint32_t entry, f
 
 GameObject* InstanceScript::spawnGameObject(uint32_t entry, float posX, float posY, float posZ, float posO, bool addToWorld /*= true*/, uint32_t misc1 /*= 0*/, uint32_t phase /*= 0*/)
 {
-    GameObject* spawnedGameObject = mInstance->getInterface()->spawnGameObject(entry, LocationVector(posX, posY, posZ, posO), addToWorld, misc1, phase);
+    GameObject* spawnedGameObject = mInstance->getInterface()->spawnGameObject(entry, LocationVector(posX, posY, posZ, posO), phase);
     return spawnedGameObject;
 }
 
 GameObject* InstanceScript::getGameObjectBySpawnId(uint32_t entry)
 {
-    return mInstance->getSqlIdGameObject(entry);
+    // todo aaron02 maprework
+    return nullptr;
+    //return mInstance->getSqlIdGameObject(entry);
 }
 
 GameObject* InstanceScript::GetGameObjectByGuid(uint32_t guid)
 {
-    return mInstance->getGameObject(guid);
+    // todo aaron02 maprework
+    return nullptr;
+    //return mInstance->getGameObject2(guid);
 }
 
 GameObject* InstanceScript::getClosestGameObjectForPosition(uint32_t entry, float posX, float posY, float posZ)
@@ -675,14 +663,16 @@ GameObject* InstanceScript::getClosestGameObjectForPosition(uint32_t entry, floa
 InstanceScript::GameObjectSet InstanceScript::getGameObjectsSetForEntry(uint32_t entry)
 {
     GameObjectSet gameobjectSet;
-    for (auto gameobject : mInstance->getGameObjects())
-    {
-        if (gameobject != nullptr)
+
+    thread_local std::vector<GameObject*> s_gameobjects;
+    getInstance()->getRegistry().snapshotGameObjects(s_gameobjects);
+
+    // perm bind all gameobjects that are currently inside the instance
+    getInstance()->getRegistry().forEachPinned(s_gameobjects, [&](GameObject& gameobject)
         {
-            if (gameobject->getEntry() == entry)
-                gameobjectSet.insert(gameobject);
-        }
-    }
+            if (gameobject.getEntry() == entry)
+                gameobjectSet.insert(&gameobject);
+        });
 
     return gameobjectSet;
 }

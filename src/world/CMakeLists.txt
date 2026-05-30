@@ -22,6 +22,7 @@ file(GLOB SRC_MAP_AREA_FILES Map/Area/*.cpp Map/Area/*.h Map/Area/*.hpp)
 file(GLOB SRC_MAP_CELLS_FILES Map/Cells/*.cpp Map/Cells/*.h Map/Cells/*.hpp)
 file(GLOB SRC_MAP_MANAGEMENT_FILES Map/Management/*.cpp Map/Management/*.h Map/Management/*.hpp)
 file(GLOB SRC_MAP_MAPS_FILES Map/Maps/*.cpp Map/Maps/*.h Map/Maps/*.hpp)
+file(GLOB SRC_MAP_VISIBILITY_FILES Map/Visibility/*.cpp Map/Visibility/*.h Map/Visibility/*.hpp)
 file(GLOB SRC_MOVEMENT_FILES Movement/*.cpp Movement/*.h Movement/*.hpp)
 file(GLOB SRC_MOVEMENT_MOVEMENTGENERATOR_FILES Movement/MovementGenerators/*.cpp Movement/MovementGenerators/*.h Movement/MovementGenerators/*.hpp)
 file(GLOB SRC_MOVEMENT_SPLINE_FILES Movement/Spline/*.cpp Movement/Spline/*.h Movement/Spline/*.hpp)
@@ -72,6 +73,7 @@ add_executable(${EXECUTABLE_NAME}
     ${SRC_MAP_CELLS_FILES}
     ${SRC_MAP_MANAGEMENT_FILES}
     ${SRC_MAP_MAPS_FILES}
+    ${SRC_MAP_VISIBILITY_FILES}
     ${SRC_MOVEMENT_FILES}
     ${SRC_MOVEMENT_MOVEMENTGENERATOR_FILES}
     ${SRC_MOVEMENT_SPLINE_FILES}

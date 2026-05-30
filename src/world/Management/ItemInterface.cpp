@@ -532,7 +532,8 @@ std::tuple<AddItemResult, std::unique_ptr<Item>> ItemInterface::m_AddItem(std::u
 
             if (m_pOwner->IsInWorld() && !item->IsInWorld())
             {
-                item->PushToWorld(m_pOwner->getWorldMap());
+                // todo aaron02 maprework
+                //item->PushToWorld(m_pOwner->getWorldMap());
                 ByteBuffer buf(2500);
                 uint32_t count = item->buildCreateUpdateBlockForPlayer(&buf, m_pOwner);
                 m_pOwner->getUpdateMgr().pushCreationData(&buf, count);

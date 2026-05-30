@@ -110,16 +110,13 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // Essential functions
     void Update(unsigned long time_passed);             // hides function Unit::Update
-    void AddToWorld();                                  // hides virtual function Object::AddToWorld
-    void AddToWorld(WorldMap* pMapMgr);                 // hides virtual function Object::AddToWorld
-    // void PushToWorld(WorldMap*);                     // not used
-    // void RemoveFromWorld(bool free_guid);            // not used
-    void OnPrePushToWorld() override;                   // overrides virtual function  Object::OnPrePushToWorld
-    void OnPushToWorld() override;                      // overrides virtual function  Object::OnPushToWorld
-    // void OnPreRemoveFromWorld();                     // not used
-    // void OnRemoveFromWorld();                        // not used
 
-    void removeFromWorld();
+    virtual void onPreAttachToWorld() override;
+    virtual void onAttachToWorld() override;
+
+    virtual void onPreDetachFromWorld() override;
+    //virtual void onDetachFromWorld() override;
+
     bool m_isReadyToBeRemoved = false;
 
 private:
@@ -791,7 +788,7 @@ protected:
     void setUpdateBits(UpdateMask* updateMask, Player* target) const;
 
     //////////////////////////////////////////////////////////////////////////////////////////
-    // Visiblility
+    // Visiblility todo aaron02 maprework
 public:
     void addVisibleObject(uint64_t guid);
     void removeVisibleObject(uint64_t guid);
@@ -2017,8 +2014,69 @@ public:
     void onRemoveInRangeObject(Object* object) override;
     void clearInRangeSets() override;
 
+    void _visAdd(const WoWGuid& g)
+    {
+        const uint64_t raw = g.getRawGuid();
+        switch (g.getHigh())
+        {
+            case HighGuid::Player:          visible_.players.insert(raw);       break;
+            case HighGuid::Unit:
+            case HighGuid::Vehicle:         visible_.creatures.insert(raw);     break;
+            case HighGuid::GameObject:      visible_.gameobjects.insert(raw);   break;
+            case HighGuid::DynamicObject:   visible_.dynamics.insert(raw);      break;
+            case HighGuid::Pet:             visible_.pets.insert(raw);          break;
+            case HighGuid::Corpse:          visible_.corpses.insert(raw);       break;
+            case HighGuid::Transporter:     visible_.gameobjects.insert(raw);   break;
+            default: break;
+        }
+        visible_.any.insert(raw);
+
+        // Keep the legacy visibility storage in sync. Several older code paths
+        // still use isVisibleObject()/addVisibleObject()/removeVisibleObject()
+        // to decide whether a create block needs to be built. If _visAdd only
+        // updates the new typed cache, those paths can create the same object
+        // again for the same player in the same update cycle.
+        // delete when legacy code is removed
+        m_visibleObjects.insert(raw);
+    }
+
+    void _visRemove(const WoWGuid& g)
+    {
+        const uint64_t raw = g.getRawGuid();
+        switch (g.getHigh()) 
+        {
+            case HighGuid::Player:          visible_.players.erase(raw);        break;
+            case HighGuid::Unit:
+            case HighGuid::Vehicle:         visible_.creatures.erase(raw);      break;
+            case HighGuid::GameObject:      visible_.gameobjects.erase(raw);    break;
+            case HighGuid::DynamicObject:   visible_.dynamics.erase(raw);       break;
+            case HighGuid::Pet:             visible_.pets.erase(raw);           break;
+            case HighGuid::Corpse:          visible_.corpses.erase(raw);        break;
+            case HighGuid::Transporter:     visible_.gameobjects.erase(raw);    break;
+            default: break;
+        }
+        visible_.any.erase(raw);
+        m_visibleObjects.erase(raw);
+    }
+
+    void _visReset()
+    {
+        visible_.clear();
+        m_visibleObjects.clear();
+    }
+    visibility::VisibleCache& visible()             noexcept { return visible_; }
+    const visibility::VisibleCache& visible() const noexcept { return visible_; }
+
+    bool seesGuid(const WoWGuid& g)     const { return visible_.any.count(g.getRawGuid()) != 0; }
+    bool seesPlayer(const WoWGuid& g)   const { return visible_.players.count(g.getRawGuid()) != 0; }
+    bool seesCreature(const WoWGuid& g) const { return visible_.creatures.count(g.getRawGuid()) != 0; }
+
+private:
+    visibility::VisibleCache visible_;
+
     /////////////////////////////////////////////////////////////////////////////////////////
     // PVP Stuff
+public:
     float m_spellHasteRatingBonus = 1.0f;
     void updateAttackSpeed();
 

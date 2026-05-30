@@ -93,13 +93,16 @@ void CombatHandler::clearCombat()
 void CombatHandler::onRemoveFromWorld()
 {
     // Clear this unit from all in range units combat map to avoid crashes when removed from world
-    for (const auto& obj : getOwner()->getInRangeObjectsSet())
-    {
-        if (obj == nullptr || !obj->isCreatureOrPlayer())
-            continue;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-        dynamic_cast<Unit*>(obj)->getCombatHandler().onUnitRemovedFromWorld(getOwner()->getGuid());
-    }
+    getOwner()->getWorldMap()->getSpatialIndex().collectNearGuidsCached(getOwner()->GetNewGUID(), 2, s_guids);
+    getOwner()->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
+        {
+            unit.getCombatHandler().onUnitRemovedFromWorld(getOwner()->getGuid());
+        });
 
     clearCombat();
 }

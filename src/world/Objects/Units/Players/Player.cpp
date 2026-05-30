@@ -28,6 +28,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Map/Area/AreaManagementGlobals.hpp"
 #include "Map/Area/AreaStorage.hpp"
 #include "Map/Management/MapMgr.hpp"
+#include "Map/Visibility/VisibilityTypes.hpp"
 #include "Objects/GameObject.h"
 #include "Management/ObjectMgr.hpp"
 #include "Management/QuestMgr.h"
@@ -469,72 +470,7 @@ void Player::Update(unsigned long time_passed)
     }
 }
 
-void Player::AddToWorld()
-{
-    if (auto transport = this->GetTransport())
-    {
-        this->SetPosition(transport->GetPositionX() + GetTransOffsetX(),
-            transport->GetPositionY() + GetTransOffsetY(),
-            transport->GetPositionZ() + GetTransOffsetZ(),
-            GetOrientation(), false);
-    }
-
-    // If we join an invalid instance and get booted out, this will prevent our stats from doubling :P
-    if (IsInWorld())
-        return;
-
-    m_beingPushed = true;
-    Object::AddToWorld();
-
-    if (m_WorldMap == nullptr)
-    {
-        m_beingPushed = false;
-        ejectFromInstance();
-        return;
-    }
-
-    if (m_session)
-        m_session->SetInstance(m_WorldMap->getInstanceId());
-
-#if VERSION_STRING > TBC
-    sendInstanceDifficultyPacket(m_WorldMap->getDifficulty());
-#endif
-}
-
-void Player::AddToWorld(WorldMap* pMapMgr)
-{
-    if (auto transport = this->GetTransport())
-    {
-        auto t_loc = transport->GetPosition();
-        this->SetPosition(t_loc.x + this->GetTransOffsetX(),
-            t_loc.y + this->GetTransOffsetY(),
-            t_loc.z + this->GetTransOffsetZ(),
-            this->GetOrientation(), false);
-    }
-
-    // If we join an invalid instance and get booted out, this will prevent our stats from doubling :P
-    if (IsInWorld())
-        return;
-
-    m_beingPushed = true;
-    Object::AddToWorld(pMapMgr);
-
-    if (m_WorldMap == nullptr)
-    {
-        m_beingPushed = false;
-        ejectFromInstance();
-        return;
-    }
-
-    if (m_session)
-        m_session->SetInstance(m_WorldMap->getInstanceId());
-
-#if VERSION_STRING > TBC
-    sendInstanceDifficultyPacket(m_WorldMap->getDifficulty());
-#endif
-}
-
-void Player::OnPrePushToWorld()
+void Player::onPreAttachToWorld()
 {
     sendInitialLogonPackets();
 #if VERSION_STRING > TBC
@@ -549,9 +485,31 @@ void Player::OnPrePushToWorld()
 #if VERSION_STRING >= WotLK
     updateRunicPowerRegeneration(true);
 #endif
+
+    m_beingPushed = true;
+
+    if (m_WorldMap == nullptr)
+    {
+        m_beingPushed = false;
+        ejectFromInstance();
+    }
+    else
+    {
+        if (m_session)
+            m_session->SetInstance(m_WorldMap->getInstanceId());
+
+#if VERSION_STRING > TBC
+        sendInstanceDifficultyPacket(m_WorldMap->getDifficulty());
+#endif
+    }
+
+    _visReset();
+    visible().reserve(256);
+
+    Object::onPreAttachToWorld();
 }
 
-void Player::OnPushToWorld()
+void Player::onAttachToWorld()
 {
     uint8_t class_ = getClass();
     uint8_t startlevel = 1;
@@ -576,8 +534,6 @@ void Player::OnPushToWorld()
 
     if (m_playerInfo->lastOnline + 900 < UNIXTIME)    // did we logged out for more than 15 minutes?
         getItemInterface()->RemoveAllConjured();
-
-    Unit::OnPushToWorld();
 
     sHookInterface.OnEnterWorld(this);
 
@@ -629,18 +585,18 @@ void Player::OnPushToWorld()
                 setMaxPower(POWER_TYPE_ENERGY, 100);
                 setPower(POWER_TYPE_ENERGY, 100);
                 break;
-#if VERSION_STRING >= WotLK
+    #if VERSION_STRING >= WotLK
             case DEATHKNIGHT:
                 setMaxPower(POWER_TYPE_RUNES, 8);
                 setMaxPower(POWER_TYPE_RUNIC_POWER, 1000);
                 setPower(POWER_TYPE_RUNES, 8);
                 break;
-#endif
-#if VERSION_STRING >= Cata
+    #endif
+    #if VERSION_STRING >= Cata
             case HUNTER:
                 setPower(POWER_TYPE_FOCUS, 0);
                 setMaxPower(POWER_TYPE_FOCUS, 100);
-#endif
+    #endif
             default:
                 setPower(POWER_TYPE_MANA, getMaxPower(POWER_TYPE_MANA));
                 break;
@@ -706,12 +662,16 @@ void Player::OnPushToWorld()
 
     sendTaxiNodeStatusMultiple();
     continueTaxiFlight();
+
+    Object::onAttachToWorld();
 }
 
-void Player::removeFromWorld()
+void Player::onPreDetachFromWorld()
 {
     if (m_sendOnlyRaidgroup)
         event_RemoveEvents(EVENT_PLAYER_EJECT_FROM_INSTANCE);
+
+    _visReset();
 
     m_loadHealth = getHealth();
     m_loadMana = getPower(POWER_TYPE_MANA);
@@ -730,7 +690,7 @@ void Player::removeFromWorld()
     //clear buyback
     getItemInterface()->EmptyBuyBack();
 
-    // Keep current pet active, Unit::RemoveFromWorld removes other summons
+    // Keep current pet active, removes other summons
     unSummonPetTemporarily();
 
     if (m_summonedObject)
@@ -742,21 +702,17 @@ void Player::removeFromWorld()
         else
         {
             if (m_summonedObject->IsInWorld())
-                m_summonedObject->RemoveFromWorld(true);
-
-            delete m_summonedObject;
+                m_summonedObject->destroy();
         }
         m_summonedObject = nullptr;
     }
 
-    if (IsInWorld())
-    {
-        removeItemsFromWorld();
-        Unit::RemoveFromWorld(false);
-    }
+    removeItemsFromWorld();
 
     m_changingMaps = true;
     m_playerInfo->lastOnline = UNIXTIME; // don't destroy conjured items yet
+
+    Unit::onPreDetachFromWorld();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -1742,7 +1698,7 @@ bool Player::teleport(const LocationVector& vec, WorldMap* map)
 {
     if (map)
     {
-        if (map->getPlayer(this->getGuidLow()))
+        if (map->getPlayer2(this->getGuidLow()))
         {
             this->SetPosition(vec);
         }
@@ -1868,7 +1824,7 @@ void Player::safeTeleport(WorldMap* mgr, const LocationVector& vec)
         }
 
         if (IsInWorld())
-            removeFromWorld();
+            getWorldMap()->getObjectFactory().detachFromWorld(this, false, true);
 
         m_mapId = mgr->getBaseMap()->getMapId();
         m_instanceId = mgr->getInstanceId();
@@ -2089,7 +2045,7 @@ void Player::setPhase(uint8_t command, uint32_t newPhase)
 
     getSummonInterface()->setPhase(command, newPhase);
 
-    if (Unit* charm = m_WorldMap->getUnit(getCharmGuid()))
+    if (Unit* charm = getWorldMapUnit(getCharmGuid()))
         charm->setPhase(command, newPhase);
 }
 
@@ -2113,7 +2069,7 @@ void Player::zoneUpdate(uint32_t zoneId)
         auto at = GetArea();
         if (at && (at->team == AREAC_SANCTUARY || at->flags & AREA_SANCTUARY))
         {
-            Unit* pUnit = (getTargetGuid() == 0) ? nullptr : (m_WorldMap ? m_WorldMap->getUnit(getTargetGuid()) : nullptr);
+            Unit* pUnit = (getTargetGuid() == 0) ? nullptr : (m_WorldMap ? getWorldMapUnit(getTargetGuid()) : nullptr);
             if (pUnit && m_duelPlayer != pUnit)
             {
                 eventAttackStop();
@@ -2204,10 +2160,7 @@ void Player::eventExploration()
     if (!IsInWorld())
         return;
 
-    if (m_position.x > Map::Terrain::_maxX || m_position.x < Map::Terrain::_minX || m_position.y > Map::Terrain::_maxY || m_position.y < Map::Terrain::_minY)
-        return;
-
-    if (getWorldMap()->getCellByCoords(GetPositionX(), GetPositionY()) == nullptr)
+    if (m_position.x > visibility::Terrain::MaxX || m_position.x < visibility::Terrain::MinX || m_position.y > visibility::Terrain::MaxY || m_position.y < visibility::Terrain::MinY)
         return;
 
     if (auto areaTableEntry = this->GetArea())
@@ -2310,7 +2263,7 @@ bool Player::exitInstance()
 {
     if (getBGEntryPosition().isSet())
     {
-        removeFromWorld();
+        getWorldMap()->getObjectFactory().detachFromWorld(this, false, true);
         safeTeleport(getBGEntryMapId(), getBGEntryInstanceId(), getBGEntryPosition());
 
         return true;
@@ -2343,7 +2296,7 @@ std::string Player::getBanReason() const { return m_banreason; }
 GameObject* Player::getSelectedGo() const
 {
     if (m_GMSelectedGO)
-        return getWorldMap()->getGameObject(static_cast<uint32_t>(m_GMSelectedGO));
+        return getWorldMapGameObject(m_GMSelectedGO);
 
     return nullptr;
 }
@@ -3171,19 +3124,32 @@ void Player::outPacketToSet(uint16_t opcode, uint16_t length, const void* data, 
     if (sendToSelf)
         outPacket(opcode, length, data);
 
-    for (const auto& objectPlayer : getInRangePlayersSet())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(128);
+
+    m_WorldMap->getVisibilitySystem().collectViewersOf(GetNewGUID(), s_guids);
+
+    for (const WoWGuid& guid : s_guids)
     {
-        if (Player* player = static_cast<Player*>(objectPlayer))
+        Player* player = getWorldMapPlayer(guid.getRawGuid());
+        if (!player)
+            continue;
+
+        if (player == this)
+            continue;
+
+        if ((player->GetPhase() & GetPhase()) == 0)
+            continue;
+
+        if (m_isGmInvisible)
         {
-            if (m_isGmInvisible)
-            {
-                if (player->getSession()->hasPermissions())
-                    player->outPacket(opcode, length, data);
-            }
-            else
-            {
+            if (player->getSession()->hasPermissions())
                 player->outPacket(opcode, length, data);
-            }
+        }
+        else
+        {
+            player->outPacket(opcode, length, data);
         }
     }
 }
@@ -3196,32 +3162,45 @@ void Player::sendMessageToSet(WorldPacket* data, bool sendToSelf, bool sendToOwn
     if (sendToSelf)
         sendPacket(data);
 
-    for (const auto& objectPlayer : getInRangePlayersSet())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(128);
+
+    m_WorldMap->getVisibilitySystem().collectViewersOf(GetNewGUID(), s_guids);
+
+    for (const WoWGuid& guid : s_guids)
     {
-        if (Player* player = static_cast<Player*>(objectPlayer))
+        Player* player = getWorldMapPlayer(guid.getRawGuid());
+        if (!player)
+            continue;
+
+        if (player == this)
+            continue;
+
+        if (player->getSession() == nullptr)
+            continue;
+
+        if (sendToOwnTeam && player->getTeam() != getTeam())
+            continue;
+
+        if ((player->GetPhase() & GetPhase()) == 0)
+            continue;
+
+        if (data->GetOpcode() != SMSG_MESSAGECHAT)
         {
-            if (player->getSession() == nullptr)
+            if (m_isGmInvisible && !player->getSession()->hasPermissions())
                 continue;
 
-            if (sendToOwnTeam && player->getTeam() != getTeam())
+            if (player->seesGuid(getGuid()))
+                player->sendPacket(data);
+        }
+        else
+        {
+            if (!isInRange(player, 64.0f))
                 continue;
 
-            if ((player->GetPhase() & GetPhase()) == 0)
-                continue;
-
-            if (data->GetOpcode() != SMSG_MESSAGECHAT)
-            {
-                if (m_isGmInvisible && !player->getSession()->hasPermissions())
-                    continue;
-
-                if (player->isVisibleObject(getGuid()))
-                    player->sendPacket(data);
-            }
-            else
-            {
-                if (!player->isIgnored(getGuidLow()))
-                    player->sendPacket(data);
-            }
+            if (!player->isIgnored(getGuidLow()))
+                player->sendPacket(data);
         }
     }
 }
@@ -7307,7 +7286,7 @@ void Player::die(Unit* unitAttacker, uint32_t /*damage*/, uint32_t /*spellId*/)
                 if (spell->getSpellInfo()->getEffect(i) == SPELL_EFFECT_PERSISTENT_AREA_AURA)
                 {
                     const uint64_t guid = getChannelObjectGuid();
-                    DynamicObject* dynamicObject = getWorldMap()->getDynamicObject(WoWGuid::getGuidLowPartFromUInt64(guid));
+                    DynamicObject* dynamicObject = getWorldMapDynamicObject(guid);
                     if (!dynamicObject)
                         continue;
 
@@ -7320,10 +7299,18 @@ void Player::die(Unit* unitAttacker, uint32_t /*damage*/, uint32_t /*spellId*/)
         }
     }
 
-    for (const auto& inRangePlayer : getInRangePlayersSet())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+    m_WorldMap->getVisibilitySystem().collectViewersOf(GetNewGUID(), s_guids);
+
+    for (const WoWGuid& id : s_guids)
     {
-        Unit* attacker = dynamic_cast<Unit*>(inRangePlayer);
-        if (attacker && attacker->isCastingSpell())
+        Player* attacker = m_WorldMap->getRegistry().getPlayer(id);
+        if (!attacker)
+            continue;
+
+        if (attacker->isCastingSpell())
         {
             for (uint8_t i = 0; i < CURRENT_SPELL_MAX; ++i)
             {
@@ -7526,10 +7513,12 @@ void Player::spawnCorpseBody()
             if (m_lootableOnCorpse && corpse->getDynamicFlags() != 1)
                 corpse->setDynamicFlags(1);
 
+            // todo aaron02 maprework
+            /*
             if (m_WorldMap == nullptr)
                 corpse->AddToWorld();
             else
-                corpse->PushToWorld(m_WorldMap);
+                corpse->PushToWorld(m_WorldMap);*/
         }
 
         setCorpseData(corpse->GetPosition(), corpse->GetInstanceID());
@@ -8666,7 +8655,7 @@ void Player::acceptQuest(uint64_t guid, uint32_t quest_id)
 
     if (wowGuid.isUnit())
     {
-        Creature* quest_giver = m_WorldMap->getCreature(wowGuid.getGuidLowPart());
+        Creature* quest_giver = getWorldMapCreature(guid);
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -8681,7 +8670,7 @@ void Player::acceptQuest(uint64_t guid, uint32_t quest_id)
     }
     else if (wowGuid.isGameObject())
     {
-        GameObject* quest_giver = m_WorldMap->getGameObject(wowGuid.getGuidLowPart());
+        GameObject* quest_giver = getWorldMapGameObject(guid);
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -8704,7 +8693,7 @@ void Player::acceptQuest(uint64_t guid, uint32_t quest_id)
     }
     else if (wowGuid.isPlayer())
     {
-        Player* quest_giver = m_WorldMap->getPlayer(static_cast<uint32_t>(guid));
+        Player* quest_giver = getWorldMapPlayer(guid);
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -9054,27 +9043,29 @@ void Player::addQuestKill(uint32_t questId, uint8_t reqId, uint32_t delay)
 
 void Player::updateNearbyQuestGameObjects()
 {
-    for (const auto& itr : getInRangeObjectsSet())
-    {
-        auto* obj = itr;
-        if (obj == nullptr || !obj->isGameObject() || obj->isTransporter())
-            continue;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-        if (const auto gameobject = dynamic_cast<GameObject*>(obj))
+    getWorldMap()->getSpatialIndex().collectNearGuidsCached(GetNewGUID(), 2, s_guids);
+    getWorldMap()->getRegistry().forEachPinnedByGuidsT<GameObject>(s_guids,
+        [&](GameObject& gameObject)
         {
-            const auto gobProperties = gameobject->GetGameObjectProperties();
+            if (gameObject.isTransporter())
+                return;
+
+            const auto gobProperties = gameObject.GetGameObjectProperties();
 
             // Update dynamic flags for gameobjects with quests or item loot
-            if (gameobject->isQuestGiver() || !gobProperties->itemMap.empty() || !gobProperties->goMap.empty())
+            if (gameObject.isQuestGiver() || !gobProperties->itemMap.empty() || !gobProperties->goMap.empty())
             {
 #if VERSION_STRING < Mop
-                gameobject->forceBuildUpdateValueForField(getOffsetForStructuredField(WoWGameObject, dynamic), this);
+                gameObject.forceBuildUpdateValueForField(getOffsetForStructuredField(WoWGameObject, dynamic), this);
 #else
-                gameobject->forceBuildUpdateValueForField(getOffsetForStructuredField(WoWObject, dynamic_field), this);
+                gameObject.forceBuildUpdateValueForField(getOffsetForStructuredField(WoWObject, dynamic_field), this);
 #endif
             }
-        }
-    }
+        });
 }
 
 std::set<uint32_t> Player::getFinishedQuests() const { return m_finishedQuests; }
@@ -10185,45 +10176,58 @@ AchievementMgr* Player::getAchievementMgr() { return m_achievementMgr.get(); }
 
 void Player::sendUpdateDataToSet(ByteBuffer* groupBuf, ByteBuffer* nonGroupBuf, bool sendToSelf)
 {
-    if (groupBuf && nonGroupBuf)
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    m_WorldMap->getVisibilitySystem().collectViewersOf(GetNewGUID(), s_guids);
+
+    const uint32_t myPhase = GetPhase();
+    const uint64_t myRaw = GetNewGUID().getRawGuid();
+    Group* myGroup = getGroup();
+    const int32_t myGroupId = myGroup ? myGroup->GetID() : 0;
+
+    auto push = [](Player* p, ByteBuffer* buf)
+        {
+        if (buf)
+            p->getUpdateMgr().pushUpdateData(buf, 1);
+        };
+
+    for (const WoWGuid& id : s_guids)
     {
-        for (const auto& object : getInRangePlayersSet())
+        if (!id.isPlayer())
+            continue;
+
+        if (!sendToSelf && id.getRawGuid() == myRaw)
+            continue;
+
+        Player* p = m_WorldMap->getRegistry().getPlayer(id);
+        if (!p || p->getWorldMap() != m_WorldMap)
+            continue;
+
+        if (p->GetPhase() != myPhase)
+            continue;
+
+        Group* g = p->getGroup();
+        const bool sameGroup = (myGroup && g && g->GetID() == myGroupId);
+
+        if (groupBuf && nonGroupBuf) 
         {
-            if (Player* player = static_cast<Player*>(object))
-            {
-                if (player->getGroup() && getGroup() && player->getGroup()->GetID() == getGroup()->GetID())
-                    player->getUpdateMgr().pushUpdateData(groupBuf, 1);
-                else
-                    player->getUpdateMgr().pushUpdateData(nonGroupBuf, 1);
-            }
+            push(p, sameGroup ? groupBuf : nonGroupBuf);
         }
-    }
-    else
-    {
-        if (groupBuf && nonGroupBuf == nullptr)
+        else if (groupBuf) 
         {
-            for (const auto& object : getInRangePlayersSet())
-            {
-                if (Player* player = static_cast<Player*>(object))
-                    if (player->getGroup() && getGroup() && player->getGroup()->GetID() == getGroup()->GetID())
-                        player->getUpdateMgr().pushUpdateData(groupBuf, 1);
-            }
+            if (sameGroup) 
+                push(p, groupBuf);
         }
-        else
+        else if (nonGroupBuf) 
         {
-            if (groupBuf == nullptr && nonGroupBuf)
-            {
-                for (const auto& object : getInRangePlayersSet())
-                {
-                    if (Player* player = static_cast<Player*>(object))
-                        if (player->getGroup() == nullptr || player->getGroup()->GetID() != getGroup()->GetID())
-                            player->getUpdateMgr().pushUpdateData(nonGroupBuf, 1);
-                }
-            }
+            if (!sameGroup) 
+                push(p, nonGroupBuf);
         }
     }
 
-    if (sendToSelf && groupBuf != nullptr)
+    if (sendToSelf && groupBuf)
         getUpdateMgr().pushUpdateData(groupBuf, 1);
 }
 
@@ -10289,7 +10293,7 @@ bool Player::canTrainAt(Trainer const* trainer)
 
 void Player::sendCinematicCamera(uint32_t id)
 {
-    m_WorldMap->changeObjectLocation(this);
+    m_WorldMap->onObjectMoved(this);
     SetPosition(float(GetPositionX() + 0.01), float(GetPositionY() + 0.01), float(GetPositionZ() + 0.01), GetOrientation());
     m_session->SendPacket(SmsgTriggerCinematic(id).serialise().get());
 }
@@ -10761,24 +10765,26 @@ void Player::continueTaxiFlight() const
 
 void Player::sendTaxiNodeStatusMultiple()
 {
-    for (const auto& itr : getInRangeObjectsSet())
-    {
-        if (!itr->isCreature())
-            continue;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-        Creature* creature = itr->ToCreature();
-        if (!creature || creature->isHostileTo(this))
-            continue;
+    getWorldMap()->getSpatialIndex().collectNearGuidsCached(GetNewGUID(), 2, s_guids);
+    getWorldMap()->getRegistry().forEachPinnedByGuidsT<Creature>(s_guids,
+        [&](Creature& creature)
+        {
+            if (creature.isHostileTo(this))
+                return;
 
-        if (!creature->isTaxi())
-            continue;
+            if (!creature.isTaxi())
+                return;
 
-        const auto nearestNode = sTaxiMgr.getNearestTaxiNode(creature->GetPosition(), creature->GetMapId(), GetTeam());
-        if (nearestNode == 0)
-            continue;
+            const auto nearestNode = sTaxiMgr.getNearestTaxiNode(creature.GetPosition(), creature.GetMapId(), GetTeam());
+            if (nearestNode == 0)
+                return;
 
-        getSession()->SendPacket(SmsgTaxinodeStatus(creature->getGuid(), m_taxi->isTaximaskNodeKnown(nearestNode)).serialise().get());
-    }
+            getSession()->SendPacket(SmsgTaxinodeStatus(creature.getGuid(), m_taxi->isTaximaskNodeKnown(nearestNode)).serialise().get());
+        });
 }
 
 bool Player::isInFlight() const
@@ -10814,7 +10820,7 @@ void Player::sendLoot(uint64_t guid, uint8_t loot_type, uint32_t mapId)
 
     if (wowGuid.isUnit())
     {
-        Creature* pCreature = getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+        Creature* pCreature = getWorldMapCreature(guid);
         if (!pCreature)return;
         pLoot = &pCreature->loot;
         m_currentLoot = pCreature->getGuid();
@@ -10822,7 +10828,7 @@ void Player::sendLoot(uint64_t guid, uint8_t loot_type, uint32_t mapId)
     }
     else if (wowGuid.isGameObject())
     {
-        GameObject* go = getWorldMap()->getGameObject(wowGuid.getGuidLowPart());
+        GameObject* go = getWorldMapGameObject(guid);
 
         if (!go)
         {
@@ -10896,7 +10902,7 @@ void Player::sendLoot(uint64_t guid, uint8_t loot_type, uint32_t mapId)
     }
     else if (wowGuid.isPlayer())
     {
-        Player* p = getWorldMap()->getPlayer((uint32_t)guid);
+        Player* p = getWorldMapPlayer(guid);
         if (!p)
             return;
 
@@ -10940,7 +10946,7 @@ void Player::sendLoot(uint64_t guid, uint8_t loot_type, uint32_t mapId)
         switch (loot_method)
         {
         case PARTY_LOOT_GROUP:
-            getGroup()->sendGroupLoot(pLoot, getWorldMap()->getObject(m_currentLoot), this, mapId);
+            getGroup()->sendGroupLoot(pLoot, getWorldMapObject(m_currentLoot), this, mapId);
             break;
         case PARTY_LOOT_NEED_BEFORE_GREED:
         case PARTY_LOOT_MASTER_LOOTER:
@@ -11623,25 +11629,25 @@ bool Player::isHostileBasedOnReputation(WDB::Structures::FactionEntry const* fac
 
 void Player::updateInrangeSetsBasedOnReputation()
 {
-    for (const auto& object : getInRangeObjectsSet())
-    {
-        if (!object->isCreatureOrPlayer())
-            continue;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-        if (const auto unit = dynamic_cast<Unit*>(object))
+    getWorldMap()->getSpatialIndex().collectNearGuidsCached(GetNewGUID(), 2, s_guids);
+    getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
         {
-            if (unit->m_factionEntry == nullptr || unit->m_factionEntry->RepListId < 0)
-                continue;
+            if (unit.m_factionEntry == nullptr || unit.m_factionEntry->RepListId < 0)
+                return;
 
-            bool isHostile = isHostileBasedOnReputation(unit->m_factionEntry);
-            bool currentHostileObject = isObjectInInRangeOppositeFactionSet(unit);
+            bool isHostile = isHostileBasedOnReputation(unit.m_factionEntry);
+            bool currentHostileObject = isObjectInInRangeOppositeFactionSet(&unit);
 
             if (isHostile && !currentHostileObject)
-                addInRangeOppositeFaction(unit);
+                addInRangeOppositeFaction(&unit);
             else if (!isHostile && currentHostileObject)
-                addInRangeOppositeFaction(unit);
-        }
-    }
+                addInRangeOppositeFaction(&unit);
+        });
 }
 
 void Player::onKillUnitReputation(Unit* unit, bool innerLoop)
@@ -11906,19 +11912,14 @@ void Player::requestDuel(Player* target)
     const float z = (GetPositionZ() + target->GetPositionZ() * distance) / (1 + distance);
 
     // create flag
-    if (GameObject* goFlag = getWorldMap()->createGameObject(21680))
+    if (GameObject* goFlag = getWorldMap()->getSpawnManager().summonGameObject(21680, LocationVector(x, y, z, GetOrientation())))
     {
-        goFlag->create(21680, m_WorldMap, GetPhase(), LocationVector(x, y, z, GetOrientation()), QuaternionData(), GO_STATE_CLOSED);
-
         goFlag->setCreatedByGuid(getGuid());
         goFlag->SetFaction(getFactionTemplate());
         goFlag->setLevel(getLevel());
 
         setDuelArbiter(goFlag->getGuid());
         target->setDuelArbiter(goFlag->getGuid());
-
-        goFlag->PushToWorld(m_WorldMap);
-
         addGameObject(goFlag);
 
         target->getSession()->SendPacket(SmsgDuelRequested(goFlag->getGuid(), getGuid()).serialise().get());
@@ -11933,7 +11934,7 @@ void Player::testDuelBoundary()
     WoWGuid wowGuid;
     wowGuid.Init(getDuelArbiter());
 
-    if (GameObject* goFlag = getWorldMap()->getGameObject(wowGuid.getGuidLowPart()))
+    if (GameObject* goFlag = getWorldMapGameObject(wowGuid.getRawGuid()))
     {
         if (CalcDistance(goFlag) > 75.0f)
         {
@@ -11975,10 +11976,10 @@ void Player::endDuel(uint8_t condition)
     {
         if (wowGuid.getGuidLowPart())
         {
-            GameObject* arbiter = m_WorldMap ? getWorldMap()->getGameObject(wowGuid.getGuidLowPart()) : nullptr;
+            GameObject* arbiter = m_WorldMap ? getWorldMapGameObject(wowGuid.getRawGuid()) : nullptr;
             if (arbiter)
             {
-                arbiter->RemoveFromWorld(true);
+                arbiter->destroy();
                 delete arbiter;
             }
 
@@ -12038,10 +12039,10 @@ void Player::endDuel(uint8_t condition)
     else
         sHookInterface.OnDuelFinished(this, m_duelPlayer);
 
-    GameObject* goFlag = m_WorldMap ? getWorldMap()->getGameObject(wowGuid.getGuidLowPart()) : nullptr;
+    GameObject* goFlag = m_WorldMap ? getWorldMapGameObject(wowGuid.getRawGuid()) : nullptr;
     if (goFlag)
     {
-        goFlag->RemoveFromWorld(true);
+        goFlag->destroy();
         delete goFlag;
     }
 
@@ -12090,9 +12091,9 @@ void Player::cancelDuel()
     WoWGuid wowGuid;
     wowGuid.Init(getDuelArbiter());
 
-    const auto goFlag = getWorldMap()->getGameObject(wowGuid.getGuidLowPart());
+    const auto goFlag = getWorldMapGameObject(wowGuid.getRawGuid());
     if (goFlag)
-        goFlag->RemoveFromWorld(true);
+        goFlag->destroy();
 
     setDuelArbiter(0);
     m_duelPlayer->setDuelArbiter(0);
@@ -12723,7 +12724,7 @@ void Player::_spawnPet(PetCache const* petCache)
     const auto pet = sObjectMgr.createPet(petCache->entry, nullptr);
     if (!pet->loadFromDB(this, petCache))
     {
-        pet->DeleteMe();
+        pet->destroy();
         return;
     }
 
@@ -13549,10 +13550,7 @@ void Player::_castSpellArea()
     if (!IsInWorld())
         return;
 
-    if (m_position.x > Map::Terrain::_maxX || m_position.x < Map::Terrain::_minX || m_position.y > Map::Terrain::_maxY || m_position.y < Map::Terrain::_minY)
-        return;
-
-    if (getWorldMap()->getCellByCoords(GetPositionX(), GetPositionY()) == nullptr)
+    if (m_position.x > visibility::Terrain::MaxX || m_position.x < visibility::Terrain::MinX || m_position.y > visibility::Terrain::MaxY || m_position.y < visibility::Terrain::MinY)
         return;
 
     uint32_t AreaId = 0;
@@ -13644,7 +13642,7 @@ void Player::_eventAttack(bool offhand)
 
     Unit* pVictim = nullptr;
     if (getTargetGuid())
-        pVictim = getWorldMap()->getUnit(getTargetGuid());
+        pVictim = getWorldMapUnit(getTargetGuid());
 
     if (!pVictim)
     {
@@ -13733,7 +13731,7 @@ void Player::eventCharmAttack()
         return;
     }
 
-    Unit* pVictim = getWorldMap()->getUnit(getTargetGuid());
+    Unit* pVictim = getWorldMapUnit(getTargetGuid());
     if (!pVictim)
     {
         sLogger.failure("WORLD: {} doesn't exist.", std::to_string(getTargetGuid()));
@@ -13745,7 +13743,7 @@ void Player::eventCharmAttack()
     }
     else
     {
-        Unit* currentCharm = getWorldMap()->getUnit(getCharmGuid());
+        Unit* currentCharm = getWorldMapUnit(getCharmGuid());
         if (!currentCharm)
             return;
 
@@ -14853,16 +14851,27 @@ void Player::loadFromDBProc(QueryResultVector& results)
     std::string taxi_nodes = field[60].asCString();
     uint32_t taxi_currentNode = field[61].asInt32();
 
-    uint32_t transportGuid = field[62].asUint32();
+    uint32_t transportEntry = field[62].asUint32();
     float transportX = field[63].asFloat();
     float transportY = field[64].asFloat();
     float transportZ = field[65].asFloat();
     float transportO = field[66].asFloat();
 
-    if (transportGuid != 0)
-        obj_movement_info.setTransportData(transportGuid, transportX, transportY, transportZ, transportO, 0, 0);
+    if (transportEntry != 0)
+    {
+        if (uint64_t guid = sTransportHandler.getTransporterGuidByEntry(transportEntry))
+        {
+            obj_movement_info.setTransportData(guid, transportX, transportY, transportZ, transportO, 0, 0);
+        }
+        else
+        {
+            obj_movement_info.clearTransportData();
+        }
+    }
     else
+    {
         obj_movement_info.clearTransportData();
+    }
 
     loadDeletedSpells(results[PlayerQuery::DeletedSpells].result.get());
 
@@ -15811,7 +15820,7 @@ void Player::onRemoveInRangeObject(Object* object)
 
     if (object->getGuid() == getCharmGuid())
     {
-        Unit* unit = getWorldMap()->getUnit(getCharmGuid());
+        Unit* unit = getWorldMapUnit(getCharmGuid());
         if (!unit)
             return;
 
@@ -16046,7 +16055,7 @@ void Player::_Relocate(uint32_t mapid, const LocationVector& v, bool sendpending
         }
 
         if (IsInWorld())
-            removeFromWorld();
+            getWorldMap()->getObjectFactory().detachFromWorld(this);
 
         m_session->SendPacket(SmsgNewWorld(mapid, v).serialise().get());
 
@@ -16105,7 +16114,7 @@ void Player::addItemsToWorld()
     {
         if (Item* inventoryItem = getItemInterface()->GetInventoryItem(slotIndex))
         {
-            inventoryItem->PushToWorld(m_WorldMap);
+            inventoryItem->registerToWorld(*m_WorldMap);
 
             if (slotIndex < INVENTORY_SLOT_BAG_END)
                 applyItemMods(inventoryItem, slotIndex, true, false, true);
@@ -16118,7 +16127,7 @@ void Player::addItemsToWorld()
                 for (uint32_t containerSlot = 0; containerSlot < inventoryItem->getItemProperties()->ContainerSlots; ++containerSlot)
                 {
                     if (Item* item = (static_cast<Container*>(inventoryItem))->getItem(static_cast<int16_t>(containerSlot)))
-                        item->PushToWorld(m_WorldMap);
+                        item->registerToWorld(*m_WorldMap);
                 }
             }
         }
@@ -16204,17 +16213,20 @@ float Player::calcRating(PlayerCombatRating index)
 
 void Player::buildFlagUpdateForNonGroupSet(uint32_t index, uint32_t flag)
 {
-    for (const auto& inRangeObject : getInRangeObjectsSet())
-    {
-        if (inRangeObject && inRangeObject->isPlayer())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    getWorldMap()->getVisibilitySystem().collectViewersOf(GetNewGUID(), s_guids);
+    getWorldMap()->getRegistry().forEachPinnedByGuidsT<Player>(s_guids,
+        [&](Player& player)
         {
-            auto group = static_cast<Player*>(inRangeObject)->getGroup();
+            auto group = player.getGroup();
             if (!group && group != getGroup())
             {
-                BuildFieldUpdatePacket(static_cast<Player*>(inRangeObject), index, flag);
+                BuildFieldUpdatePacket(&player, index, flag);
             }
-        }
-    }
+        });
 }
 
 void Player::completeLoading()

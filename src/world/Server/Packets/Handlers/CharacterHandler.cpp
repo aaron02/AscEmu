@@ -740,8 +740,28 @@ void WorldSession::fullLogin(Player* player)
     player->setEnteringToWorld();
 
     // add us to the world if we are not already added
+    // todo aaron02 maprework
+    
     if (canEnterWorld && !player->getWorldMap())
-        player->AddToWorld();
+    {
+        const auto mapInfo = sMySQLStore.getWorldMapInfo(player->GetMapId());
+        if (mapInfo == nullptr || player->GetMapId() >= MAX_NUM_MAPS)
+            return;
+
+        WorldMap* map = sMapMgr.findWorldMap(player->GetMapId(), player->GetInstanceID());
+
+        if (map == nullptr)
+        {
+            sLogger.failure("AddToWorld() failed for Object with GUID {} MapId {} InstanceId {}", std::to_string(player->getGuid()), player->GetMapId(), player->GetInstanceID());
+            return;
+        }
+
+        map->onPlayerEnter(player);
+    }
+    else
+    {
+        sLogger.failure("Cant Enter World: failed for Object with GUID {} MapId {} InstanceId {}", std::to_string(player->getGuid()), player->GetMapId(), player->GetInstanceID());
+    }
     //////////////////////////////////////////////////////////////////////////////////////////
 
 #if VERSION_STRING == Mop

@@ -77,12 +77,12 @@ void LootRoll::finalize()
 
     if (wowGuid.isUnit())
     {
-        if (creature = _mgr->getCreature(wowGuid.getGuidLowPart()))
+        if (creature = _mgr->getCreature2(wowGuid))
             pLoot = &creature->loot;
     }
     else if (wowGuid.isGameObject())
     {
-        if (gameObject = _mgr->getGameObject(wowGuid.getGuidLowPart()))
+        if (gameObject = _mgr->getGameObject2(wowGuid))
         {
             if (gameObject->IsLootable())
             {
@@ -109,13 +109,13 @@ void LootRoll::finalize()
         return;
     }
 
-    Player* _player = playerLowGuid != 0 ? _mgr->getPlayer(playerLowGuid) : nullptr;
+    Player* _player = playerLowGuid != 0 ? _mgr->getPlayer2(playerLowGuid) : nullptr;
     if (_player == nullptr)
     {
         /* all passed */
         auto pitr = m_passRolls.cbegin();
         while (_player == nullptr && pitr != m_passRolls.cend())
-            _player = _mgr->getPlayer((*(pitr++)));
+            _player = _mgr->getPlayer2((*(pitr++)));
 
         if (_player != nullptr)
         {

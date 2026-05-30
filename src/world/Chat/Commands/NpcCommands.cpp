@@ -19,6 +19,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Storage/MySQLDataStore.hpp"
 #include "Storage/WDB/WDBStores.hpp"
 #include "Storage/WDB/WDBStructures.hpp"
+#include "Map/Visibility/VisibilityTypes.hpp"
 
 //.npc addagent
 bool ChatCommandHandler::HandleNpcAddAgentCommand(const char* args, WorldSession* m_session)
@@ -208,10 +209,37 @@ bool ChatCommandHandler::HandleNpcComeCommand(const char* /*args*/, WorldSession
     if (creature_target == nullptr)
         return true;
 
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    uint32_t count = 0;
+
+    creature_target->getWorldMap()->getSpatialIndex().collectNearGuidsCached(creature_target->GetNewGUID(), 2, s_guids);
+    creature_target->getWorldMap()->getRegistry().forEachPinnedByGuids(s_guids, 
+        [&](Object& object)
+        {
+            count++;
+        });
+
+    greenSystemMessage(m_session, "InRange Objects count {} ", count);
+
+    auto [gx, gy] = visibility::worldToGrid(LocationVector(50.0, 50.0));
+    auto gid = visibility::packGridId(gx, gy);
+
+    // Activate Destination Grid
+    creature_target->getWorldMap()->getVisibilitySystem().activateGrid(gid);
+
+
+    /* aaron02 test  remove visibility
+    auto creature_target = GetSelectedCreature(m_session, true);
+    if (creature_target == nullptr)
+        return true;
+
     auto player = m_session->GetPlayer();
     creature_target->getMovementManager()->movePoint(0, player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), false, player->GetOrientation());
-    sGMLog.writefromsession(m_session, "used .npc come on %s spawn ID: %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid);
-
+    sGMLog.writefromsession(m_session, "used .npc come on %s spawn ID: %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getSpawnId());
+    */
     return true;
 }
 
@@ -230,14 +258,14 @@ bool ChatCommandHandler::HandleNpcDeleteCommand(const char* /*args*/, WorldSessi
 
     if (creature_target->isSummon())
     {
-        creature_target->Delete();
+        creature_target->despawn();
     }
     else
     {
         //creature_target->getAIInterface()->hideWayPoints(m_session->GetPlayer());
 
-        uint32_t spawn_id = creature_target->spawnid;
-        if (spawn_id != 0)
+        uint32_t spawn_id = creature_target->getSpawnId();
+        if (spawn_id != 0 && creature_target->m_spawn)
         {
             blueSystemMessage(m_session, "Creature {} ({}) deleted from creature_spawn table.", creature_target->GetCreatureProperties()->Name, spawn_id);
             sGMLog.writefromsession(m_session, "used npc delete on creature %s (%u), pos %f %f %f", creature_target->GetCreatureProperties()->Name.c_str(), spawn_id, creature_target->GetPositionX(), creature_target->GetPositionY(), creature_target->GetPositionZ());
@@ -246,27 +274,12 @@ bool ChatCommandHandler::HandleNpcDeleteCommand(const char* /*args*/, WorldSessi
 
         if (creature_target->m_spawn)
         {
-            uint32_t cellx = uint32_t(((Map::Terrain::_maxX - creature_target->m_spawn->x) / Map::Cell::cellSize));
-            uint32_t celly = uint32_t(((Map::Terrain::_maxY - creature_target->m_spawn->y) / Map::Cell::cellSize));
-
-            if (cellx <= Map::Cell::_sizeX && celly <= Map::Cell::_sizeY)
-            {
-                CellSpawns* sp = creature_target->getWorldMap()->getBaseMap()->getSpawnsList(cellx, celly);
-                if (sp != nullptr)
-                {
-                    for (CreatureSpawnList::iterator itr = sp->CreatureSpawns.begin(); itr != sp->CreatureSpawns.end(); ++itr)
-                        if ((*itr) == creature_target->m_spawn)
-                        {
-                            sp->CreatureSpawns.erase(itr);
-                            break;
-                        }
-                }
-                delete creature_target->m_spawn;
-                creature_target->m_spawn = nullptr;
-            }
+            // todo aaron02 delete from premade spawns store
+            delete creature_target->m_spawn;
+            creature_target->m_spawn = nullptr;
         }
 
-        creature_target->RemoveFromWorld(false, true);
+        creature_target->despawn();
     }
 
     return true;
@@ -280,7 +293,7 @@ bool ChatCommandHandler::HandleNpcFollowCommand(const char* /*args*/, WorldSessi
         return true;
 
     creature_target->getMovementManager()->moveFollow(m_session->GetPlayer(), PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
-    sGMLog.writefromsession(m_session, "used npc follow command on %s, sqlid %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid);
+    sGMLog.writefromsession(m_session, "used npc follow command on %s, sqlid %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getSpawnId());
     return true;
 }
 
@@ -322,7 +335,7 @@ std::string ChatCommandHandler::getNpcFlagString(Creature* creature)
 //.npc info
 bool ChatCommandHandler::HandleNpcInfoCommand(const char* /*args*/, WorldSession* m_session)
 {
-    auto creature_target = GetSelectedCreature(m_session, true);
+    Creature* creature_target = GetSelectedCreature(m_session, true);
     if (creature_target == nullptr)
         return true;
 
@@ -330,7 +343,7 @@ bool ChatCommandHandler::HandleNpcInfoCommand(const char* /*args*/, WorldSession
 
     systemMessage(m_session, "Showing Creature info of {} =============", creature_target->GetCreatureProperties()->Name);
     redSystemMessage(m_session, "EntryID: {}", creature_target->getEntry());
-    redSystemMessage(m_session, "SpawnID: {}", creature_target->GetSQL_id());
+    redSystemMessage(m_session, "SpawnID: {}", creature_target->getSpawnId());
     systemMessage(m_session, "GUID: {}", guid);
     systemMessage(m_session, "Faction: {}", creature_target->getFactionTemplate());
     systemMessage(m_session, "Phase: {}", creature_target->GetPhase());
@@ -555,7 +568,7 @@ bool ChatCommandHandler::HandleNpcInfoCommand(const char* /*args*/, WorldSession
     if (owner_header_set)
         systemMessage(m_session, "=================================");
 
-    if (creature_target->m_spawn != nullptr)
+    if (creature_target->m_spawn != nullptr && !creature_target->m_spawn->origine.empty())
         systemMessage(m_session, "Is part of table: {}", creature_target->m_spawn->origine);
     else
         systemMessage(m_session, "Is spawnd by an internal script");
@@ -597,7 +610,7 @@ bool ChatCommandHandler::HandleNpcInfoCommand(const char* /*args*/, WorldSession
         systemMessage(m_session, "Creature doesn't have C++/LUA gossip script");
 
     redSystemMessage(m_session, "EntryID: {}", creature_target->getEntry());
-    redSystemMessage(m_session, "SpawnID: {}", creature_target->GetSQL_id());
+    redSystemMessage(m_session, "SpawnID: {}", creature_target->getSpawnId());
 
     return true;
 }
@@ -678,7 +691,7 @@ bool ChatCommandHandler::HandleNpcStopFollowCommand(const char* /*args*/, WorldS
 
     creature_target->getMovementManager()->remove(FOLLOW_MOTION_TYPE);
 
-    sGMLog.writefromsession(m_session, "cancelled npc follow command on %s, sqlid %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid);
+    sGMLog.writefromsession(m_session, "cancelled npc follow command on %s, sqlid %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getSpawnId());
     return true;
 }
 
@@ -689,14 +702,14 @@ bool ChatCommandHandler::HandleNpcRespawnCommand(const char* /*args*/, WorldSess
     if (creature_target == nullptr)
         return true;
 
-    if (creature_target->isCreature() && creature_target->getDeathState() == CORPSE && creature_target->spawnid != 0)
+    if (creature_target->isCreature() && creature_target->getDeathState() == CORPSE && creature_target->getSpawnId() != 0)
     {
         sEventMgr.RemoveEvents(creature_target, EVENT_CREATURE_RESPAWN);
 
         blueSystemMessage(m_session, "Respawning Creature: `{}` with entry: {} on map: {} spawnid: {}", creature_target->GetCreatureProperties()->Name,
-            creature_target->getEntry(), creature_target->getWorldMap()->getBaseMap()->getMapId(), creature_target->spawnid);
+            creature_target->getEntry(), creature_target->getWorldMap()->getBaseMap()->getMapId(), creature_target->getSpawnId());
         sGMLog.writefromsession(m_session, "respawned Creature: `%s` with entry: %u on map: %u sqlid: %u", creature_target->GetCreatureProperties()->Name.c_str(),
-            creature_target->getEntry(), creature_target->getWorldMap()->getBaseMap()->getMapId(), creature_target->spawnid);
+            creature_target->getEntry(), creature_target->getWorldMap()->getBaseMap()->getMapId(), creature_target->getSpawnId());
 
         /*
         if (creature_target->getWorldMap()->pInstance != nullptr)
@@ -705,7 +718,7 @@ bool ChatCommandHandler::HandleNpcRespawnCommand(const char* /*args*/, WorldSess
             creature_target->getWorldMap()->pInstance->m_killedNpcs.erase(creature_target->getEntry());
         }*/
 
-        creature_target->Despawn(0, 1000);
+        creature_target->despawn(0, Util::getTimeNow() + 1);
     }
     else
     {
@@ -725,7 +738,7 @@ bool ChatCommandHandler::HandleNpcReturnCommand(const char* /*args*/, WorldSessi
 
     creature_target->getMovementManager()->moveTargetedHome();
 
-    sGMLog.writefromsession(m_session, "returned NPC %s (%u)", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid);
+    sGMLog.writefromsession(m_session, "returned NPC %s (%u)", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getSpawnId());
 
     return true;
 }
@@ -756,14 +769,21 @@ bool ChatCommandHandler::HandleNpcSelectCommand(const char* /*args*/, WorldSessi
     float dist2;
 
     auto player = m_session->GetPlayer();
-    for (const auto& itr : player->getInRangeObjectsSet())
-    {
-        if (itr && (dist2 = player->GetDistance2dSq(itr)) < dist && (itr)->isCreature())
+
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    player->getWorldMap()->getSpatialIndex().collectNearGuidsCached(player->GetNewGUID(), 2, s_guids);
+    player->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Creature>(s_guids,
+        [&](Creature& creature)
         {
-            near_creature = static_cast<Creature*>(itr);
-            dist = dist2;
-        }
-    }
+            if ((dist2 = player->GetDistance2dSq(&creature)) < dist)
+            {
+                near_creature = &creature;
+                dist = dist2;
+            }
+        });
 
     if (near_creature == nullptr)
     {
@@ -772,7 +792,7 @@ bool ChatCommandHandler::HandleNpcSelectCommand(const char* /*args*/, WorldSessi
     }
 
     player->setTargetGuid(near_creature->getGuid());
-    systemMessage(m_session, "Nearest Creature {} spawnID: {} GUID: {} selected", near_creature->GetCreatureProperties()->Name, near_creature->spawnid, near_creature->getGuid());
+    systemMessage(m_session, "Nearest Creature {} spawnID: {} GUID: {} selected", near_creature->GetCreatureProperties()->Name, near_creature->getSpawnId(), near_creature->getGuid());
     return true;
 }
 
@@ -795,10 +815,7 @@ bool ChatCommandHandler::HandleNpcSpawnCommand(const char* args, WorldSession* m
     creature_spawn->entry = entry;
     creature_spawn->id = sObjectMgr.generateCreatureSpawnId();
     creature_spawn->movetype = 0;
-    creature_spawn->x = m_session->GetPlayer()->GetPositionX();
-    creature_spawn->y = m_session->GetPlayer()->GetPositionY();
-    creature_spawn->z = m_session->GetPlayer()->GetPositionZ();
-    creature_spawn->o = m_session->GetPlayer()->GetOrientation();
+    creature_spawn->spawnPoint = m_session->GetPlayer()->GetPosition();
     creature_spawn->emote_state = 0;
     creature_spawn->flags = creature_properties->NPCFLags;
     creature_spawn->pvp_flagged = 0;
@@ -818,26 +835,15 @@ bool ChatCommandHandler::HandleNpcSpawnCommand(const char* args, WorldSession* m
     creature_spawn->phase = m_session->GetPlayer()->GetPhase();
     creature_spawn->waypoint_id = 0;
 
-    if (auto creature = m_session->GetPlayer()->getWorldMap()->createCreature(entry))
+    if (auto creature = m_session->GetPlayer()->getWorldMap()->getSpawnManager().spawnCreature(entry, {}, creature_spawn))
     {
-        creature->Load(creature_spawn, 0, nullptr);
         creature->m_loadedFromDB = true;
-        creature->PushToWorld(m_session->GetPlayer()->getWorldMap());
-
-        // Add to map
-        uint32_t x = m_session->GetPlayer()->getWorldMap()->getPosX(m_session->GetPlayer()->GetPositionX());
-        uint32_t y = m_session->GetPlayer()->getWorldMap()->getPosY(m_session->GetPlayer()->GetPositionY());
-        m_session->GetPlayer()->getWorldMap()->getBaseMap()->getSpawnsListAndCreate(x, y)->CreatureSpawns.push_back(creature_spawn);
-        MapCell* map_cell = m_session->GetPlayer()->getWorldMap()->getCell(x, y);
-        if (map_cell != nullptr)
-            map_cell->setLoaded();
-
         creature->SaveToDB();
 
         blueSystemMessage(m_session, "Spawned a creature `{}` with entry {} at {} {} {} on map {}", creature_properties->Name,
-            entry, creature_spawn->x, creature_spawn->y, creature_spawn->z, m_session->GetPlayer()->GetMapId());
+            entry, creature_spawn->spawnPoint.x, creature_spawn->spawnPoint.y, creature_spawn->spawnPoint.z, m_session->GetPlayer()->GetMapId());
         sGMLog.writefromsession(m_session, "spawned a %s at %u %f %f %f", creature_properties->Name.c_str(), m_session->GetPlayer()->GetMapId(),
-            creature_spawn->x, creature_spawn->y, creature_spawn->z);
+            creature_spawn->spawnPoint.x, creature_spawn->spawnPoint.y, creature_spawn->spawnPoint.z);
     }
     return true;
 }
@@ -882,7 +888,7 @@ bool ChatCommandHandler::HandlePossessCommand(const char* /*args*/, WorldSession
         {
             auto creature = static_cast<Creature*>(unit_target);
             blueSystemMessage(m_session, "Creature {} selected.", creature->GetCreatureProperties()->Name);
-            sGMLog.writefromsession(m_session, "used possess command on Creature %s spawn_id %u", creature->GetCreatureProperties()->Name.c_str(), creature->GetSQL_id());
+            sGMLog.writefromsession(m_session, "used possess command on Creature %s spawn_id %u", creature->GetCreatureProperties()->Name.c_str(), creature->getSpawnId());
         }
     }
     else
@@ -913,7 +919,7 @@ bool ChatCommandHandler::HandleNpcVendorAddItemCommand(const char* args, WorldSe
         return true;
     }
 
-    Creature* selected_creature = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    Creature* selected_creature = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     if (selected_creature == nullptr)
     {
         systemMessage(m_session, "You should select a creature.");
@@ -993,7 +999,7 @@ bool ChatCommandHandler::HandleNpcVendorRemoveItemCommand(const char* args, Worl
         return true;
     }
 
-    Creature* selected_creature = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    Creature* selected_creature = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     if (selected_creature == nullptr)
     {
         systemMessage(m_session, "You should select a creature.");
@@ -1082,20 +1088,20 @@ bool ChatCommandHandler::HandleNpcSetCanFlyCommand(const char* /*args*/, WorldSe
         creature_target->setMoveCanFly(false);
 
         if (creature_target->m_spawn != nullptr)
-            WorldDatabase.Execute("UPDATE %s SET CanFly = 1 WHERE id = %u AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+            WorldDatabase.Execute("UPDATE %s SET CanFly = 1 WHERE id = %u AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), creature_target->getSpawnId(), VERSION_STRING, VERSION_STRING);
 
-        greenSystemMessage(m_session, "CanFly permanent set from 0 to 1 for Creature {} ({}).", creature_target->GetCreatureProperties()->Name, creature_target->spawnid);
-        sGMLog.writefromsession(m_session, "changed npc CanFly for creature_spawns ID: %u [%s] from 0 to 1", creature_target->spawnid, creature_target->GetCreatureProperties()->Name.c_str());
+        greenSystemMessage(m_session, "CanFly permanent set from 0 to 1 for Creature {} ({}).", creature_target->GetCreatureProperties()->Name, creature_target->getSpawnId());
+        sGMLog.writefromsession(m_session, "changed npc CanFly for creature_spawns ID: %u [%s] from 0 to 1", creature_target->getSpawnId(), creature_target->GetCreatureProperties()->Name.c_str());
     }
     else
     {
         creature_target->setMoveCanFly(true);
 
         if (creature_target->m_spawn != nullptr)
-            WorldDatabase.Execute("UPDATE %s SET CanFly = 0 WHERE id = %u AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+            WorldDatabase.Execute("UPDATE %s SET CanFly = 0 WHERE id = %u AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), creature_target->getSpawnId(), VERSION_STRING, VERSION_STRING);
 
-        greenSystemMessage(m_session, "CanFly permanent set from 1 to 0 for Creature {} ({}).", creature_target->GetCreatureProperties()->Name, creature_target->spawnid);
-        sGMLog.writefromsession(m_session, "changed npc CanFly for creature_spawns ID: %u [%s] from 1 to 0", creature_target->spawnid, creature_target->GetCreatureProperties()->Name.c_str());
+        greenSystemMessage(m_session, "CanFly permanent set from 1 to 0 for Creature {} ({}).", creature_target->GetCreatureProperties()->Name, creature_target->getSpawnId());
+        sGMLog.writefromsession(m_session, "changed npc CanFly for creature_spawns ID: %u [%s] from 1 to 0", creature_target->getSpawnId(), creature_target->GetCreatureProperties()->Name.c_str());
     }
     return true;
 }
@@ -1138,7 +1144,7 @@ bool ChatCommandHandler::HandleNpcSetEquipCommand(const char* args, WorldSession
             if (creature_target->m_spawn != nullptr)
                 creature_target->m_spawn->Item1SlotEntry = item_id;
             greenSystemMessage(m_session, "Melee slot successfull changed from {} to {} for Creature {}", previousValue, item_id, creature_target->GetCreatureProperties()->Name);
-            sGMLog.writefromsession(m_session, "changed melee slot from %u to %u for creature spawn %u", previousValue, item_id, creature_target->spawnid);
+            sGMLog.writefromsession(m_session, "changed melee slot from %u to %u for creature spawn %u", previousValue, item_id, creature_target->getSpawnId());
             break;
         }
         case OFFHAND:
@@ -1146,7 +1152,7 @@ bool ChatCommandHandler::HandleNpcSetEquipCommand(const char* args, WorldSession
             if (creature_target->m_spawn != nullptr)
                 creature_target->m_spawn->Item2SlotEntry = item_id;
             greenSystemMessage(m_session, "Offhand slot successfull changed from {} to {} for Creature {}", previousValue, item_id, creature_target->GetCreatureProperties()->Name);
-            sGMLog.writefromsession(m_session, "changed offhand slot from %u to %u for creature spawn %u", previousValue, item_id, creature_target->spawnid);
+            sGMLog.writefromsession(m_session, "changed offhand slot from %u to %u for creature spawn %u", previousValue, item_id, creature_target->getSpawnId());
             break;
         }
         case RANGED:
@@ -1154,7 +1160,7 @@ bool ChatCommandHandler::HandleNpcSetEquipCommand(const char* args, WorldSession
             if (creature_target->m_spawn != nullptr)
                 creature_target->m_spawn->Item3SlotEntry = item_id;
             greenSystemMessage(m_session, "Ranged slot successfull changed from {} to {} for Creature {}", previousValue, item_id, creature_target->GetCreatureProperties()->Name);
-            sGMLog.writefromsession(m_session, "changed ranged slot from %u to %u for creature spawn %u", previousValue, item_id, creature_target->spawnid);
+            sGMLog.writefromsession(m_session, "changed ranged slot from %u to %u for creature spawn %u", previousValue, item_id, creature_target->getSpawnId());
             break;
         }
         default:
@@ -1189,10 +1195,10 @@ bool ChatCommandHandler::HandleNpcSetEmoteCommand(const char* args, WorldSession
     creature_target->setEmoteState(emote);
 
     if (creature_target->m_spawn != nullptr)
-        WorldDatabase.Execute("UPDATE %s SET emote_state = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), emote, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+        WorldDatabase.Execute("UPDATE %s SET emote_state = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), emote, creature_target->getSpawnId(), VERSION_STRING, VERSION_STRING);
 
-    greenSystemMessage(m_session, "Emote permanent set from {} to {} for spawn ID: {}.", old_emote, emote, creature_target->spawnid);
-    sGMLog.writefromsession(m_session, "changed npc emote of %s ID: %u from %u to %u", creature_target->spawnid, creature_target->GetCreatureProperties()->Name.c_str(), old_emote, emote);
+    greenSystemMessage(m_session, "Emote permanent set from {} to {} for spawn ID: {}.", old_emote, emote, creature_target->getSpawnId());
+    sGMLog.writefromsession(m_session, "changed npc emote of %s ID: %u from %u to %u", creature_target->getSpawnId(), creature_target->GetCreatureProperties()->Name.c_str(), old_emote, emote);
     return true;
 }
 
@@ -1204,7 +1210,7 @@ bool ChatCommandHandler::HandleNpcSetFormationMasterCommand(const char* /*args*/
         return true;
 
     m_session->GetPlayer()->m_formationMaster = creature_target;
-    blueSystemMessage(m_session, "Formation Master set to {} spawn ID: {}.", creature_target->GetCreatureProperties()->Name, creature_target->spawnid);
+    blueSystemMessage(m_session, "Formation Master set to {} spawn ID: {}.", creature_target->GetCreatureProperties()->Name, creature_target->getSpawnId());
     return true;
 }
 
@@ -1239,10 +1245,10 @@ bool ChatCommandHandler::HandleNpcSetFlagsCommand(const char* args, WorldSession
     creature_target->addNpcFlags(npc_flags);
 
     if (creature_target->m_spawn != nullptr)
-        WorldDatabase.Execute("UPDATE %s SET flags = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), npc_flags, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+        WorldDatabase.Execute("UPDATE %s SET flags = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), npc_flags, creature_target->getSpawnId(), VERSION_STRING, VERSION_STRING);
 
-    greenSystemMessage(m_session, "Flags changed in spawns table from {} to {} for spawn ID: {}. You may need to clean your client cache.", old_npc_flags, npc_flags, creature_target->spawnid);
-    sGMLog.writefromsession(m_session, "changed npc flags of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid, old_npc_flags, npc_flags);
+    greenSystemMessage(m_session, "Flags changed in spawns table from {} to {} for spawn ID: {}. You may need to clean your client cache.", old_npc_flags, npc_flags, creature_target->getSpawnId());
+    sGMLog.writefromsession(m_session, "changed npc flags of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getSpawnId(), old_npc_flags, npc_flags);
 
     return true;
 }
@@ -1267,11 +1273,11 @@ bool ChatCommandHandler::HandleNpcSetPhaseCommand(const char* args, WorldSession
     creature_target->setPhase(PHASE_SET, npc_phase);
 
     if (creature_target->m_spawn != nullptr)
-        WorldDatabase.Execute("UPDATE %s SET phase = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), npc_phase, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+        WorldDatabase.Execute("UPDATE %s SET phase = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), npc_phase, creature_target->getSpawnId(), VERSION_STRING, VERSION_STRING);
 
 
-    greenSystemMessage(m_session, "Phase changed in spawns table from {} to {} for spawn ID: {}.", old_npc_phase, npc_phase, creature_target->spawnid);
-    sGMLog.writefromsession(m_session, "changed npc phase of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid, old_npc_phase, npc_phase);
+    greenSystemMessage(m_session, "Phase changed in spawns table from {} to {} for spawn ID: {}.", old_npc_phase, npc_phase, creature_target->getSpawnId());
+    sGMLog.writefromsession(m_session, "changed npc phase of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getSpawnId(), old_npc_phase, npc_phase);
 
     return true;
 }
@@ -1296,10 +1302,10 @@ bool ChatCommandHandler::HandleNpcSetStandstateCommand(const char* args, WorldSe
     creature_target->setStandState(standstate);
 
     if (creature_target->m_spawn != nullptr)
-        WorldDatabase.Execute("UPDATE %s SET standstate = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), standstate, creature_target->spawnid, VERSION_STRING, VERSION_STRING);
+        WorldDatabase.Execute("UPDATE %s SET standstate = '%lu' WHERE id = %lu AND min_build <= %u AND max_build >= %u", creature_target->m_spawn->origine.c_str(), standstate, creature_target->getSpawnId(), VERSION_STRING, VERSION_STRING);
 
-    greenSystemMessage(m_session, "Standstate changed in spawns table from {} to {} for spawn ID: {}.", old_standstate, standstate, creature_target->spawnid);
-    sGMLog.writefromsession(m_session, "changed npc standstate of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->spawnid, old_standstate, standstate);
+    greenSystemMessage(m_session, "Standstate changed in spawns table from {} to {} for spawn ID: {}.", old_standstate, standstate, creature_target->getSpawnId());
+    sGMLog.writefromsession(m_session, "changed npc standstate of %s ID: %u from %u to %u", creature_target->GetCreatureProperties()->Name.c_str(), creature_target->getSpawnId(), old_standstate, standstate);
     
     return true;
 }
@@ -1323,7 +1329,7 @@ bool ChatCommandHandler::HandleNpcChangeEntry(const char* args, WorldSession* m_
     uint32_t old_entry = creature_target->getEntry();
     creature_target->updateEntry(entry);
 
-    greenSystemMessage(m_session, "CreatureEntry temporarily set from {} to {} for spawn ID: {}.", old_entry, entry, creature_target->spawnid);
+    greenSystemMessage(m_session, "CreatureEntry temporarily set from {} to {} for spawn ID: {}.", old_entry, entry, creature_target->getSpawnId());
 
     return true;
 }

@@ -139,7 +139,7 @@ bool ChatCommandHandler::HandleGetInstanceInfoCommand(const char* args, WorldSes
     {
         ss << "Status: " << MSG_COLOR_LIGHTRED << "Shut Down|r\n";
     }
-    else if (!instance->hasPlayers())
+    else if (!instance->getRegistry().countPlayers() > 0)
     {
         /*ss << "Status: " << MSG_COLOR_LIGHTRED << "Idle|r";
         if (instance->m_mapMgr->InactiveMoveTime && !instance->m_mapMgr->GetMapInfo()->isNonInstanceMap())
@@ -148,7 +148,7 @@ bool ChatCommandHandler::HandleGetInstanceInfoCommand(const char* args, WorldSes
     }
     else
     {
-        ss << "Status: " << MSG_COLOR_GREEN << "In use|r (" << MSG_COLOR_GREEN << instance->getPlayerCount() << MSG_COLOR_CYAN << " players inside|r)\n";
+        ss << "Status: " << MSG_COLOR_GREEN << "In use|r (" << MSG_COLOR_GREEN << instance->getRegistry().countPlayers() << MSG_COLOR_CYAN << " players inside|r)\n";
 
     }
     SendMultilineMessage(m_session, ss.str().c_str());
@@ -206,7 +206,7 @@ bool ChatCommandHandler::HandleResetInstanceCommand(const char* args, WorldSessi
         return true;
     }
 
-    if (instance && instance->hasPlayers())
+    if (instance && instance->getRegistry().countPlayers() > 0)
     {
         redSystemMessage(m_session, "Failed to reset non-persistent instance with id {}, due to player still inside.", instanceId);
         return true;

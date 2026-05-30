@@ -303,7 +303,7 @@ bool MinionsOfGurok(uint8_t /*effectIndex*/, Spell* pSpell)
     if (!pSpell->getPlayerCaster() || !target || !target->isCreature() || target->getEntry() != 17157)
         return true;
 
-    static_cast<Creature*>(target)->Despawn(500, 360000);
+    static_cast<Creature*>(target)->despawn(500, 360000);
 
     float SSX = target->GetPositionX();
     float SSY = target->GetPositionY();
@@ -552,7 +552,7 @@ bool ExtractGas(uint8_t /*effectIndex*/, Spell* s)
         item = 22578; //-water
 
     s->getPlayerCaster()->getItemInterface()->AddItemById(item, count, 0);
-    creature->Despawn(3500, creature->GetCreatureProperties()->RespawnTime);
+    creature->despawn(3500, creature->GetCreatureProperties()->RespawnTime);
 
     return true;
 }
@@ -662,19 +662,25 @@ bool ShrinkRay(uint8_t /*effectIndex*/, Spell* s)
 
             case 2:  // our party
             {
-                for (const auto& itr : s->getPlayerCaster()->getInRangePlayersSet())
+                thread_local std::vector<WoWGuid> s_guids;
+                s_guids.clear();
+                s_guids.reserve(64);
+
+                s->getPlayerCaster()->getWorldMap()->getVisibility().collectViewersOf(s->getPlayerCaster()->GetNewGUID(), s_guids);
+
+                for (const WoWGuid& id : s_guids)
                 {
-                    if (!itr)
+                    Player* player = s->getPlayerCaster()->getWorldMap()->getRegistry().getPlayer(id);
+                    if (!player)
                         continue;
 
-                    Player* p = static_cast<Player*>(itr);
-                    if ((p->GetPhase() & s->getPlayerCaster()->GetPhase()) == 0)
+                    if ((player->GetPhase() & s->getPlayerCaster()->GetPhase()) == 0)
                         continue;
 
-                    if (p->getGroup()->GetID() != s->getPlayerCaster()->getGroup()->GetID())
+                    if (player->getGroup()->GetID() != s->getPlayerCaster()->getGroup()->GetID())
                         continue;
 
-                    s->getPlayerCaster()->castSpell(p, spellids[spellindex], true);
+                    s->getPlayerCaster()->castSpell(player, spellids[spellindex], true);
                 }
             }
             break;

@@ -107,7 +107,7 @@ bool InstanceSaved::unloadIfEmpty()
     {
         // don't remove the save if there are still players inside the map
         if (WorldMap* map = sMapMgr.findWorldMap(getMapId(), getInstanceId()))
-            if (map->getPlayerCount())
+            if (map->getRegistry().countPlayers())
                 return true;
 
         if (!sInstanceMgr.lock_instanceLists)
@@ -394,11 +394,11 @@ void InstanceMgr::resetInstance(uint32_t mapid, uint32_t instanceId)
 
     if (iMap)
     {
-        iMap->deleteRespawnTimes();
+        iMap->getSpawnManager().deleteRespawnTimes();
     }
     else
     {
-        WorldMap::deleteRespawnTimesInDB(mapid, instanceId);
+        SpawnManager::deleteRespawnTimesInDB(mapid, instanceId);
     }
 
     // Free up the used instanceId from Our instanceId Pool

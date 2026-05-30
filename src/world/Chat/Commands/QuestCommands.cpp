@@ -296,27 +296,17 @@ bool ChatCommandHandler::HandleQuestFinishCommand(const char* args, WorldSession
                 else
                 {
                     // I need some way to get the guid without targeting the creature or looking through all the spawns...
-                    Object* questGiver = nullptr;
-
-                    for (auto* pCreature: plr->getWorldMap()->getCreatures())
-                    {
-                        if (pCreature)
+                    thread_local std::vector<Creature*> s_creatures;
+                    plr->getWorldMap()->getRegistry().snapshotCreatures(s_creatures);
+                    plr->getWorldMap()->getRegistry().forEachPinned(s_creatures, [&](Creature& creature)
                         {
-                            if (pCreature->getEntry() == giver_id) //found creature
+                            if (creature.getEntry() == giver_id) //found creature
                             {
-                                questGiver = pCreature;
+                                greenSystemMessage(m_session, "Found a quest_giver creature.");
+                                sQuestMgr.OnActivateQuestGiver(&creature, plr);
+                                sQuestMgr.GiveQuestRewardReputation(plr, qst, &creature);
                             }
-                        }
-                    }
-
-                    if (questGiver)
-                    {
-                        greenSystemMessage(m_session, "Found a quest_giver creature.");
-                        sQuestMgr.OnActivateQuestGiver(questGiver, plr);
-                        sQuestMgr.GiveQuestRewardReputation(plr, qst, questGiver);
-                    }
-                    else
-                        redSystemMessage(m_session, "Unable to find quest_giver object.");
+                        });
                 }
 
                 questLog->finishAndRemove();
@@ -674,7 +664,7 @@ bool ChatCommandHandler::HandleQuestListCommand(const char* args, WorldSession* 
             return true;
         }
 
-        Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+        Creature* unit = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
         if (unit)
         {
             if (!unit->isQuestGiver())
@@ -766,7 +756,7 @@ bool ChatCommandHandler::HandleQuestAddStartCommand(const char* args, WorldSessi
         return false;
     }
 
-    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     if (!unit)
     {
         systemMessage(m_session, "You must target an npc.");
@@ -849,7 +839,7 @@ bool ChatCommandHandler::HandleQuestAddFinishCommand(const char* args, WorldSess
         return false;
     }
 
-    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     if (!unit)
     {
         systemMessage(m_session, "You must target an npc.");
@@ -945,7 +935,7 @@ bool ChatCommandHandler::HandleQuestDelStartCommand(const char* args, WorldSessi
         return false;
     }
 
-    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     if (!unit)
     {
         systemMessage(m_session, "You must target an npc.");
@@ -1025,7 +1015,7 @@ bool ChatCommandHandler::HandleQuestDelFinishCommand(const char* args, WorldSess
         return false;
     }
 
-    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     if (!unit)
     {
         systemMessage(m_session, "You must target an npc.");
@@ -1366,7 +1356,7 @@ bool ChatCommandHandler::HandleQuestLoadCommand(const char* /*args*/, WorldSessi
     if (wowGuid.getRawGuid() == 0)
         return true;
 
-    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     if (!unit)
         return true;
 

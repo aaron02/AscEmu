@@ -233,7 +233,7 @@ void WorldSession::LogoutPlayer(bool Save)
 
         if (_player->m_currentLoot && _player->IsInWorld())
         {
-            Object* obj = _player->getWorldMap()->getObject(_player->m_currentLoot);
+            Object* obj = _player->getWorldMapObject(_player->m_currentLoot);
             if (obj != nullptr)
             {
                 switch (obj->getObjectTypeId())
@@ -343,7 +343,11 @@ void WorldSession::LogoutPlayer(bool Save)
 
         _player->removeAllAuras();
         if (_player->IsInWorld())
-            _player->removeFromWorld();
+        {
+            auto factory = _player->getWorldMap()->getObjectFactory();
+            factory.detachFromWorld(_player);
+            factory.recycleAndDestroy(_player, true, true);
+        }
 
         if (_player->m_playerInfo->m_Group != nullptr)
             _player->m_playerInfo->m_Group->Update();
@@ -386,7 +390,6 @@ void WorldSession::LogoutPlayer(bool Save)
             }
         }
 
-        delete _player;
         _player = nullptr;
 
         SendPacket(SmsgLogoutComplete().serialise().get());

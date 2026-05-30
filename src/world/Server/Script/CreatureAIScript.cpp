@@ -270,7 +270,7 @@ Creature* CreatureAIScript::spawnCreature(uint32_t entry, float posX, float posY
     if (_creature->getWorldMap()->getInterface() == nullptr)
         return nullptr;
 
-    Creature* creature = _creature->getWorldMap()->getInterface()->spawnCreature(entry, LocationVector(posX, posY, posZ, posO), true, true, 0, 0, phase);
+    Creature* creature = _creature->getWorldMap()->getInterface()->spawnCreature(entry, LocationVector(posX, posY, posZ, posO), phase);
     if (creature == nullptr)
         return nullptr;
 
@@ -284,7 +284,7 @@ Creature* CreatureAIScript::spawnCreature(uint32_t entry, float posX, float posY
 
 void CreatureAIScript::despawn(uint32_t delay /*= 2000*/, uint32_t respawnTime /*= 0*/)
 {
-    _creature->Despawn(delay, respawnTime);
+    _creature->despawn(delay, respawnTime);
 }
 
 bool CreatureAIScript::isAlive()
@@ -799,27 +799,30 @@ void CreatureAIScript::setZoneWideCombat(Creature* creature)
     if (!map || !map->getBaseMap() || !map->getBaseMap()->isInstanceMap())
         return;
 
-    if (!map->hasPlayers())
+    if (!map->getRegistry().countPlayers())
         return;
 
-    for (const auto& player : map->getPlayers())
-    {
-        if (Player* plr = player.second)
+    thread_local std::vector<Player*> s_players;
+    map->getRegistry().snapshotPlayers(s_players);
+
+    map->getRegistry().forEachPinned(s_players, [&](Player& player)
         {
-            if (!plr->isAlive() || !creature->canBeginCombat(plr))
-                continue;
+            if (player.getWorldMap() != map)
+                return;
 
-            creature->getAIInterface()->onHostileAction(plr);
+                if (!player.isAlive() || !creature->canBeginCombat(&player))
+                    return;
 
-            for (const auto& summon : plr->getSummonInterface()->getSummons())
-                creature->getAIInterface()->onHostileAction(summon);
+                creature->getAIInterface()->onHostileAction(&player);
+
+                for (const auto& summon : player.getSummonInterface()->getSummons())
+                    creature->getAIInterface()->onHostileAction(summon);
 
 #ifdef FT_VEHICLES
-            if (Unit* vehicle = plr->getVehicleBase())
-                creature->getAIInterface()->onHostileAction(vehicle);
+                if (Unit* vehicle = player.getVehicleBase())
+                    creature->getAIInterface()->onHostileAction(vehicle);
 #endif
-        }
-    }
+        });
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -1309,32 +1312,57 @@ bool CreatureAIScript::hasAura(uint32_t spellId)
 
 void CreatureAIScript::_removeAuraOnPlayers(uint32_t spellId)
 {
-    for (auto object : _creature->getInRangePlayersSet())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    getCreature()->getWorldMap()->getVisibilitySystem().collectViewersOf(getCreature()->GetNewGUID(), s_guids);
+
+    for (const WoWGuid& id : s_guids)
     {
-        if (object != nullptr)
-            static_cast<Player*>(object)->removeAllAurasById(spellId);
+        Player* inRangePlayer = getCreature()->getWorldMap()->getRegistry().getPlayer(id);
+        if (!inRangePlayer)
+            continue;
+
+        inRangePlayer->removeAllAurasById(spellId);
     }
 }
 
 void CreatureAIScript::_castOnInrangePlayers(uint32_t spellId, bool triggered)
 {
-    for (auto object : _creature->getInRangePlayersSet())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    getCreature()->getWorldMap()->getVisibilitySystem().collectViewersOf(getCreature()->GetNewGUID(), s_guids);
+
+    for (const WoWGuid& id : s_guids)
     {
-        if (object != nullptr)
-            _creature->castSpell(static_cast<Player*>(object), spellId, triggered);
+        Player* inRangePlayer = getCreature()->getWorldMap()->getRegistry().getPlayer(id);
+        if (!inRangePlayer)
+            continue;
+
+        _creature->castSpell(inRangePlayer, spellId, triggered);
     }
 }
 
 void CreatureAIScript::_castOnInrangePlayersWithinDist(float minDistance, float maxDistance, uint32_t spellId, bool triggered)
 {
-    for (auto object : _creature->getInRangePlayersSet())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    getCreature()->getWorldMap()->getVisibilitySystem().collectViewersOf(getCreature()->GetNewGUID(), s_guids);
+
+    for (const WoWGuid& id : s_guids)
     {
-        if (object != nullptr)
-        {
-            float distanceToPlayer = object->GetDistance2dSq(this->getCreature());
-            if (distanceToPlayer >= minDistance && distanceToPlayer <= maxDistance)
-                _creature->castSpell(static_cast<Player*>(object), spellId, triggered);
-        }
+        Player* inRangePlayer = getCreature()->getWorldMap()->getRegistry().getPlayer(id);
+        if (!inRangePlayer)
+            continue;
+
+        float distanceToPlayer = inRangePlayer->GetDistance2dSq(this->getCreature());
+        if (distanceToPlayer >= minDistance && distanceToPlayer <= maxDistance)
+            _creature->castSpell(inRangePlayer, spellId, triggered);
     }
 }
 
@@ -1392,7 +1420,7 @@ void CreatureAIScript::_unsetTargetToChannel()
 
 Unit* CreatureAIScript::_getTargetToChannel()
 {
-    return _creature->getWorldMap()->getUnit(_creature->getChannelObjectGuid());
+    return _creature->getWorldMapUnit(_creature->getChannelObjectGuid());
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -1607,10 +1635,21 @@ Unit* CreatureAIScript::getBestPlayerTarget(TargetFilter pTargetFilter, float pM
 {
     //Build potential target list
     UnitArray TargetArray;
-    for (const auto& PlayerIter : getCreature()->getInRangePlayersSet())
+
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    getCreature()->getWorldMap()->getVisibilitySystem().collectViewersOf(getCreature()->GetNewGUID(), s_guids);
+
+    for (const WoWGuid& id : s_guids)
     {
-        if (PlayerIter && isValidUnitTarget(PlayerIter, pTargetFilter, FilterArgs(pTargetFilter, pMinRange, pMaxRange, auraId)))
-            TargetArray.push_back(static_cast<Unit*>(PlayerIter));
+        Player* inRangePlayer = getCreature()->getWorldMap()->getRegistry().getPlayer(id);
+        if (!inRangePlayer)
+            continue;
+
+        if (isValidUnitTarget(inRangePlayer, pTargetFilter, FilterArgs(pTargetFilter, pMinRange, pMaxRange, auraId)))
+            TargetArray.push_back(static_cast<Unit*>(inRangePlayer));
     }
 
     return getBestTargetInArray(TargetArray, pTargetFilter);
@@ -1633,11 +1672,17 @@ Unit* CreatureAIScript::getBestUnitTarget(TargetFilter pTargetFilter, float pMin
 
     if (pTargetFilter & TargetFilter_Friendly)
     {
-        for (const auto& ObjectIter : getCreature()->getInRangeObjectsSet())
-        {
-            if (ObjectIter && isValidUnitTarget(ObjectIter, pTargetFilter, FilterArgs(pTargetFilter, pMinRange, pMaxRange, auraId)))
-                TargetArray.push_back(static_cast<Unit*>(ObjectIter));
-        }
+        thread_local std::vector<WoWGuid> s_guids;
+        s_guids.clear();
+        s_guids.reserve(64);
+
+        getCreature()->getWorldMap()->getSpatialIndex().collectNearGuidsCached(getCreature()->GetNewGUID(), 2, s_guids);
+        getCreature()->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+            [&](Unit& unit)
+            {
+                if (isValidUnitTarget(&unit, pTargetFilter, FilterArgs(pTargetFilter, pMinRange, pMaxRange, auraId)))
+                    TargetArray.push_back(&unit);
+            });
 
         if (isValidUnitTarget(getCreature(), pTargetFilter, FilterArgs(pTargetFilter, 0.0f, 0.0f, auraId)))
             TargetArray.push_back(getCreature());    //add self as possible friendly target
@@ -1672,11 +1717,17 @@ Unit* CreatureAIScript::selectUnitTarget(FilterArgs const& args)
 
     if (args.hasFilter(TargetFilter_Friendly))
     {
-        for (const auto& ObjectIter : getCreature()->getInRangeObjectsSet())
-        {
-            if (ObjectIter && isValidUnitTarget(ObjectIter, args.getTargetFilter(), args))
-                TargetArray.push_back(static_cast<Unit*>(ObjectIter));
-        }
+        thread_local std::vector<WoWGuid> s_guids;
+        s_guids.clear();
+        s_guids.reserve(64);
+
+        getCreature()->getWorldMap()->getSpatialIndex().collectNearGuidsCached(getCreature()->GetNewGUID(), 2, s_guids);
+        getCreature()->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+            [&](Unit& unit)
+            {
+                if (isValidUnitTarget(&unit, args.getTargetFilter(), args))
+                    TargetArray.push_back(&unit);
+            });
 
         if (isValidUnitTarget(getCreature(), args.getTargetFilter(), args))
             TargetArray.push_back(getCreature());    //add self as possible friendly target
@@ -1685,10 +1736,20 @@ Unit* CreatureAIScript::selectUnitTarget(FilterArgs const& args)
     {
         if (args.hasFilter(TargetFilter_Player))
         {
-            for (const auto& PlayerIter : getCreature()->getInRangePlayersSet())
+            thread_local std::vector<WoWGuid> s_guids;
+            s_guids.clear();
+            s_guids.reserve(64);
+
+            getCreature()->getWorldMap()->getVisibilitySystem().collectViewersOf(getCreature()->GetNewGUID(), s_guids);
+
+            for (const WoWGuid& id : s_guids)
             {
-                if (PlayerIter && isValidUnitTarget(PlayerIter, args.getTargetFilter(), args))
-                    TargetArray.push_back(static_cast<Unit*>(PlayerIter));
+                Player* inRangePlayer = getCreature()->getWorldMap()->getRegistry().getPlayer(id);
+                if (!inRangePlayer)
+                    continue;
+
+                if (isValidUnitTarget(inRangePlayer, args.getTargetFilter(), args))
+                    TargetArray.push_back(static_cast<Unit*>(inRangePlayer));
             }
         }
         else

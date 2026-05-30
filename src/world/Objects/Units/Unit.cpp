@@ -277,72 +277,7 @@ void Unit::Update(unsigned long time_passed)
     getMovementManager()->update(time_passed);
 }
 
-void Unit::RemoveFromWorld(bool free_guid)
-{
-#ifdef FT_VEHICLES
-    if (isVehicle())
-        removeVehicleKit();
-#endif
-    removeAllFollowers();
-
-    getCombatHandler().onRemoveFromWorld();
-
-#if VERSION_STRING > TBC
-    if (getCritterGuid() != 0)
-    {
-        setCritterGuid(0);
-
-        if (Unit* unit = m_WorldMap->getUnit(getCritterGuid()))
-            unit->Delete();
-    }
-#endif
-
-    m_summonInterface->removeAllSummons();
-
-    if (m_dynamicObject != nullptr)
-        m_dynamicObject->remove();
-
-    for (unsigned int& m_ObjectSlot : m_objectSlots)
-    {
-        if (m_ObjectSlot != 0)
-        {
-            if (GameObject* game_object = m_WorldMap->getGameObject(m_ObjectSlot))
-                game_object->expireAndDelete();
-
-            m_ObjectSlot = 0;
-        }
-    }
-
-    clearAllAreaAuraTargets();
-    removeAllAreaAurasCastedByOther();
-
-    // Attempt to prevent memory corruption
-    for (const auto& object : getInRangeObjectsSet())
-    {
-        if (!object->isCreatureOrPlayer())
-            continue;
-
-        dynamic_cast<Unit*>(object)->clearCasterFromHealthBatch(this);
-    }
-
-    Object::RemoveFromWorld(free_guid);
-
-    for (uint16_t x = AuraSlots::TOTAL_SLOT_START; x < AuraSlots::TOTAL_SLOT_END; ++x)
-    {
-        if (auto* const aura = getAuraWithAuraSlot(x))
-        {
-            if (aura->m_deleted)
-            {
-                m_auraList[x] = nullptr;
-                continue;
-            }
-            aura->RelocateEvents();
-        }
-    }
-    getThreatManager().removeMeFromThreatLists();
-}
-
-void Unit::OnPushToWorld()
+void Unit::onAttachToWorld()
 {
     for (const auto& aura : getAuraList())
     {
@@ -361,6 +296,79 @@ void Unit::OnPushToWorld()
 #endif
 
     getMovementManager()->addToWorld();
+
+    Object::onAttachToWorld();
+}
+
+void Unit::onPreDetachFromWorld()
+{
+    if (!IsInWorld())
+        return;
+
+#ifdef FT_VEHICLES
+    if (isVehicle())
+        removeVehicleKit();
+#endif
+    removeAllFollowers();
+
+    getCombatHandler().onRemoveFromWorld();
+
+#if VERSION_STRING > TBC
+    if (getCritterGuid() != 0)
+    {
+        setCritterGuid(0);
+
+        if (Unit* unit = getWorldMapUnit(getCritterGuid()))
+            unit->destroy();
+    }
+#endif
+
+    m_summonInterface->removeAllSummons();
+
+    if (m_dynamicObject != nullptr)
+        m_dynamicObject->remove();
+
+    for (auto m_ObjectSlot : m_objectSlots)
+    {
+        if (m_ObjectSlot)
+        {
+            if (GameObject* game_object = getWorldMapGameObject(m_ObjectSlot.getRawGuid()))
+                game_object->destroy();
+
+            m_ObjectSlot.Clear();
+        }
+    }
+
+    clearAllAreaAuraTargets();
+    removeAllAreaAurasCastedByOther();
+
+    // Attempt to prevent memory corruption
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    getWorldMap()->getSpatialIndex().collectNearGuidsCached(GetNewGUID(), 2, s_guids);
+    getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
+        {
+            unit.clearCasterFromHealthBatch(this);
+        });
+
+    for (uint16_t x = AuraSlots::TOTAL_SLOT_START; x < AuraSlots::TOTAL_SLOT_END; ++x)
+    {
+        if (auto* const aura = getAuraWithAuraSlot(x))
+        {
+            if (aura->m_deleted)
+            {
+                m_auraList[x] = nullptr;
+                continue;
+            }
+            aura->RelocateEvents();
+        }
+    }
+    getThreatManager().removeMeFromThreatLists();
+
+    Object::onPreDetachFromWorld();
 }
 
 void Unit::die(Unit* /*pAttacker*/, uint32_t /*damage*/, uint32_t /*spellid*/)
@@ -1713,11 +1721,16 @@ void Unit::setPhase(uint8_t command/* = PHASE_SET*/, uint32_t newPhase/* = 1*/)
 {
     Object::Phase(command, newPhase);
 
-    for (const auto& itr : getInRangeObjectsSet())
-    {
-        if (itr && itr->isCreatureOrPlayer())
-            dynamic_cast<Unit*>(itr)->updateVisibility();
-    }
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    getWorldMap()->getSpatialIndex().collectNearGuidsCached(GetNewGUID(), 2, s_guids);
+    getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
+        {
+            unit.updateVisibility();
+        });
 
     updateVisibility();
 }
@@ -5590,6 +5603,70 @@ void Unit::sendAuraUpdate(Aura* aur, bool remove)
 #endif
 }
 
+void Unit::queueInitialVisiblePacketsForPlayer(Player* target)
+{
+#if VERSION_STRING >= WotLK
+    if (target == nullptr)
+        return;
+
+    auto packetData = SmsgAuraUpdateAll(getGuid(), {});
+    auto updates = 0u;
+
+    for (const auto& aur : getAuraList())
+    {
+        if (aur == nullptr)
+            continue;
+
+        // Update only auras with a visual slot
+        if (aur->m_visualSlot == 0xFF)
+            continue;
+
+        SmsgAuraUpdateAll::AuraUpdate auraUpdate;
+
+        auraUpdate.flags = aur->getAuraFlags();
+        auraUpdate.visualSlot = aur->m_visualSlot;
+        auraUpdate.spellId = aur->getSpellId();
+
+        const auto casterUnit = aur->GetUnitCaster();
+        if (casterUnit != nullptr)
+            auraUpdate.level = static_cast<uint8_t>(casterUnit->getLevel());
+        else
+            auraUpdate.level = static_cast<uint8_t>(worldConfig.player.playerLevelCap);
+
+        const uint32_t stackAmount = aur->getSpellInfo()->getMaxstack() > 0 ? aur->getStackCount() : aur->getCharges();
+        auraUpdate.stackCount = static_cast<uint8_t>(stackAmount <= 255 ? stackAmount : 255);
+
+        if (!(auraUpdate.flags & AFLAG_IS_CASTER))
+            auraUpdate.casterGuid = aur->getCasterGuid();
+
+        if (auraUpdate.flags & AFLAG_DURATION)
+        {
+            auraUpdate.duration = aur->getMaxDuration();
+            auraUpdate.timeLeft = aur->getTimeLeft();
+        }
+
+#if VERSION_STRING >= Cata
+        if (auraUpdate.flags & AFLAG_SEND_EFFECT_AMOUNT)
+        {
+            for (uint8_t x = 0; x < MAX_SPELL_EFFECTS; ++x)
+            {
+                if (aur->getAuraEffect(x)->getAuraEffectType() != SPELL_AURA_NONE)
+                    auraUpdate.effAmount[x] = aur->getAuraEffect(x)->getEffectDamage();
+                else
+                    auraUpdate.effAmount[x] = 0;
+            }
+        }
+#endif
+
+        packetData.addAuraUpdate(auraUpdate);
+        ++updates;
+    }
+
+    if (updates > 0)
+        target->getUpdateMgr().queueDelayedPacket(packetData.serialise());
+#endif
+}
+
 void Unit::sendFullAuraUpdate()
 {
 #if VERSION_STRING >= WotLK
@@ -5812,14 +5889,32 @@ bool Unit::canSee(Object* const obj)
         }
         else
         {
-            if (!isInRange(gobj->GetPosition(), viewDistance))
-                return false;
+            if (obj->ToGameObject()->GetTransport())
+            {
+                // 4 Cell Range for Transport GameObjects
+                if (!isInRange(obj->GetPosition(), ((visibility::Cell::Size * 4) * (visibility::Cell::Size * 4))))
+                    return false;
+            }
+            else
+            {
+                if (!isInRange(gobj->GetPosition(), viewDistance))
+                    return false;
+            }
         }
     }
-    else
+    else if (!obj->isPlayer())
     {
-        if (!isInRange(obj->GetPosition(), viewDistance))
-            return false;
+        if (obj->isCreature() && obj->ToCreature()->GetTransport())
+        {
+            // 4 Cell Range for Transport Creatures
+            if (!isInRange(obj->GetPosition(), ((visibility::Cell::Size * 4) * (visibility::Cell::Size * 4))))
+                return false;
+        }
+        else
+        {
+            if (!isInRange(obj->GetPosition(), viewDistance))
+                return false;
+        }
     }
 
     // Unit cannot see invisible Game Masters unless he/she has Game Master flag on
@@ -6189,34 +6284,39 @@ void Unit::updateVisibility()
     if (isPlayer())
     {
         Player* player = dynamic_cast<Player*>(this);
-        for (const auto& inRangeObject : getInRangeObjectsSet())
-        {
-            if (inRangeObject)
+
+        thread_local std::vector<WoWGuid> s_guids;
+        s_guids.clear();
+        s_guids.reserve(64);
+
+        getWorldMap()->getSpatialIndex().collectNearGuidsCached(GetNewGUID(), 2, s_guids);
+        getWorldMap()->getRegistry().forEachPinnedByGuidsT<Object>(s_guids,
+            [&](Object& object)
             {
-                canSee = player->canSee(inRangeObject);
-                isVisible = player->isVisibleObject(inRangeObject->getGuid());
+                canSee = player->canSee(&object);
+                isVisible = player->isVisibleObject(object.getGuid());
                 if (canSee)
                 {
                     if (!isVisible)
                     {
                         buf.clear();
-                        count = inRangeObject->buildCreateUpdateBlockForPlayer(&buf, player);
+                        count = object.buildCreateUpdateBlockForPlayer(&buf, player);
                         player->getUpdateMgr().pushCreationData(&buf, count);
-                        player->addVisibleObject(inRangeObject->getGuid());
+                        player->addVisibleObject(object.getGuid());
                     }
                 }
                 else
                 {
                     if (isVisible)
                     {
-                        player->sendDestroyObjectPacket(inRangeObject->getGuid());
-                        player->removeVisibleObject(inRangeObject->getGuid());
+                        player->sendDestroyObjectPacket(object.getGuid());
+                        player->removeVisibleObject(object.getGuid());
                     }
                 }
 
-                if (inRangeObject->isPlayer())
+                if (object.isPlayer())
                 {
-                    Player* inRangePlayer = dynamic_cast<Player*>(inRangeObject);
+                    Player* inRangePlayer = dynamic_cast<Player*>(&object);
                     canSee = inRangePlayer->canSee(player);
                     isVisible = inRangePlayer->isVisibleObject(player->getGuid());
                     if (canSee)
@@ -6238,9 +6338,9 @@ void Unit::updateVisibility()
                         }
                     }
                 }
-                else if (inRangeObject->isCreature() && player->getSession() && player->getSession()->HasGMPermissions())
+                else if (object.isCreature() && player->getSession() && player->getSession()->HasGMPermissions())
                 {
-                    auto* const inRangeCreature = dynamic_cast<Creature*>(inRangeObject);
+                    auto* const inRangeCreature = dynamic_cast<Creature*>(&object);
 
                     uint32_t fieldIds[] =
                     {
@@ -6257,34 +6357,40 @@ void Unit::updateVisibility()
 
                     inRangeCreature->forceBuildUpdateValueForFields(fieldIds, player);
                 }
-            }
-        }
+            });
     }
     else // For units we can save a lot of work
     {
-        for (const auto& inRangeObject : getInRangePlayersSet())
+        thread_local std::vector<WoWGuid> s_guids;
+        s_guids.clear();
+        s_guids.reserve(64);
+
+        m_WorldMap->getVisibilitySystem().collectViewersOf(GetNewGUID(), s_guids);
+
+        for (const WoWGuid& id : s_guids)
         {
-            if (Player* inRangePlayer = dynamic_cast<Player*>(inRangeObject))
+            Player* inRangePlayer = m_WorldMap->getRegistry().getPlayer(id);
+            if (!inRangePlayer)
+                continue;
+
+            canSee = inRangePlayer->canSee(this);
+            isVisible = inRangePlayer->isVisibleObject(this->getGuid());
+            if (!canSee)
             {
-                canSee = inRangePlayer->canSee(this);
-                isVisible = inRangePlayer->isVisibleObject(this->getGuid());
-                if (!canSee)
+                if (isVisible)
                 {
-                    if (isVisible)
-                    {
-                        inRangePlayer->sendDestroyObjectPacket(getGuid());
-                        inRangePlayer->removeVisibleObject(getGuid());
-                    }
+                    inRangePlayer->sendDestroyObjectPacket(getGuid());
+                    inRangePlayer->removeVisibleObject(getGuid());
                 }
-                else
+            }
+            else
+            {
+                if (!isVisible)
                 {
-                    if (!isVisible)
-                    {
-                        buf.clear();
-                        count = buildCreateUpdateBlockForPlayer(&buf, inRangePlayer);
-                        inRangePlayer->getUpdateMgr().pushCreationData(&buf, count);
-                        inRangePlayer->addVisibleObject(this->getGuid());
-                    }
+                    buf.clear();
+                    count = buildCreateUpdateBlockForPlayer(&buf, inRangePlayer);
+                    inRangePlayer->getUpdateMgr().pushCreationData(&buf, count);
+                    inRangePlayer->addVisibleObject(this->getGuid());
                 }
             }
         }
@@ -7496,6 +7602,7 @@ void Unit::smsg_AttackStart(Unit* pVictim)
 
 void Unit::addToInRangeObjects(Object* pObj)
 {
+    // todo aaron02 maprework
     if (pObj->isCreatureOrPlayer())
     {
         if (this->isHostileTo(pObj))
@@ -7504,8 +7611,6 @@ void Unit::addToInRangeObjects(Object* pObj)
         if (this->isFriendlyTo(pObj))
             addInRangeSameFaction(pObj);
     }
-
-    Object::addToInRangeObjects(pObj);
 }
 
 void Unit::onRemoveInRangeObject(Object* pObj)
@@ -8314,7 +8419,7 @@ void Unit::enterVehicle(Vehicle* vehicle, int8_t seatId)
     if (!vehicle->addPassenger(this, seatId))
     {
         if (isCreature())
-            ToCreature()->Despawn(2000, 0);
+            ToCreature()->despawn(2000, 0);
     }
 }
 
@@ -8422,7 +8527,7 @@ void Unit::exitVehicle(LocationVector const* exitPosition)
     // Despawn Accessories
     if (vehicle->getBase()->hasUnitStateFlag(UNIT_STATE_ACCESSORY) && vehicle->getBase()->isCreature())
         if ((vehicle->getBase())->getVehicleKit()->getBase() == this)
-            vehicle->getBase()->ToCreature()->Despawn(2000, 0);
+            vehicle->getBase()->ToCreature()->despawn(2000, 0);
 
     if (hasUnitStateFlag(UNIT_STATE_ACCESSORY))
     {
@@ -8435,7 +8540,7 @@ void Unit::exitVehicle(LocationVector const* exitPosition)
         {
             // If for other reason we as Accessories are exiting the vehicle 
             // (ejected, master dismounted) despawn.
-            ToCreature()->Despawn(2000, 0);
+            ToCreature()->despawn(2000, 0);
         }
     }
 }
@@ -8667,7 +8772,7 @@ void Unit::removeGameObject(GameObject* gameObj, bool del)
 
     for (uint8_t i = 0; i < 4; ++i)
     {
-        if (m_objectSlots[i] == gameObj->GetUIdFromGUID())
+        if (m_objectSlots[i].getRawGuid() == gameObj->getGuid())
         {
             m_objectSlots[i] = 0;
             break;
@@ -8683,7 +8788,7 @@ void Unit::removeGameObject(GameObject* gameObj, bool del)
     if (del)
     {
         gameObj->setRespawnTime(0);
-        gameObj->Delete();
+        gameObj->despawn(0, 0);
     }
 }
 
@@ -8702,7 +8807,7 @@ void Unit::removeGameObject(uint32_t spellId, bool del)
             if (del)
             {
                 (*i)->setRespawnTime(0);
-                (*i)->Delete();
+                (*i)->despawn(0, 0);
             }
 
             next = m_gameObj.erase(i);
@@ -8722,7 +8827,7 @@ void Unit::removeAllGameObjects()
         GameObjectList::iterator i = m_gameObj.begin();
         (*i)->setOwnerGuid(0);
         (*i)->setRespawnTime(0);
-        (*i)->Delete();
+        (*i)->despawn(0, 0);
         m_gameObj.erase(i);
     }
 }
@@ -8957,7 +9062,7 @@ void Unit::unPossess()
     if (!getCharmGuid())
         return;
 
-    Unit* unitTarget = getWorldMap()->getUnit(getCharmGuid());
+    Unit* unitTarget = getWorldMapUnit(getCharmGuid());
     if (!unitTarget)
         return;
 
@@ -8991,7 +9096,7 @@ void Unit::unPossess()
     setMoveRoot(false);
 
     if (!unitTarget->isPet() && (unitTarget->getCreatedByGuid() == getGuid()))
-        sEventMgr.AddEvent(static_cast<Object*>(unitTarget), &Object::Delete, 0, 1, 1, 0);
+        sEventMgr.AddEvent(static_cast<Object*>(unitTarget), &Object::destroy, 0, 1, 1, 0);
 }
 
 void Unit::deactivate(WorldMap* mgr)
@@ -9000,7 +9105,7 @@ void Unit::deactivate(WorldMap* mgr)
         getAIInterface()->enterEvadeMode();
 
     getCombatHandler().clearCombat();
-    Object::deactivate(mgr);
+    Object::deactivate();
 }
 
 float Unit::getChanceToDaze(Unit* target)
@@ -9040,15 +9145,17 @@ void Unit::eventModelChange()
 
 void Unit::aggroPvPGuards()
 {
-    for (const auto& inRangeObject : getInRangeObjectsSet())
-    {
-        if (inRangeObject && inRangeObject->isCreature())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    getWorldMap()->getSpatialIndex().collectNearGuidsCached(GetNewGUID(), 2, s_guids);
+    getWorldMap()->getRegistry().forEachPinnedByGuidsT<Creature>(s_guids,
+        [&](Creature& creature)
         {
-            Unit* inRangeUnit = dynamic_cast<Unit*>(inRangeObject);
-            if (inRangeUnit->getAIInterface() && inRangeUnit->getAIInterface()->m_isNeutralGuard && CalcDistance(inRangeUnit) <= 50.0f * 50.0f)
-                inRangeUnit->getAIInterface()->onHostileAction(this);
-        }
-    }
+            if (creature.getAIInterface() && creature.getAIInterface()->m_isNeutralGuard && CalcDistance(&creature) <= 50.0f * 50.0f)
+                creature.getAIInterface()->onHostileAction(this);
+        });
 }
 
 void Unit::setTriggerStunOrImmobilize(uint32_t newTrigger, uint32_t newChance, bool isVictim/* = false*/)
@@ -9194,7 +9301,7 @@ void Unit::addExtraStrikeTarget(SpellInfo const* spellInfo, uint32_t charges)
 
 uint32_t Unit::doDamageSplitTarget(uint32_t res, SchoolMask schoolMask, bool isMeleeDmg)
 {
-    Unit* splittarget = (getWorldMap() != nullptr) ? getWorldMap()->getUnit(m_damageSplitTarget->m_target) : nullptr;
+    Unit* splittarget = (getWorldMap() != nullptr) ? getWorldMap()->getUnit2(WoWGuid(m_damageSplitTarget->m_target)) : nullptr;
     if (splittarget != nullptr && res > 0)
     {
         // calculate damage
@@ -11233,7 +11340,7 @@ DamageInfo Unit::strike(Unit* pVictim, WeaponDamageType weaponType, SpellInfo co
         //ugly hack for shadowfiend restoring mana
         if (getSummonedByGuid() != 0 && getEntry() == 19668)
         {
-            Player* owner = getWorldMap()->getPlayer(static_cast<uint32_t>(getSummonedByGuid()));
+            Player* owner = getWorldMapPlayer(getSummonedByGuid());
             if (owner)
             {
                 uint32_t amount = static_cast<uint32_t>(owner->getMaxPower(POWER_TYPE_MANA) * 0.05f);
@@ -11243,8 +11350,8 @@ DamageInfo Unit::strike(Unit* pVictim, WeaponDamageType weaponType, SpellInfo co
         //ugly hack for Bloodsworm restoring hp
         if (getSummonedByGuid() != 0 && getEntry() == 28017)
         {
-            Player* owner = getWorldMap()->getPlayer(static_cast<uint32_t>(getSummonedByGuid()));
-            if (owner != NULL)
+            Player* owner = getWorldMapPlayer(getSummonedByGuid());
+            if (owner != nullptr)
                 owner->addSimpleHealingBatchEvent(Util::float2int32(1.5f * dmg.realDamage), owner, sSpellMgr.getSpellInfo(50452));
         }
     }
@@ -11508,21 +11615,30 @@ DamageInfo Unit::strike(Unit* pVictim, WeaponDamageType weaponType, SpellInfo co
             auto itx2 = itx++;
             const auto& ex = *itx2;
 
-            for (const auto& itr : getInRangeObjectsSet())
-            {
-                if (!itr || itr == pVictim || !itr->isCreatureOrPlayer())
-                    continue;
 
-                if (CalcDistance(itr) < 5.0f && this->isValidTarget(itr) && itr->isInFront(this) && !static_cast<Unit*>(itr)->isPacified())
+
+
+            thread_local std::vector<WoWGuid> s_guids;
+            s_guids.clear();
+            s_guids.reserve(64);
+
+            getWorldMap()->getSpatialIndex().collectNearGuidsCached(GetNewGUID(), 1, s_guids);
+            getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+                [&](Unit& unit)
                 {
-                    // Sweeping Strikes hits cannot be dodged, missed or parried (from wowhead)
-                    bool skip_hit_check2 = ex->spell_info->getId() == 12328 ? true : false;
-                    //zack : should we use the spell id the registered this extra strike when striking ? It would solve a few proc on proc problems if so ;)
-                    // Strike(TO<Unit*>(*itr), weapon_damage_type, ability, add_damage, pct_dmg_mod, exclusive_damage, false, skip_hit_check);
-                    strike(static_cast<Unit*>(itr), dmg.weaponType, ex->spell_info, add_damage, pct_dmg_mod, exclusive_damage, false, skip_hit_check2);
-                    break;
-                }
-            }
+                    if (&unit == pVictim)
+                        return;
+
+                    if (CalcDistance(&unit) < 5.0f && this->isValidTarget(&unit) && unit.isInFront(this) && !unit.isPacified())
+                    {
+                        // Sweeping Strikes hits cannot be dodged, missed or parried (from wowhead)
+                        bool skip_hit_check2 = ex->spell_info->getId() == 12328 ? true : false;
+                        //zack : should we use the spell id the registered this extra strike when striking ? It would solve a few proc on proc problems if so ;)
+                        // Strike(TO<Unit*>(*itr), weapon_damage_type, ability, add_damage, pct_dmg_mod, exclusive_damage, false, skip_hit_check);
+                        strike(&unit, dmg.weaponType, ex->spell_info, add_damage, pct_dmg_mod, exclusive_damage, false, skip_hit_check2);
+                        return;
+                    }
+                });
 
             // Sweeping Strikes charges are used up regardless whether there is a secondary target in range or not. (from wowhead)
             if (ex->charges > 0)

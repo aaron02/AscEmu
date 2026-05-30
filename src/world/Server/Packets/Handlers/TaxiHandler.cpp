@@ -30,7 +30,7 @@ void WorldSession::sendTaxiStatus(WoWGuid guid)
     Creature* unit = player->getWorldMapCreature(guid.getRawGuid());
     if (!unit || unit->isHostileTo(player) || !unit->isTaxi())
     {
-        sLogger.failure("WorldSession::sendTaxiStatus Creature with guid - {} not found.", std::to_string(unit->getGuid()));
+        sLogger.failure("WorldSession::sendTaxiStatus Creature with guid - {} not found.", std::to_string(guid.getRawGuid()));
         return;
     }
 

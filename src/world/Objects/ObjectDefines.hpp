@@ -117,8 +117,8 @@ struct QuaternionData
 
 enum GOSummonType : uint8_t
 {
-    GO_SUMMON_TIMED_OR_CORPSE_DESPAWN = 0,    // despawns after a specified time OR when the summoner dies
-    GO_SUMMON_TIMED_DESPAWN = 1     // despawns after a specified time
+    GO_SUMMON_TIMED_OR_CORPSE_DESPAWN = 0,      // despawns after a specified time OR when the summoner dies
+    GO_SUMMON_TIMED_DESPAWN = 1                 // despawns after a specified time
 };
 
 enum CreatureSummonDespawnType : uint8_t

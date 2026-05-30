@@ -4412,10 +4412,7 @@ void MySQLDataStore::loadCreatureSpawns()
 
                 cspawn->entry = creature_entry;
                 cspawn->mapId = fields[4].asUint32();
-                cspawn->x = fields[5].asFloat();
-                cspawn->y = fields[6].asFloat();
-                cspawn->z = fields[7].asFloat();
-                cspawn->o = fields[8].asFloat();
+                cspawn->spawnPoint = LocationVector(fields[5].asFloat(), fields[6].asFloat(), fields[7].asFloat(), fields[8].asFloat());
                 cspawn->movetype = fields[9].asUint8();
                 cspawn->displayid = fields[10].asUint32();
                 if (cspawn->displayid != 0 && !creature_properties->isTriggerNpc)

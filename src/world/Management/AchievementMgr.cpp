@@ -608,7 +608,7 @@ void AchievementMgr::updateAchievementCriteria(AchievementCriteriaTypes _type, i
                     case 1206: // To All The Squirrels I've Loved Before
                     {
                         // requires a target
-                        if (const auto unit = getPlayer()->getWorldMap()->getUnit(selectedGUID))
+                        if (const auto unit = getPlayer()->getWorldMapUnit(selectedGUID))
                         {
                             const uint32_t unitEntry = unit->getEntry();
                             if ((unitEntry == 1412 && achievementCriteria->index == 1)      // Squirrel
@@ -640,7 +640,7 @@ void AchievementMgr::updateAchievementCriteria(AchievementCriteriaTypes _type, i
                     case 2557: // To All The Squirrels Who Shared My Life
                     {
                         // requires a target
-                        if (const auto unit = getPlayer()->getWorldMap()->getUnit(selectedGUID))
+                        if (const auto unit = getPlayer()->getWorldMapUnit(selectedGUID))
                         {
                             const uint32_t unitEntry = unit->getEntry();
                             if ((unitEntry == 29328 && achievementCriteria->index == 1)      // Arctic Hare
@@ -805,7 +805,7 @@ void AchievementMgr::updateAchievementCriteria(AchievementCriteriaTypes _type, i
                 uint64_t creatureGuid = _miscvalue1;
                 creatureGuid <<= 32; // shift to high 32-bits
                 creatureGuid += _miscvalue2;
-                if (const auto unit = getPlayer()->getWorldMap()->getUnit(creatureGuid))
+                if (const auto unit = getPlayer()->getWorldMapUnit(creatureGuid))
                 {
                     bool yieldXP = CalculateXpToGive(unit, getPlayer()) > 0;
                     if (unit->isCreature())
@@ -1901,7 +1901,7 @@ void AchievementMgr::giveAchievementReward(WDB::Structures::AchievementEntry con
     //Reward Mail
     if (Reward->sender)
     {
-        Creature* creature = getPlayer()->getWorldMap()->createCreature(Reward->sender);
+        Creature* creature = getPlayer()->getWorldMap()->getSpawnManager().summonCreature(Reward->sender, {});
         if (creature == nullptr)
         {
             sLogger.failure("can not create sender for achievement {}", _entry->ID);
@@ -1935,7 +1935,7 @@ void AchievementMgr::giveAchievementReward(WDB::Structures::AchievementEntry con
             item = nullptr;
 
             //removing sender
-            creature->Delete();
+            creature->despawn();
         }
         else
         {
@@ -2017,10 +2017,18 @@ void AchievementMgr::sendAchievementEarned(WDB::Structures::AchievementEntry con
         }
 
         // Send Achievement message to nearby players
-        for (const auto& inRangeItr : getPlayer()->getInRangePlayersSet())
+        thread_local std::vector<WoWGuid> s_guids;
+        s_guids.clear();
+        s_guids.reserve(64);
+        getPlayer()->getWorldMap()->getVisibilitySystem().collectViewersOf(getPlayer()->GetNewGUID(), s_guids);
+
+        for (const WoWGuid& id : s_guids)
         {
-            const Player* player = dynamic_cast<Player*>(inRangeItr);
-            if (player && player->getSession() && !player->isIgnored(getPlayer()->getGuidLow()))
+            Player* player = getPlayer()->getWorldMap()->getRegistry().getPlayer(id);
+            if (!player)
+                continue;
+
+            if (player->getSession() && !player->isIgnored(getPlayer()->getGuidLow()))
             {
                 // check if achievement message has already been sent to this player (in guild or group)
                 alreadySent = false;
@@ -2039,6 +2047,7 @@ void AchievementMgr::sendAchievementEarned(WDB::Structures::AchievementEntry con
                 }
             }
         }
+
         // Have we sent the message to the achieving player yet?
         alreadySent = false;
         for (guidIndex = 0; guidIndex < guidCount; ++guidIndex)

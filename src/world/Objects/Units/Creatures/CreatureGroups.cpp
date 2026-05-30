@@ -35,6 +35,8 @@ void FormationMgr::addCreatureToGroup(uint32_t leaderSpawnId, Creature* creature
 
         // With dynamic spawn the creature may have just respawned
         // we need to find previous instance of creature and delete it from the formation, as it'll be invalidated
+        // todo aaron02 maprework
+        /*
         for (const auto& pair : map->_sqlids_creatures)
         {
             if (pair.first == creature->getSpawnId())
@@ -46,7 +48,7 @@ void FormationMgr::addCreatureToGroup(uint32_t leaderSpawnId, Creature* creature
                 if (itr->second->hasMember(other))
                     itr->second->removeMember(other);
             }
-        }
+        }*/
     }
     else
     {

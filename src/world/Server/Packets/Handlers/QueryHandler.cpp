@@ -115,28 +115,31 @@ void WorldSession::handleAchievmentQueryOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleInrangeQuestgiverQuery(WorldPacket& /*recvPacket*/)
 {
+    if (!_player || !_player->IsInWorld())
+        return;
+
     std::vector<QuestgiverInrangeStatus> questgiverSet;
     QuestgiverInrangeStatus temp;
 
-    for (const auto& inrangeObject : _player->getInRangeObjectsSet())
-    {
-        if (inrangeObject == nullptr || !inrangeObject->isCreature())
-            continue;
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
 
-        if (const auto creature = dynamic_cast<Creature*>(inrangeObject))
+    _player->getWorldMap()->getSpatialIndex().collectNearGuidsCached(_player->GetNewGUID(), 2, s_guids);
+    _player->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Creature>(s_guids,
+        [&](Creature& creature)
         {
-            if (creature->isQuestGiver())
+            if (creature.isQuestGiver())
             {
-                temp.rawGuid = creature->getGuid();
+                temp.rawGuid = creature.getGuid();
 #if VERSION_STRING < Cata
-                temp.status = static_cast<uint8_t>(sQuestMgr.CalcStatus(creature, _player));
+                temp.status = static_cast<uint8_t>(sQuestMgr.CalcStatus(&creature, _player));
 #else
-                temp.status = sQuestMgr.CalcStatus(creature, _player);
+                temp.status = sQuestMgr.CalcStatus(&creature, _player);
 #endif
                 questgiverSet.push_back(temp);
             }
-        }
-    }
+        });
 
     SendPacket(SmsgQuestgiverStatusMultiple(uint32_t(questgiverSet.size()), questgiverSet).serialise().get());
 }

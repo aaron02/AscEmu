@@ -656,53 +656,51 @@ Unit* AIInterface::findTarget()
 
     float distance = 999999.0f; // that should do it.. :p
 
-    for (const auto& itr2 : m_Unit->getInRangeObjectsSet())
-    {
-        if (itr2)
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    m_Unit->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_Unit->GetNewGUID(), 2, s_guids);
+    m_Unit->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+        [&](Unit& unit)
         {
-            if (!itr2->isCreatureOrPlayer())
-                continue;
-
-            Unit* pUnit = static_cast<Unit*>(itr2);
-
             // Must be hostile, not neutral, to target
-            if (!m_Unit->isHostileTo(pUnit))
-                continue;
+            if (!m_Unit->isHostileTo(&unit))
+                return;
 
-            if (!canOwnerAttackUnit(pUnit))
-                continue;
+            if (!canOwnerAttackUnit(&unit))
+                return;
 
             if (worldConfig.terrainCollision.isCollisionEnabled)
             {
-                if (!m_Unit->IsWithinLOSInMap(pUnit))
-                    continue;
+                if (!m_Unit->IsWithinLOSInMap(&unit))
+                    return;
             }
 
             //on blizz there is no Z limit check
-            const float dist = m_Unit->GetDistance2dSq(pUnit);
+            const float dist = m_Unit->GetDistance2dSq(&unit);
 
-            if (pUnit->m_factionTemplate != nullptr && pUnit->m_factionTemplate->Faction == 28)// only Attack a critter if there is no other Enemy in range
+            if (unit.m_factionTemplate != nullptr && unit.m_factionTemplate->Faction == 28)// only Attack a critter if there is no other Enemy in range
             {
                 if (dist < 10.0f)
-                    critterTarget = pUnit;
+                    critterTarget = &unit;
 
-                continue;
+                return;
             }
 
-            if (dist > calcAggroRange(pUnit))
-                continue;
+            if (dist > calcAggroRange(&unit))
+                return;
 
             // Do not aggro flying stuff that cannot be reached
-            if (!m_Unit->canFly() && (m_Unit->getDistanceZ(pUnit) > (3 + m_Unit->getMeleeRange(pUnit))))
-                continue;
+            if (!m_Unit->canFly() && (m_Unit->getDistanceZ(&unit) > (3 + m_Unit->getMeleeRange(&unit))))
+                return;
 
             if (dist > distance)     // we want to find the CLOSEST target
-                continue;
+                return;
 
             distance = dist;
-            target = pUnit;
-        }
-    }
+            target = &unit;
+        });
 
     if (target == nullptr)
         target = critterTarget;
@@ -726,29 +724,33 @@ void AIInterface::findFriends(float sqrtRange)
     if (!m_Unit->isHostileTo(currentTarget))
         return;
 
-    for (const auto& itr : m_Unit->getInRangeObjectsSet())
-    {
-        if (itr != nullptr && itr->isCreature())
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    m_Unit->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_Unit->GetNewGUID(), 2, s_guids);
+    m_Unit->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Creature>(s_guids,
+        [&](Creature& creature)
         {
-            Creature* helper = itr->ToCreature();
+            Creature* helper = &creature;
             if (isAlreadyAssisting(helper) || helper->getAIInterface()->isAlreadyAssisting(m_Unit))
-                continue;
+                return;
 
             if (m_Unit->getDistanceSq(helper) > sqrtRange)
-                continue;
+                return;
 
             // Helper must be hostile to current target
             // Neutral mobs cannot assist other neutral mobs
             if (!helper->isHostileTo(currentTarget))
-                continue;
+                return;
 
             if (!helper->getAIInterface()->canOwnerAssistUnit(m_Unit))
-                continue;
+                return;
 
             if (worldConfig.terrainCollision.isCollisionEnabled)
             {
                 if (!m_Unit->IsWithinLOSInMap(helper))
-                    continue;
+                    return;
             }
 
             m_assistTargets.insert(helper);
@@ -758,8 +760,7 @@ void AIInterface::findFriends(float sqrtRange)
                 helper->getAIInterface()->setEngagedByAssist();
                 helper->getAIInterface()->onHostileAction(currentTarget);
             }
-        }
-    }
+        });
 }
 
 bool AIInterface::canOwnerAttackUnit(Unit* pUnit) const
@@ -851,7 +852,7 @@ bool AIInterface::canOwnerAttackUnit(Unit* pUnit) const
     }
 
     // Map Visibility Range but not more than the Distance of 2 Cells
-    auto distance = std::min<float>(m_Unit->getWorldMap()->getVisibilityRange(), Map::Cell::cellSize * 2);
+    auto distance = std::min<float>(m_Unit->getWorldMap()->getVisibilityRange(), visibility::Cell::Size * 2);
 
     if (auto* const unit = m_Unit->getUnitOwner())
     {
@@ -1449,41 +1450,45 @@ bool AIInterface::_findFriendWhileFleeing()
     auto* const currentTarget = _selectCurrentTarget();
     Creature* helper = nullptr;
     float distance = 999999.0f;
-    for (const auto& itr : m_Unit->getInRangeObjectsSet())
-    {
-        if (itr != nullptr && itr->isCreature())
+
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
+    m_Unit->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_Unit->GetNewGUID(), 2, s_guids);
+    m_Unit->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Creature>(s_guids,
+        [&](Creature& creature)
         {
-            auto* candidate = itr->ToCreature();
+            Creature* candidate = &creature;
             if (isAlreadyAssisting(candidate) || candidate->getAIInterface()->isAlreadyAssisting(m_Unit))
-                continue;
+                return;
 
             const auto distToHelper = m_Unit->getDistanceSq(candidate);
             if (distToHelper > (fleeRadius * fleeRadius))
-                continue;
+                return;
 
             if (candidate->isInCombat())
-                continue;
+                return;
 
             if (!candidate->isHostileTo(currentTarget))
-                continue;
+                return;
 
             if (!candidate->getAIInterface()->canOwnerAssistUnit(m_Unit))
-                continue;
+                return;
 
             if (worldConfig.terrainCollision.isCollisionEnabled)
             {
                 if (!m_Unit->IsWithinLOSInMap(candidate))
-                    continue;
+                    return;
             }
 
             // Find the closest candidate
             if (distToHelper > distance)
-                continue;
+                return;
 
             distance = distToHelper;
             helper = candidate;
-        }
-    }
+        });
 
     if (helper == nullptr)
         return false;
@@ -1624,22 +1629,30 @@ void AIInterface::castSpellOnRandomTarget(CreatureAISpells* AiSpell)
         // set up targets in range by position, relation and hp range
         std::vector<Unit*> possibleUnitTargets;
 
-        for (const auto& inRangeObject : getUnit()->getInRangeObjectsSet())
-        {
-            if (((isTargetRandFriend && getUnit()->isFriendlyTo(inRangeObject))
-                || (!isTargetRandFriend && getUnit()->isHostileTo(inRangeObject) && inRangeObject != getUnit())) && inRangeObject->isCreatureOrPlayer())
-            {
-                Unit* inRangeTarget = static_cast<Unit*>(inRangeObject);
 
-                if (
-                    inRangeTarget->isAlive() && AiSpell->isDistanceInRange(getUnit()->GetDistance2dSq(inRangeTarget))
-                    && ((AiSpell->isHpInPercentRange(inRangeTarget->getHealthPct()) && isTargetRandFriend)
-                        || (getUnit()->getThreatManager().getThreat(inRangeTarget) > 0 && getUnit()->isHostileTo(inRangeTarget))))
+        thread_local std::vector<WoWGuid> s_guids;
+        s_guids.clear();
+        s_guids.reserve(64);
+
+        m_Unit->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_Unit->GetNewGUID(), 2, s_guids);
+        m_Unit->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+            [&](Unit& unit)
+            {
+                Unit* inRangeObject = &unit;
+                if (((isTargetRandFriend && getUnit()->isFriendlyTo(inRangeObject))
+                    || (!isTargetRandFriend && getUnit()->isHostileTo(inRangeObject) && inRangeObject != getUnit())) && inRangeObject->isCreatureOrPlayer())
                 {
-                    possibleUnitTargets.push_back(inRangeTarget);
+                    Unit* inRangeTarget = static_cast<Unit*>(inRangeObject);
+
+                    if (
+                        inRangeTarget->isAlive() && AiSpell->isDistanceInRange(getUnit()->GetDistance2dSq(inRangeTarget))
+                        && ((AiSpell->isHpInPercentRange(inRangeTarget->getHealthPct()) && isTargetRandFriend)
+                            || (getUnit()->getThreatManager().getThreat(inRangeTarget) > 0 && getUnit()->isHostileTo(inRangeTarget))))
+                    {
+                        possibleUnitTargets.push_back(inRangeTarget);
+                    }
                 }
-            }
-        }
+            });
 
         // add us as a friendly target.
         if (AiSpell->isHpInPercentRange(getUnit()->getHealthPct()) && isTargetRandFriend)
@@ -2191,7 +2204,7 @@ void AIInterface::updateTotem(uint32_t p_time)
             Spell* pSpell = sSpellMgr.newSpell(m_Unit, totemspell, true, 0);
             Unit* nextTarget = getCurrentTarget();
             if (nextTarget == NULL ||
-                (!m_Unit->getWorldMap()->getUnit(nextTarget->getGuid()) ||
+                (!m_Unit->getWorldMapUnit(nextTarget->getGuid()) ||
                     !nextTarget->isAlive() ||
                     !(m_Unit->isInRange(nextTarget->GetPosition(), pSpell->getSpellInfo()->custom_base_range_or_radius_sqr)) ||
                     !m_Unit->isValidTarget(nextTarget, pSpell->getSpellInfo())
@@ -2602,7 +2615,7 @@ void AIInterface::eventLeaveCombat(Unit* /*pUnit*/, uint32_t /*misc1*/)
                 for (auto spawns : data->spawns)
                 {
                     if (spawns.second && spawns.second->m_spawn && !spawns.second->isAlive())
-                        spawns.second->Despawn(0, 1000);
+                        spawns.second->despawn(0, 1000);
                 }
             }
         }
@@ -2721,7 +2734,7 @@ void AIInterface::eventUnitDied(Unit* pUnit, uint32_t /*misc1*/)
             }
 
             // Killed Group checks
-            auto spawnGroupData = sMySQLStore.getSpawnGroupDataBySpawn(pCreature->spawnid);
+            auto spawnGroupData = sMySQLStore.getSpawnGroupDataBySpawn(pCreature->getSpawnId());
 
             // Spawn Group Handling
             if (spawnGroupData && spawnGroupData->groupId)
@@ -2729,7 +2742,7 @@ void AIInterface::eventUnitDied(Unit* pUnit, uint32_t /*misc1*/)
                 bool killed = true;
                 for (auto spawns : spawnGroupData->spawns)
                 {
-                    if (!unitMapMgr->getRespawnInfo(SPAWN_TYPE_CREATURE, spawns.first))
+                    if (!unitMapMgr->getSpawnManager().getRespawnTime(SPAWN_TYPE_CREATURE2, spawns.first))
                         killed = false;
                 }
 
@@ -2883,27 +2896,33 @@ void AIInterface::eventChangeFaction(Unit* ForceAttackersToHateThisInstead)
     //we need a new assist list
     m_assistTargets.clear();
 
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+
     //Clear targettable
     if (ForceAttackersToHateThisInstead == nullptr)
     {
-        for (const auto& itr : m_Unit->getInRangeObjectsSet())
-        {
-            if (itr && itr->isCreatureOrPlayer() && static_cast<Unit*>(itr)->getAIInterface())
+        m_Unit->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_Unit->GetNewGUID(), 1, s_guids);
+        m_Unit->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+            [&](Unit& unit)
             {
-                static_cast<Unit*>(itr)->getThreatManager().clearThreat(m_Unit);
-            }
-        }
+                if (unit.getAIInterface())
+                {
+                    unit.getThreatManager().clearThreat(m_Unit);
+                }
+            });
     }
     else
     {
-        for (const auto& itr : m_Unit->getInRangeObjectsSet())
-        {
-            if (itr && itr->isCreatureOrPlayer())   //this guy will join me in fight since I'm telling him "sorry i was controlled"
+        m_Unit->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_Unit->GetNewGUID(), 1, s_guids);
+        m_Unit->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+            [&](Unit& unit)
             {
-                static_cast<Unit*>(itr)->getThreatManager().addThreat(ForceAttackersToHateThisInstead, 10.0f);   //just aping to be bale to hate him in case we got nothing else
-                static_cast<Unit*>(itr)->getThreatManager().clearThreat(m_Unit);
-            }
-        }
+                //this guy will join me in fight since I'm telling him "sorry i was controlled"
+                unit.getThreatManager().addThreat(ForceAttackersToHateThisInstead, 10.0f);   //just aping to be bale to hate him in case we got nothing else
+                unit.getThreatManager().clearThreat(m_Unit);
+            });
 
         getUnit()->getThreatManager().addThreat(ForceAttackersToHateThisInstead, 0.0f);
     }
@@ -3826,10 +3845,19 @@ Unit* AIInterface::getBestPlayerTarget(TargetFilter pTargetFilter, float pMinRan
 {
     //Build potential target list
     UnitArray TargetArray;
-    for (const auto& PlayerIter : getUnit()->getInRangePlayersSet())
+
+    thread_local std::vector<WoWGuid> s_guids;
+    s_guids.clear();
+    s_guids.reserve(64);
+    getUnit()->getWorldMap()->getVisibilitySystem().collectViewersOf(getUnit()->GetNewGUID(), s_guids);
+
+    for (const WoWGuid& id : s_guids)
     {
-        if (PlayerIter && isValidUnitTarget(PlayerIter, pTargetFilter, pMinRange, pMaxRange))
-            TargetArray.push_back(static_cast<Unit*>(PlayerIter));
+        Player* player = getUnit()->getWorldMap()->getRegistry().getPlayer(id);
+        if (!player || !isValidUnitTarget(player, pTargetFilter, pMinRange, pMaxRange))
+            continue;
+
+        TargetArray.push_back(static_cast<Unit*>(player));
     }
 
     return getBestTargetInArray(TargetArray, pTargetFilter);
@@ -3841,11 +3869,17 @@ Unit* AIInterface::getBestUnitTarget(TargetFilter pTargetFilter, float pMinRange
     UnitArray TargetArray;
     if (pTargetFilter & TargetFilter_Friendly)
     {
-        for (const auto& ObjectIter : getUnit()->getInRangeObjectsSet())
-        {
-            if (ObjectIter && isValidUnitTarget(ObjectIter, pTargetFilter, pMinRange, pMaxRange))
-                TargetArray.push_back(static_cast<Unit*>(ObjectIter));
-        }
+        thread_local std::vector<WoWGuid> s_guids;
+        s_guids.clear();
+        s_guids.reserve(64);
+
+        m_Unit->getWorldMap()->getSpatialIndex().collectNearGuidsCached(m_Unit->GetNewGUID(), 2, s_guids);
+        m_Unit->getWorldMap()->getRegistry().forEachPinnedByGuidsT<Unit>(s_guids,
+            [&](Unit& unit)
+            {
+                if (isValidUnitTarget(&unit, pTargetFilter, pMinRange, pMaxRange))
+                    TargetArray.push_back(&unit);
+            });
 
         if (isValidUnitTarget(getUnit(), pTargetFilter))
             TargetArray.push_back(getUnit());    //add self as possible friendly target

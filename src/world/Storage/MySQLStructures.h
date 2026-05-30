@@ -135,10 +135,7 @@ namespace MySQLStructure
         //max_build
         uint32_t entry;
         uint32_t mapId;
-        float x;
-        float y;
-        float z;
-        float o;
+        LocationVector spawnPoint;
         uint8_t movetype;
         uint32_t displayid;
         uint32_t factionid;
@@ -165,7 +162,7 @@ namespace MySQLStructure
         //event_entry
         uint32_t wander_distance;
         uint32_t waypoint_id;
-        std::string origine;
+        std::string origine{};
 
         // sets one of the bytes of an uint32_t
         uint32_t setbyte(uint32_t buffer, uint8_t index, uint32_t byte)

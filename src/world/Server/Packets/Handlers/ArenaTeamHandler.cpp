@@ -345,7 +345,7 @@ void WorldSession::handleInspectArenaStatsOpcode(WorldPacket& recvPacket)
 
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT_ARENA_STATS: {} (guidLow)", srlPacket.guid.getGuidLow());
 
-    const auto player = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
+    const auto player = _player->getWorldMapPlayer(srlPacket.guid.getRawGuid());
     if (player == nullptr)
         return;
 

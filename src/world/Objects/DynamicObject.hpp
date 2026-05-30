@@ -23,13 +23,13 @@ struct WoWDynamicObject;
 class SERVER_DECL DynamicObject : public Object
 {
 public:
-    DynamicObject(uint32_t high, uint32_t low);
+    DynamicObject(uint64_t guid);
     ~DynamicObject();
 
     void create(Unit* caster, Spell* pSpell, LocationVector lv, uint32_t duration, float radius, uint32_t type);
     void updateTargets();
 
-    void onRemoveInRangeObject(Object* pObj) override;
+    void onRemoveInRangeObject(Object* pObj);
     void remove();
 
     //////////////////////////////////////////////////////////////////////////////////////////

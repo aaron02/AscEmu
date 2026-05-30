@@ -169,7 +169,8 @@ void Container::forceCreationUpdate(Item* item)
 {
     if (m_owner->IsInWorld() && !item->IsInWorld())
     {
-        item->PushToWorld(m_owner->getWorldMap());
+        // todo aaron02 maprework
+        //item->PushToWorld(m_owner->getWorldMap());
         ByteBuffer buf(2500);
         uint32_t count = item->buildCreateUpdateBlockForPlayer(&buf, m_owner);
         m_owner->getUpdateMgr().pushCreationData(&buf, count);

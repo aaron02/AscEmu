@@ -207,8 +207,6 @@ public:
     typedef std::set<Creature*> CreatureSet;
     typedef std::set<GameObject*> GameObjectSet;
 
-    void setCellForcedStates(float xMin, float xMax, float yMin, float yMax, bool forceActive = true);
-
     Creature* spawnCreature(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t factionId = 0);
     Creature* getCreatureBySpawnId(uint32_t entry);
     Creature* GetCreatureByGuid(uint32_t guid);

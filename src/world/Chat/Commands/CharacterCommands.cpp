@@ -1993,7 +1993,7 @@ bool ChatCommandHandler::HandleCharListInstanceCommand(const char* /*args*/, Wor
                     ss << MSG_COLOR_LIGHTRED << "Shut Down|r";
                 else
                 {
-                    if (!instance->hasPlayers())
+                    if (!instance->getRegistry().countPlayers())
                         ss << MSG_COLOR_LIGHTRED << "Idle|r";
                     else
                         ss << MSG_COLOR_GREEN << "In use|r";

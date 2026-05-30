@@ -11,7 +11,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Objects/Units/Creatures/Summons/SummonHandler.hpp"
 #include "Objects/Units/Players/Player.hpp"
 #include "Objects/Units/Creatures/Vehicle.hpp"
-#include "Map/Cells/CellHandlerDefines.hpp"
+#include "Map/Visibility/VisibilityTypes.hpp"
 #include "Objects/GameObject.h"
 #include "Server/Warden/SpeedDetector.h"
 #include "Management/ObjectMgr.hpp"
@@ -189,10 +189,10 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvData)
     /// out of bounds check
     {
         bool out_of_bounds = false;
-        out_of_bounds = out_of_bounds || sessionMovementInfo.position.y < Map::Terrain::_minY;
-        out_of_bounds = out_of_bounds || sessionMovementInfo.position.y > Map::Terrain::_maxY;
-        out_of_bounds = out_of_bounds || sessionMovementInfo.position.x > Map::Terrain::_maxX;
-        out_of_bounds = out_of_bounds || sessionMovementInfo.position.x > Map::Terrain::_maxX;
+        out_of_bounds = out_of_bounds || sessionMovementInfo.position.y < visibility::Terrain::MinY;
+        out_of_bounds = out_of_bounds || sessionMovementInfo.position.y > visibility::Terrain::MaxY;
+        out_of_bounds = out_of_bounds || sessionMovementInfo.position.x > visibility::Terrain::MaxX;
+        out_of_bounds = out_of_bounds || sessionMovementInfo.position.x > visibility::Terrain::MaxX;
 
         if (out_of_bounds)
         {
@@ -599,7 +599,20 @@ void WorldSession::handleMoveWorldportAckOpcode(WorldPacket& /*recvPacket*/)
     else
     {
         _player->m_teleportState = 2;
-        _player->AddToWorld();
+        
+        const auto mapInfo = sMySQLStore.getWorldMapInfo(_player->GetMapId());
+        if (mapInfo == nullptr || _player->GetMapId() >= MAX_NUM_MAPS)
+            return;
+
+        WorldMap* world = sMapMgr.findWorldMap(_player->GetMapId(), _player->GetInstanceID());
+
+        if (world == nullptr)
+        {
+            sLogger.failure("AddToWorld() failed for Object with GUID {} MapId {} InstanceId {}", std::to_string(_player->getGuid()), _player->GetMapId(), _player->GetInstanceID());
+            return;
+        }
+
+        world->getObjectFactory().attachToWorld(_player, _player->GetPosition());
     }
 
     _player->resetTimeSync();

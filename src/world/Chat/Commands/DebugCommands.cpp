@@ -28,6 +28,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Storage/MySQLDataStore.hpp"
 #include "Utilities/Narrow.hpp"
 #include "Utilities/Util.hpp"
+#include "Map/Visibility/VisibilityTypes.hpp"
 
 bool ChatCommandHandler::HandleMoveHardcodedScriptsToDBCommand(const char* args, WorldSession* session)
 {
@@ -76,10 +77,7 @@ bool ChatCommandHandler::HandleMoveHardcodedScriptsToDBCommand(const char* args,
         creature_spawn->entry = entry;
         creature_spawn->id = sObjectMgr.generateCreatureSpawnId();
         creature_spawn->movetype = 0;
-        creature_spawn->x = session->GetPlayer()->GetPositionX();
-        creature_spawn->y = session->GetPlayer()->GetPositionY();
-        creature_spawn->z = session->GetPlayer()->GetPositionZ();
-        creature_spawn->o = session->GetPlayer()->GetOrientation();
+        creature_spawn->spawnPoint = session->GetPlayer()->GetPosition();
         creature_spawn->emote_state = 0;
         creature_spawn->flags = creature_properties->NPCFLags;
         creature_spawn->pvp_flagged = 0;
@@ -98,20 +96,8 @@ bool ChatCommandHandler::HandleMoveHardcodedScriptsToDBCommand(const char* args,
         creature_spawn->CanFly = 0;
         creature_spawn->phase = session->GetPlayer()->GetPhase();
 
-        if (auto creature = session->GetPlayer()->getWorldMap()->createCreature(entry))
+        if (auto creature = session->GetPlayer()->getWorldMap()->getSpawnManager().spawnCreature({}, {}, creature_spawn))
         {
-            creature->Load(creature_spawn, 0, nullptr);
-            creature->m_loadedFromDB = true;
-            creature->PushToWorld(session->GetPlayer()->getWorldMap());
-
-            // Add to map
-            uint32_t x = session->GetPlayer()->getWorldMap()->getPosX(session->GetPlayer()->GetPositionX());
-            uint32_t y = session->GetPlayer()->getWorldMap()->getPosY(session->GetPlayer()->GetPositionY());
-            session->GetPlayer()->getWorldMap()->getBaseMap()->getSpawnsListAndCreate(x, y)->CreatureSpawns.push_back(creature_spawn);
-            MapCell* map_cell = session->GetPlayer()->getWorldMap()->getCell(x, y);
-            if (map_cell != nullptr)
-                map_cell->setLoaded();
-
             for (const auto& aiSpells : creature->getAIInterface()->mCreatureAISpells)
             {
                 if (aiSpells->fromDB)
@@ -149,7 +135,7 @@ bool ChatCommandHandler::HandleMoveHardcodedScriptsToDBCommand(const char* args,
                 ++count;
             }
 
-            creature->RemoveFromWorld(false, true);
+            creature->despawn();
         }
     }
 
@@ -699,7 +685,7 @@ bool ChatCommandHandler::HandleDebugInFrontCommand(const char* /*args*/, WorldSe
     uint64_t guid = m_session->GetPlayer()->getTargetGuid();
     if (guid != 0)
     {
-        if ((obj = m_session->GetPlayer()->getWorldMap()->getUnit(guid)) == 0)
+        if ((obj = m_session->GetPlayer()->getWorldMapUnit(guid)) == 0)
         {
             systemMessage(m_session, "You should select a character or a creature.");
             return true;
@@ -725,7 +711,7 @@ bool ChatCommandHandler::HandleShowReactionCommand(const char* args, WorldSessio
 
     if (wowGuid.getRawGuid() != 0)
     {
-        obj = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+        obj = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     }
 
     if (!obj)
@@ -755,7 +741,7 @@ bool ChatCommandHandler::HandleDistanceCommand(const char* /*args*/, WorldSessio
     uint64_t guid = m_session->GetPlayer()->getTargetGuid();
     if (guid != 0)
     {
-        if ((obj = m_session->GetPlayer()->getWorldMap()->getUnit(guid)) == 0)
+        if ((obj = m_session->GetPlayer()->getWorldMapUnit(guid)) == 0)
         {
             systemMessage(m_session, "You should select a character or a creature.");
             return true;
@@ -781,7 +767,7 @@ bool ChatCommandHandler::HandleAIMoveCommand(const char* args, WorldSession* m_s
     wowGuid.Init(player->getTargetGuid());
     if (wowGuid.getRawGuid() != 0)
     {
-        creature = player->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+        creature = player->getWorldMapCreature(wowGuid.getRawGuid());
     }
 
     if (creature == nullptr)
@@ -903,7 +889,7 @@ bool ChatCommandHandler::HandleFaceCommand(const char* args, WorldSession* m_ses
 
     if (wowGuid.getRawGuid() != 0)
     {
-        obj = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+        obj = m_session->GetPlayer()->getWorldMapCreature(wowGuid.getRawGuid());
     }
 
     if (obj == nullptr)
@@ -974,7 +960,7 @@ bool ChatCommandHandler::HandleKnockBackCommand(const char* args, WorldSession* 
 //.debug fade
 bool ChatCommandHandler::HandleFadeCommand(const char* args, WorldSession* m_session)
 {
-    Unit* target = m_session->GetPlayer()->getWorldMap()->getUnit(m_session->GetPlayer()->getTargetGuid());
+    Unit* target = m_session->GetPlayer()->getWorldMapUnit(m_session->GetPlayer()->getTargetGuid());
     if (!target)
         target = m_session->GetPlayer();
 
@@ -991,7 +977,7 @@ bool ChatCommandHandler::HandleFadeCommand(const char* args, WorldSession* m_ses
 //.debug threatMod
 bool ChatCommandHandler::HandleThreatModCommand(const char* args, WorldSession* m_session)
 {
-    Unit* target = m_session->GetPlayer()->getWorldMap()->getUnit(m_session->GetPlayer()->getTargetGuid());
+    Unit* target = m_session->GetPlayer()->getWorldMapUnit(m_session->GetPlayer()->getTargetGuid());
     if (!target)
         target = m_session->GetPlayer();
 
@@ -1008,7 +994,7 @@ bool ChatCommandHandler::HandleThreatModCommand(const char* args, WorldSession* 
 //.debug movefall
 bool ChatCommandHandler::HandleMoveFallCommand(const char* /*args*/, WorldSession* m_session)
 {
-    Unit* target = m_session->GetPlayer()->getWorldMap()->getUnit(m_session->GetPlayer()->getTargetGuid());
+    Unit* target = m_session->GetPlayer()->getWorldMapUnit(m_session->GetPlayer()->getTargetGuid());
     if (!target)
         return true;
 
@@ -1026,7 +1012,7 @@ bool ChatCommandHandler::HandleMoveFallCommand(const char* /*args*/, WorldSessio
 bool ChatCommandHandler::HandleThreatListCommand(const char* /*args*/, WorldSession* m_session)
 {
     Unit* target = nullptr;
-    target = m_session->GetPlayer()->getWorldMap()->getUnit(m_session->GetPlayer()->getTargetGuid());
+    target = m_session->GetPlayer()->getWorldMapUnit(m_session->GetPlayer()->getTargetGuid());
     if (!target)
     {
         systemMessage(m_session, "You should select a creature.");
@@ -1086,7 +1072,7 @@ bool ChatCommandHandler::HandleDebugSpawnWarCommand(const char* args, WorldSessi
     WorldMap* m = m_session->GetPlayer()->getWorldMap();
 
     // if we have selected unit, use its position
-    Unit* unit = m->getUnit(m_session->GetPlayer()->getTargetGuid());
+    Unit* unit = m->getUnit2(WoWGuid(m_session->GetPlayer()->getTargetGuid()));
     if (unit == nullptr)
         unit = m_session->GetPlayer(); // otherwise ours
 
@@ -1103,17 +1089,16 @@ bool ChatCommandHandler::HandleDebugSpawnWarCommand(const char* args, WorldSessi
         y = r * cosf(angle);
         z = unit->getMapHeight(LocationVector(bx + x, by + y, unit->GetPositionZ() + 2));
 
-        Creature* c = m->createCreature(npcid);
-        c->Load(cp, bx + x, by + y, z, 0.0f);
-        if (health != 0)
+        if (Creature* c = m->getSpawnManager().spawnCreature(npcid, LocationVector(bx + x, by + y, z, 0.0f)))
         {
-            c->setMaxHealth(health);
-            c->setHealth(health);
+            if (health != 0)
+            {
+                c->setMaxHealth(health);
+                c->setHealth(health);
+            }
+            c->setFactionTemplate((count % 2) ? 1 : 2);
+            c->setServersideFaction();
         }
-        c->setFactionTemplate((count % 2) ? 1 : 2);
-        c->setServersideFaction();
-        c->PushToWorld(m);
-
         r += 0.5;
         angle += 8 / r;
     }
@@ -1266,7 +1251,7 @@ bool ChatCommandHandler::HandleSimpleDistanceCommand(const char* args, WorldSess
     if (sscanf(args, "%f %f %f", &toX, &toY, &toZ) != 3)
         return false;
 
-    if (toX >= Map::Terrain::_maxX || toX <= Map::Terrain::_minX || toY <= Map::Terrain::_minY || toY >= Map::Terrain::_maxY)
+    if (toX >= visibility::Terrain::MaxX || toX <= visibility::Terrain::MinX || toY <= visibility::Terrain::MinY || toY >= visibility::Terrain::MaxY)
         return false;
 
     float distance = CalculateDistance(
@@ -1291,7 +1276,7 @@ bool ChatCommandHandler::HandleRangeCheckCommand(const char* /*args*/, WorldSess
         return true;
     }
 
-    Unit* unit = m_session->GetPlayer()->getWorldMap()->getUnit(guid);
+    Unit* unit = m_session->GetPlayer()->getWorldMapUnit(guid);
     if (!unit)
     {
         m_session->SystemMessage("Invalid selection.");
@@ -1465,7 +1450,7 @@ bool ChatCommandHandler::HandleCastSpellCommand(const char* args, WorldSession* 
                 sGMLog.writefromsession(m_session, "cast spell %d on PLAYER %s", spellid, static_cast< Player* >(target)->getName().c_str());
             break;
         case TYPEID_UNIT:
-            sGMLog.writefromsession(m_session, "cast spell %d on CREATURE %u [%s], sqlid %u", spellid, target->getEntry(), static_cast< Creature* >(target)->GetCreatureProperties()->Name.c_str(), static_cast< Creature* >(target)->GetSQL_id());
+            sGMLog.writefromsession(m_session, "cast spell %d on CREATURE %u [%s], sqlid %u", spellid, target->getEntry(), static_cast< Creature* >(target)->GetCreatureProperties()->Name.c_str(), static_cast< Creature* >(target)->getSpawnId());
             break;
     }
 
@@ -1525,7 +1510,7 @@ bool ChatCommandHandler::HandleCastSpellNECommand(const char* args, WorldSession
                 sGMLog.writefromsession(m_session, "cast spell %d on PLAYER %s", spellId, static_cast< Player* >(target)->getName().c_str());
             break;
         case TYPEID_UNIT:
-            sGMLog.writefromsession(m_session, "cast spell %d on CREATURE %u [%s], sqlid %u", spellId, target->getEntry(), static_cast< Creature* >(target)->GetCreatureProperties()->Name.c_str(), static_cast< Creature* >(target)->GetSQL_id());
+            sGMLog.writefromsession(m_session, "cast spell %d on CREATURE %u [%s], sqlid %u", spellId, target->getEntry(), static_cast< Creature* >(target)->GetCreatureProperties()->Name.c_str(), static_cast< Creature* >(target)->getSpawnId());
             break;
     }
 
@@ -1565,7 +1550,7 @@ bool ChatCommandHandler::HandleCastSelfCommand(const char* args, WorldSession* m
                 sGMLog.writefromsession(m_session, "used castself with spell %d on PLAYER %s", spellid, static_cast< Player* >(target)->getName().c_str());
             break;
         case TYPEID_UNIT:
-            sGMLog.writefromsession(m_session, "used castself with spell %d on CREATURE %u [%s], sqlid %u", spellid, target->getEntry(), static_cast< Creature* >(target)->GetCreatureProperties()->Name.c_str(), static_cast< Creature* >(target)->GetSQL_id());
+            sGMLog.writefromsession(m_session, "used castself with spell %d on CREATURE %u [%s], sqlid %u", spellid, target->getEntry(), static_cast< Creature* >(target)->GetCreatureProperties()->Name.c_str(), static_cast< Creature* >(target)->getSpawnId());
             break;
     }
 

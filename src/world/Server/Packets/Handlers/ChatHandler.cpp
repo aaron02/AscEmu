@@ -412,7 +412,7 @@ void WorldSession::handleTextEmoteOpcode(WorldPacket& recvPacket)
     uint32_t nameLength = 1;
     std::string unitName;
 
-    auto unit = _player->getWorldMap()->getUnit(srlPacket.guid);
+    auto unit = _player->getWorldMapUnit(srlPacket.guid);
     if (unit != nullptr)
     {
         if (unit->isPlayer())

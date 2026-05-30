@@ -9,7 +9,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "MovementDefines.hpp"
 #include "LocationVector.h"
 #include "CommonDefines.hpp"
-#include "Map/Cells/CellHandlerDefines.hpp"
+#include "Map/Visibility/VisibilityTypes.hpp"
 
 struct MovementInfo
 {
@@ -207,15 +207,15 @@ inline float normalizeOrientation(float orientation)
 
 inline void normalizeMapCoord(float &c)
 {
-    if (c > Map::Terrain::MapHalfSize - 0.5f)
-        c = Map::Terrain::MapHalfSize - 0.5f;
-    else if (c < -(Map::Terrain::MapHalfSize - 0.5f))
-        c = -(Map::Terrain::MapHalfSize - 0.5f);
+    if (c > visibility::Terrain::MapHalf - 0.5f)
+        c = visibility::Terrain::MapHalf - 0.5f;
+    else if (c < -(visibility::Terrain::MapHalf - 0.5f))
+        c = -(visibility::Terrain::MapHalf - 0.5f);
 }
 
 inline bool isValidMapCoord(float c)
 {
-    return std::isfinite(c) && (std::fabs(c) <= Map::Terrain::MapHalfSize - 0.5f);
+    return std::isfinite(c) && (std::fabs(c) <= visibility::Terrain::MapHalf - 0.5f);
 }
 
 inline bool isValidMapCoord(float x, float y)

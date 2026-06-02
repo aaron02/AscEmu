@@ -246,6 +246,10 @@ void WorldSession::LogoutPlayer(bool Save)
 
     if (_player != nullptr)
     {
+        // Logout must not leave a possessed NPC behind as a temporary
+        // visibility viewer/activator. Do this before aura/spell/session cleanup.
+        _player->resetPossessionBeforeRelocation();
+
         _player->setFaction(_player->getInitialFactionId());
 
         sObjectMgr.removePlayer(_player);
@@ -257,7 +261,7 @@ void WorldSession::LogoutPlayer(bool Save)
 
         if (_player->m_currentLoot && _player->IsInWorld())
         {
-            Object* obj = _player->getWorldMap()->getObject(_player->m_currentLoot);
+            Object* obj = _player->getWorldMapObject(_player->m_currentLoot);
             if (obj != nullptr)
             {
                 switch (obj->getObjectTypeId())
@@ -367,7 +371,9 @@ void WorldSession::LogoutPlayer(bool Save)
 
         _player->removeAllAuras();
         if (_player->IsInWorld())
-            _player->removeFromWorld();
+        {
+            _player->getWorldMap()->onPlayerLeave(_player);
+        }
 
         if (_player->m_playerInfo->m_Group != nullptr)
             _player->m_playerInfo->m_Group->Update();
@@ -410,7 +416,6 @@ void WorldSession::LogoutPlayer(bool Save)
             }
         }
 
-        delete _player;
         _player = nullptr;
 
         SendPacket(SmsgLogoutComplete().serialise().get());

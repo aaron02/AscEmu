@@ -207,8 +207,6 @@ public:
     typedef std::set<Creature*> CreatureSet;
     typedef std::set<GameObject*> GameObjectSet;
 
-    void setCellForcedStates(float xMin, float xMax, float yMin, float yMax, bool forceActive = true);
-
     Creature* spawnCreature(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t factionId = 0);
     Creature* getCreatureBySpawnId(uint32_t entry);
     Creature* GetCreatureByGuid(uint32_t guid);
@@ -217,7 +215,7 @@ public:
     CreatureSet getCreatureSetForEntry(uint32_t entry, bool debug = false, Player* player = nullptr);
     CreatureSet getCreatureSetForEntries(std::vector<uint32_t> entryVector);
 
-    GameObject* spawnGameObject(uint32_t entry, float posX, float posY, float posZ, float posO, bool addToWorld = true, uint32_t misc1 = 0, uint32_t phase = 0);
+    GameObject* spawnGameObject(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t phase = 0);
     GameObject* getGameObjectBySpawnId(uint32_t entry);
     GameObject* GetGameObjectByGuid(uint32_t guid);
 

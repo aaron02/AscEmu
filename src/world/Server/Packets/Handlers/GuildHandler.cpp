@@ -479,7 +479,7 @@ void WorldSession::handleGuildBankerActivate(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto gameObject = _player->getWorldMap()->getGameObject(srlPacket.guid.getGuidLow());
+    const auto gameObject = _player->getWorldMapGameObject(srlPacket.guid.getRawGuid());
     if (gameObject == nullptr)
         return;
 
@@ -531,7 +531,7 @@ void WorldSession::handleCharterOffer(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    Player* pTarget = _player->getWorldMap()->getPlayer(srlPacket.playerGuid.getGuidLow());
+    Player* pTarget = _player->getWorldMapPlayer(srlPacket.playerGuid.getRawGuid());
     const auto pCharter = sObjectMgr.getCharterByItemGuid(srlPacket.itemGuid);
     if (pCharter == nullptr)
     {
@@ -590,7 +590,8 @@ void WorldSession::handleCharterSign(WorldPacket& recvPacket)
         _player->m_charters[charter->getCharterType()] = charter;
         _player->saveToDB(false);
 
-        Player* player = _player->getWorldMap()->getPlayer(charter->getLeaderGuid());
+        // todo aaron02 maprework
+        Player* player = _player->getWorldMapPlayer(charter->getLeaderGuid());
         if (player == nullptr)
             return;
 
@@ -759,7 +760,7 @@ void WorldSession::handleCharterBuy(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    Creature* creature = _player->getWorldMap()->getCreature(srlPacket.creatureGuid.getGuidLowPart());
+    Creature* creature = _player->getWorldMapCreature(srlPacket.creatureGuid.getRawGuid());
     if (!creature)
     {
         Disconnect();

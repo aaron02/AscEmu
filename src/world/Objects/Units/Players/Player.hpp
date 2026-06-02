@@ -110,16 +110,12 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // Essential functions
     void Update(unsigned long time_passed);             // hides function Unit::Update
-    void AddToWorld();                                  // hides virtual function Object::AddToWorld
-    void AddToWorld(WorldMap* pMapMgr);                 // hides virtual function Object::AddToWorld
-    // void PushToWorld(WorldMap*);                     // not used
-    // void RemoveFromWorld(bool free_guid);            // not used
-    void OnPrePushToWorld() override;                   // overrides virtual function  Object::OnPrePushToWorld
-    void OnPushToWorld() override;                      // overrides virtual function  Object::OnPushToWorld
-    // void OnPreRemoveFromWorld();                     // not used
-    // void OnRemoveFromWorld();                        // not used
+    virtual void onPreAttachToWorld() override;
+    virtual void onAttachToWorld() override;
 
-    void removeFromWorld();
+    virtual void onPreDetachFromWorld() override;
+    //virtual void onDetachFromWorld() override;
+
     bool m_isReadyToBeRemoved = false;
 
 private:
@@ -592,6 +588,13 @@ public:
     //\Todo: this function is not as "safe" as the one above, reduce it to one function.
     void safeTeleport(WorldMap* mgr, const LocationVector& vec);
 
+    void resetPossessionBeforeRelocation();
+    void resetVisibilityBeforeRelocation();
+    void refreshVisibilityAfterRelocation();
+
+    void collectVisibleObjectGuidsForRelocation(std::vector<WoWGuid>& out) const;
+    void clearVisibleObjectCachesForRelocation();
+
     void setTransferStatus(uint8_t status);
     uint8_t getTransferStatus() const;
     bool isTransferPending() const;
@@ -801,14 +804,57 @@ protected:
     //////////////////////////////////////////////////////////////////////////////////////////
     // Visiblility
 public:
-    void addVisibleObject(uint64_t guid);
-    void removeVisibleObject(uint64_t guid);
-    bool isVisibleObject(uint64_t guid);
+    void _visAdd(const WoWGuid& g)
+    {
+        const uint64_t raw = g.getRawGuid();
+        switch (g.getHigh())
+        {
+            case HighGuid::Player:          visible_.players.insert(raw);       break;
+            case HighGuid::Unit:
+            case HighGuid::Vehicle:         visible_.creatures.insert(raw);     break;
+            case HighGuid::GameObject:      visible_.gameobjects.insert(raw);   break;
+            case HighGuid::DynamicObject:   visible_.dynamics.insert(raw);      break;
+            case HighGuid::Pet:             visible_.pets.insert(raw);          break;
+            case HighGuid::Corpse:          visible_.corpses.insert(raw);       break;
+            case HighGuid::Transporter:     visible_.gameobjects.insert(raw);   break;
+            default: break;
+        }
+        visible_.any.insert(raw);
+    }
 
-    void removeIfVisiblePushOutOfRange(uint64_t guid);
+    void _visRemove(const WoWGuid& g)
+    {
+        const uint64_t raw = g.getRawGuid();
+        switch (g.getHigh())
+        {
+            case HighGuid::Player:          visible_.players.erase(raw);        break;
+            case HighGuid::Unit:
+            case HighGuid::Vehicle:         visible_.creatures.erase(raw);      break;
+            case HighGuid::GameObject:      visible_.gameobjects.erase(raw);    break;
+            case HighGuid::DynamicObject:   visible_.dynamics.erase(raw);       break;
+            case HighGuid::Pet:             visible_.pets.erase(raw);           break;
+            case HighGuid::Corpse:          visible_.corpses.erase(raw);        break;
+            case HighGuid::Transporter:     visible_.gameobjects.erase(raw);    break;
+            default: break;
+        }
+        visible_.any.erase(raw);
+    }
+
+    void _visReset()
+    {
+        visible_.clear();
+    }
+    visibility::VisibleCache& visible()             noexcept { return visible_; }
+    const visibility::VisibleCache& visible() const noexcept { return visible_; }
+
+    bool seesGuid(const WoWGuid& g)     const { return visible_.any.count(g.getRawGuid()) != 0; }
+    bool seesPlayer(const WoWGuid& g)   const { return visible_.players.count(g.getRawGuid()) != 0; }
+    bool seesCreature(const WoWGuid& g) const { return visible_.creatures.count(g.getRawGuid()) != 0; }
+
+private:
+    visibility::VisibleCache visible_;
 
 protected:
-    std::set<uint64_t> m_visibleObjects;
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Stats
@@ -1673,7 +1719,6 @@ public:
     void setFactionAtWar(uint32_t faction, bool set);
 
     bool isHostileBasedOnReputation(WDB::Structures::FactionEntry const* factionEntry, bool skipForcedReactions = false) const;
-    void updateInrangeSetsBasedOnReputation();
 
     void onKillUnitReputation(Unit* unit, bool innerLoop);
     void onTalkReputation(WDB::Structures::FactionEntry const* factionEntry);
@@ -2017,13 +2062,13 @@ public:
     void eventDeath();
 
     /////////////////////////////////////////////////////////////////////////////////////////
-    // Inrange
-    void addToInRangeObjects(Object* object) override;
+    // Inrange / visibility bridge
+public:
     void onRemoveInRangeObject(Object* object) override;
-    void clearInRangeSets() override;
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // PVP Stuff
+public:
     float m_spellHasteRatingBonus = 1.0f;
     void updateAttackSpeed();
 

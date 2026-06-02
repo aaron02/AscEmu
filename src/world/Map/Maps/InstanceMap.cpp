@@ -55,7 +55,7 @@ void InstanceMap::unloadAll(bool onShutdown/* = false*/)
 {
     if (m_resetAfterUnload == true)
     {
-        deleteRespawnTimes();
+        spawnMgr_->deleteRespawnTimes();
     }
 
     WorldMap::unloadAll(onShutdown);
@@ -79,42 +79,44 @@ void InstanceMap::permBindAllPlayers()
         return;
     }
 
-    // perm bind all players that are currently inside the instance
-    for (const auto& itr : getPlayers())
-    {
-        Player* player = itr.second;
-        // never instance bind GMs with GM mode enabled
-        if (player->isGMFlagSet())
-            continue;
+    thread_local std::vector<Player*> s_players;
+    registry_->snapshotPlayers(s_players);
 
-        InstancePlayerBind* bind = player->getBoundInstance(save->getMapId(), save->getDifficulty());
-        if (bind && bind->perm)
+    // perm bind all players that are currently inside the instance
+    registry_->forEachPinned(s_players, [&](Player& player)
         {
-            if (bind->save && bind->save->getInstanceId() != save->getInstanceId())
+            // never instance bind GMs with GM mode enabled
+            if (player.isGMFlagSet())
+                return;
+
+            InstancePlayerBind* bind = player.getBoundInstance(save->getMapId(), save->getDifficulty());
+            if (bind && bind->perm)
             {
-                sLogger.failure("Player ({}, Name: {}) is in instance map (Name: {}, Entry: {}, Difficulty: {}, ID: {}) that is being bound, but already has a save for the map on ID {}!", player->getGuidLow(), player->getName(), getBaseMap()->getMapName() , save->getMapId(), save->getDifficulty(), save->getInstanceId(), bind->save->getInstanceId());
+                if (bind->save && bind->save->getInstanceId() != save->getInstanceId())
+                {
+                    sLogger.failure("Player ({}, Name: {}) is in instance map (Name: {}, Entry: {}, Difficulty: {}, ID: {}) that is being bound, but already has a save for the map on ID {}!", player.getGuidLow(), player.getName(), getBaseMap()->getMapName(), save->getMapId(), save->getDifficulty(), save->getInstanceId(), bind->save->getInstanceId());
+                }
+                else if (!bind->save)
+                {
+                    sLogger.failure("Player ({}, Name: {}) is in instance map (Name: {}, Entry: {}, Difficulty: {}, ID: {}) that is being bound, but already has a bind (without associated save) for the map!", player.getGuidLow(), player.getName(), getBaseMap()->getMapName(), save->getMapId(), save->getDifficulty(), save->getInstanceId());
+                }
             }
-            else if (!bind->save)
+            else
             {
-                sLogger.failure("Player ({}, Name: {}) is in instance map (Name: {}, Entry: {}, Difficulty: {}, ID: {}) that is being bound, but already has a bind (without associated save) for the map!", player->getGuidLow(), player->getName(), getBaseMap()->getMapName(), save->getMapId(), save->getDifficulty(), save->getInstanceId());
-            }
-        }
-        else
-        {
-            player->bindToInstance(save, true);
-            WorldPacket data(SMSG_INSTANCE_SAVE_CREATED, 4);
-            data << uint32_t(0);
-            player->sendPacket(&data);
+                player.bindToInstance(save, true);
+                WorldPacket data(SMSG_INSTANCE_SAVE_CREATED, 4);
+                data << uint32_t(0);
+                player.sendPacket(&data);
 #if VERSION_STRING > TBC
-            player->getSession()->sendCalendarRaidLockout(save, true);
+                player.getSession()->sendCalendarRaidLockout(save, true);
 #endif
 
-            // if group leader is in instance, group also gets bound
-            if (const auto group = player->getGroup())
-                if (group->GetLeader()->guid == player->getGuidLow())
-                    group->bindToInstance(save, true);
-        }
-    }
+                // if group leader is in instance, group also gets bound
+                if (const auto group = player.getGroup())
+                    if (group->GetLeader()->guid == player.getGuidLow())
+                        group->bindToInstance(save, true);
+            }
+        });
 }
 
 bool InstanceMap::addPlayerToMap(Player* player)
@@ -241,8 +243,19 @@ void InstanceMap::setResetSchedule(bool on)
 
 void InstanceMap::sendResetWarnings(uint32_t timeLeft)
 {
-    for (const auto& itr : getPlayers())
-        itr.second->sendInstanceResetWarning(getBaseMap()->getMapId(), itr.second->getDifficulty(getBaseMap()->isRaid()), timeLeft, false);
+    const uint32_t mapId = getBaseMap()->getMapId();
+    const bool     isRaid = getBaseMap()->isRaid();
+
+    thread_local std::vector<Player*> s_players;
+    registry_->snapshotPlayers(s_players);
+
+    registry_->forEachPinned(s_players, [&](Player& player)
+        {
+            if (player.getWorldMap() != this)
+                return;
+
+            player.sendInstanceResetWarning(mapId, player.getDifficulty(isRaid), timeLeft, /*raidWarning=*/false);
+        });
 }
 
 EnterState InstanceMap::cannotEnter(Player* player)
@@ -314,26 +327,40 @@ void InstanceMap::createInstanceData(bool load)
 
 bool InstanceMap::reset(uint8_t method)
 {
+    const uint32_t mapId = getBaseMap()->getMapId();
+    const InstanceDifficulty::Difficulties difficulty = getDifficulty();
+
     if (getPlayerCount())
     {
+        thread_local std::vector<Player*> s_players;
+        registry_->snapshotPlayers(s_players);
+
         if (method == INSTANCE_RESET_ALL || method == INSTANCE_RESET_CHANGE_DIFFICULTY)
         {
             // notify the players to leave the instance so it can be reset
-            for (const auto& itr : getPlayers())
-                itr.second->sendResetFailedNotify(getBaseMap()->getMapId());
+            registry_->forEachPinned(s_players, [&](Player& p)
+                {
+                    if (p.getWorldMap() != this) return;
+                    p.sendResetFailedNotify(mapId);
+                });
         }
         else
         {
             bool doUnload = true;
+
             if (method == INSTANCE_RESET_GLOBAL)
             {
                 // set the homebind timer for players inside (1 minute)
-                for (const auto& itr : getPlayers())
-                {
-                    InstancePlayerBind* bind = itr.second->getBoundInstance(getBaseMap()->getMapId(), getDifficulty());
-                    if (bind && bind->extendState && bind->save->getInstanceId() == getInstanceId())
-                        doUnload = false;
-                }
+                registry_->forEachPinned(s_players, [&](Player& p)
+                    {
+                        if (p.getWorldMap() != this) return;
+
+                        if (auto* bind = p.getBoundInstance(mapId, difficulty))
+                        {
+                            if (bind->extendState && bind->save && bind->save->getInstanceId() == getInstanceId())
+                                doUnload = false;
+                        }
+                    });
 
                 if (doUnload && hasPermBoundPlayers()) // check if any unloaded players have a nonexpired save to this
                     doUnload = false;

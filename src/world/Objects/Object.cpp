@@ -54,6 +54,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Units/Creatures/Vehicle.hpp"
 #include "Units/Players/Player.hpp"
 #include "Utilities/Random.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -70,7 +71,7 @@ Object::~Object()
 {
     if (!isItem())
     {
-        if (!m_inQueue && !IsInWorld())
+        if (!IsInWorld())
         {
             m_instanceId = INSTANCEID_NOT_IN_WORLD;
 
@@ -537,6 +538,14 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
 
     // Update count
     return 1;
+}
+
+void Object::prepareInitialCreateForPlayer(Player* target)
+{
+}
+
+void Object::queueInitialVisiblePacketsForPlayer(Player* target)
+{
 }
 
 void Object::forceBuildUpdateValueForField(uint32_t field, Player* target)
@@ -1551,219 +1560,154 @@ void Object::removeSpellModifierFromCurrentSpells(AuraEffectModifier const* aura
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-// InRange sets
-void Object::clearInRangeSets()
+// Legacy in-range query API backed by SpatialIndex
+namespace
 {
-    std::scoped_lock guard(m_inRangeSetMutex, m_inRangeFactionSetMutex);
-    std::unique_lock<std::shared_mutex> playerGuard(m_inRangePlayerSetMutex);
-    mInRangeObjectsSet.clear();
-    mInRangePlayersSet.clear();
-    mInRangeOppositeFactionSet.clear();
-    mInRangeSameFactionSet.clear();
-}
-
-void Object::addToInRangeObjects(Object* pObj)
-{
-    if (pObj == nullptr)
+    float getLegacyInRangeQueryDistance()
     {
-        sLogger.failure("Invalid object pointers can't be added!");
-        return;
+        const int cells = std::max<int>(1, static_cast<int>(worldConfig.server.mapCellNumber));
+        return static_cast<float>(cells) * visibility::Cell::Size;
     }
 
-    if (pObj == this)
-        sLogger.failure("We are in range of ourselves!");
-
-    if (pObj->isPlayer())
+    bool isValidLegacyInRangeResult(const Object* self, const Object* obj)
     {
-        std::unique_lock<std::shared_mutex> playerLock(m_inRangePlayerSetMutex);
-        mInRangePlayersSet.push_back(pObj);
-    }
-
-    std::scoped_lock<std::mutex> guard(m_inRangeSetMutex);
-    mInRangeObjectsSet.push_back(pObj);
-}
-
-void Object::removeSelfFromInrangeSets()
-{
-    std::scoped_lock<std::mutex> guard(m_inRangeSetMutex);
-    for (const auto& itr : mInRangeObjectsSet)
-    {
-        if (itr)
-            itr->removeObjectFromInRangeObjectsSet(this);
+        return obj != nullptr && obj != self;
     }
 }
 
-// Objects
+void Object::onRemoveInRangeObject(Object* /*pObj*/)
+{
+}
+
 std::vector<Object*> Object::getInRangeObjectsSet() const
 {
-    return mInRangeObjectsSet;
+    std::vector<Object*> out;
+
+    if (!IsInWorld() || m_WorldMap == nullptr)
+        return out;
+
+    m_WorldMap->getSpatialIndex().collectObjectsInRange<Object>(
+        GetPosition(),
+        getLegacyInRangeQueryDistance(),
+        out);
+
+    out.erase(std::remove_if(out.begin(), out.end(), [this](Object* obj)
+    {
+        return !isValidLegacyInRangeResult(this, obj);
+    }), out.end());
+
+    return out;
 }
 
 bool Object::hasInRangeObjects() const
 {
-    return !mInRangeObjectsSet.empty();
+    return getInRangeObjectsCount() != 0;
 }
 
 size_t Object::getInRangeObjectsCount() const
 {
-    return mInRangeObjectsSet.size();
+    return getInRangeObjectsSet().size();
 }
 
 bool Object::isObjectInInRangeObjectsSet(Object* pObj) const
 {
-    std::scoped_lock<std::mutex> guard(m_inRangeSetMutex);
-    return std::find(mInRangeObjectsSet.cbegin(), mInRangeObjectsSet.cend(), pObj) != mInRangeObjectsSet.cend();
+    if (!pObj || pObj == this)
+        return false;
+
+    const auto objects = getInRangeObjectsSet();
+    return std::find(objects.begin(), objects.end(), pObj) != objects.end();
 }
 
-void Object::removeObjectFromInRangeObjectsSet(Object* pObj)
-{
-    std::scoped_lock<std::mutex> guard(m_inRangeSetMutex);
-
-    if (pObj != nullptr)
-    {
-        if (pObj->isPlayer())
-        {
-            std::unique_lock<std::shared_mutex> playerLock(m_inRangePlayerSetMutex);
-            mInRangePlayersSet.erase(std::remove(mInRangePlayersSet.begin(), mInRangePlayersSet.end(), pObj), mInRangePlayersSet.end());
-        }
-
-        mInRangeObjectsSet.erase(std::remove(mInRangeObjectsSet.begin(), mInRangeObjectsSet.end(), pObj), mInRangeObjectsSet.end());
-
-        onRemoveInRangeObject(pObj);
-    }
-    else
-    {
-        sLogger.failure("Object::removeObjectFromInRangeObjectsSet something tried to remove invalid object pointer!");
-    }
-}
-
-// Players
 std::vector<Object*> Object::getInRangePlayersSet() const
 {
-    return mInRangePlayersSet;
+    std::vector<Object*> out;
+
+    if (!IsInWorld() || m_WorldMap == nullptr)
+        return out;
+
+    std::vector<Player*> players;
+    m_WorldMap->getSpatialIndex().collectObjectsInRange<Player>(
+        GetPosition(),
+        getLegacyInRangeQueryDistance(),
+        players);
+
+    out.reserve(players.size());
+    for (Player* player : players)
+    {
+        if (isValidLegacyInRangeResult(this, player))
+            out.push_back(player);
+    }
+
+    return out;
 }
 
 size_t Object::getInRangePlayersCount() const
 {
-    return mInRangePlayersSet.size();
+    return getInRangePlayersSet().size();
 }
 
-// Opposite Faction
 std::vector<Object*> Object::getInRangeOppositeFactionSet() const
 {
-    return mInRangeOppositeFactionSet;
+    std::vector<Object*> out;
+    const auto objects = getInRangeObjectsSet();
+
+    out.reserve(objects.size());
+    for (Object* obj : objects)
+    {
+        if (!obj)
+            continue;
+
+        if (!(obj->isCreatureOrPlayer() || obj->isGameObject()))
+            continue;
+
+        if (isHostileTo(obj))
+            out.push_back(obj);
+    }
+
+    return out;
 }
 
 bool Object::isObjectInInRangeOppositeFactionSet(Object* pObj) const
 {
-    std::scoped_lock<std::mutex> guard(m_inRangeFactionSetMutex);
-    auto it = std::find(mInRangeOppositeFactionSet.begin(), mInRangeOppositeFactionSet.end(), pObj);
-    return it != mInRangeOppositeFactionSet.end();
+    if (!pObj || pObj == this)
+        return false;
+
+    if (!(pObj->isCreatureOrPlayer() || pObj->isGameObject()))
+        return false;
+
+    return isObjectInInRangeObjectsSet(pObj) && isHostileTo(pObj);
 }
 
-void Object::updateInRangeOppositeFactionSet()
-{
-    {
-        std::scoped_lock<std::mutex> factionLock(m_inRangeFactionSetMutex);
-        mInRangeOppositeFactionSet.clear();
-    }
-
-    std::scoped_lock<std::mutex> guard(m_inRangeSetMutex);
-    for (const auto& itr : mInRangeObjectsSet)
-    {
-        if (itr)
-        {
-            if (itr->isCreatureOrPlayer() || itr->isGameObject())
-            {
-                if (this->isHostileTo(itr))
-                {
-                    if (!itr->isObjectInInRangeOppositeFactionSet(this))
-                        itr->addInRangeOppositeFaction(this);
-                    if (!isObjectInInRangeOppositeFactionSet(itr))
-                        addInRangeOppositeFaction(itr);
-                }
-                else
-                {
-                    if (itr->isObjectInInRangeOppositeFactionSet(this))
-                        itr->removeObjectFromInRangeOppositeFactionSet(this);
-                    if (isObjectInInRangeOppositeFactionSet(itr))
-                        removeObjectFromInRangeOppositeFactionSet(itr);
-                }
-            }
-        }
-    }
-}
-
-void Object::addInRangeOppositeFaction(Object* obj)
-{
-    std::scoped_lock<std::mutex> guard(m_inRangeFactionSetMutex);
-    mInRangeOppositeFactionSet.push_back(obj);
-}
-
-void Object::removeObjectFromInRangeOppositeFactionSet(Object* obj)
-{
-    std::scoped_lock<std::mutex> guard(m_inRangeFactionSetMutex);
-    mInRangeOppositeFactionSet.erase(std::remove(mInRangeOppositeFactionSet.begin(), mInRangeOppositeFactionSet.end(), obj), mInRangeOppositeFactionSet.end());
-}
-
-// Same Faction
 std::vector<Object*> Object::getInRangeSameFactionSet() const
 {
-    return mInRangeSameFactionSet;
+    std::vector<Object*> out;
+    const auto objects = getInRangeObjectsSet();
+
+    out.reserve(objects.size());
+    for (Object* obj : objects)
+    {
+        if (!obj)
+            continue;
+
+        if (!(obj->isCreatureOrPlayer() || obj->isGameObject()))
+            continue;
+
+        if (isFriendlyTo(obj))
+            out.push_back(obj);
+    }
+
+    return out;
 }
 
 bool Object::isObjectInInRangeSameFactionSet(Object* pObj) const
 {
-    std::scoped_lock<std::mutex> guard(m_inRangeFactionSetMutex);
-    auto it = std::find(mInRangeSameFactionSet.begin(), mInRangeSameFactionSet.end(), pObj);
-    return it != mInRangeSameFactionSet.end();
-}
+    if (!pObj || pObj == this)
+        return false;
 
-void Object::updateInRangeSameFactionSet()
-{
-    {
-        std::scoped_lock<std::mutex> factionLock(m_inRangeFactionSetMutex);
-        mInRangeSameFactionSet.clear();
-    }
+    if (!(pObj->isCreatureOrPlayer() || pObj->isGameObject()))
+        return false;
 
-    std::scoped_lock<std::mutex> guard(m_inRangeSetMutex);
-    for (const auto& itr : mInRangeObjectsSet)
-    {
-        if (itr)
-        {
-            if (itr->isCreatureOrPlayer() || itr->isGameObject())
-            {
-                if (this->isFriendlyTo(itr))
-                {
-                    if (!itr->isObjectInInRangeSameFactionSet(this))
-                        itr->addInRangeSameFaction(this);
-
-                    if (!isObjectInInRangeSameFactionSet(itr))
-                        addInRangeSameFaction(itr);
-                }
-                else
-                {
-                    if (itr->isObjectInInRangeSameFactionSet(this))
-                        itr->removeObjectFromInRangeSameFactionSet(this);
-
-                    if (isObjectInInRangeSameFactionSet(itr))
-                        removeObjectFromInRangeSameFactionSet(itr);
-                }
-            }
-        }
-    }
-}
-
-void Object::addInRangeSameFaction(Object* obj)
-{
-    std::scoped_lock<std::mutex> guard(m_inRangeFactionSetMutex);
-    mInRangeSameFactionSet.push_back(obj);
-}
-
-void Object::removeObjectFromInRangeSameFactionSet(Object* obj)
-{
-    std::scoped_lock<std::mutex> guard(m_inRangeFactionSetMutex);
-    mInRangeSameFactionSet.erase(std::remove(mInRangeSameFactionSet.begin(), mInRangeSameFactionSet.end(), obj), mInRangeSameFactionSet.end());
+    return isObjectInInRangeObjectsSet(pObj) && isFriendlyTo(pObj);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -3917,7 +3861,7 @@ bool Object::SetPosition(const LocationVector & v, [[maybe_unused]]bool allowPor
 
     if (IsInWorld() && updateMap)
     {
-        m_WorldMap->changeObjectLocation(this);
+        m_WorldMap->onObjectMoved(this);
     }
 
     updatePositionData();
@@ -3958,7 +3902,7 @@ bool Object::SetPosition(float newX, float newY, float newZ, float newOrientatio
         if (IsInWorld() && updateMap)
         {
             m_lastMapUpdatePosition.ChangeCoords({ newX, newY, newZ, newOrientation });
-            m_WorldMap->changeObjectLocation(this);
+            m_WorldMap->onObjectMoved(this);
 
             if (isPlayer() && dynamic_cast<Player*>(this)->getGroup() && dynamic_cast<Player*>(this)->getLastGroupPosition().Distance2DSq(m_position) > 25.0f)       // distance of 5.0
             {
@@ -4020,110 +3964,38 @@ void Object::setCreateBits(UpdateMask* updateMask, Player* /*target*/) const
             updateMask->SetBit(i);
 }
 
-void Object::AddToWorld()
+void Object::onAttachToWorld()
 {
-    WorldMap* mapMgr = nullptr;
-
-    const auto mapInfo = sMySQLStore.getWorldMapInfo(GetMapId());
-    if (mapInfo == nullptr || GetMapId() >= MAX_NUM_MAPS)
-        return;
-
-    mapMgr = sMapMgr.findWorldMap(GetMapId(), GetInstanceID());
-
-    if (mapMgr == nullptr)
+    if (m_WorldMap && m_WorldMap->getScript())
     {
-        sLogger.failure("AddToWorld() failed for Object with GUID {} MapId {} InstanceId {}", std::to_string(getGuid()), GetMapId(), GetInstanceID());
-        return;
+        m_WorldMap->getScript()->addObject(this);
     }
-
-    m_WorldMap = mapMgr;
-    m_inQueue = true;
-
-    // correct incorrect instance id's
-    m_instanceId = m_WorldMap->getInstanceId();
-    m_mapId = m_WorldMap->getBaseMap()->getMapId();
-    mapMgr->AddObject(this);
-}
-
-void Object::AddToWorld(WorldMap* pMapMgr)
-{
-    if (!pMapMgr || (pMapMgr->getBaseMap()->getMapInfo()->playerlimit && this->isPlayer() && pMapMgr->getPlayerCount() >= pMapMgr->getBaseMap()->getMapInfo()->playerlimit))
-        return; //instance add failed
-
-    m_WorldMap = pMapMgr;
-    m_inQueue = true;
-
-    pMapMgr->AddObject(this);
-
-    // correct incorrect instance id's
-    m_instanceId = pMapMgr->getInstanceId();
-    m_mapId = m_WorldMap->getBaseMap()->getMapId();
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-/// Unlike addtoworld it pushes it directly ignoring add pool this can
-/// only be called from the thread of mapmgr!
-//////////////////////////////////////////////////////////////////////////////////////////
-void Object::PushToWorld(WorldMap* mgr)
-{
-    if (mgr == nullptr)
-    {
-        sLogger.failure("Invalid push to world of Object {}", std::to_string(getGuid()));
-        return; // instance add failed
-    }
-
-    m_mapId = mgr->getBaseMap()->getMapId();
-    //there's no need to set the InstanceId before calling PushToWorld() because it's already set here.
-    m_instanceId = mgr->getInstanceId();
-
-    m_WorldMap = mgr;
-    OnPrePushToWorld();
-
-    mgr->PushObject(this);
-
-    // correct incorrect instance id's
-    m_inQueue = false;
 
     updatePositionData();
-
-    event_Relocate();
-
-    // call virtual function to handle stuff.. :P
-    OnPushToWorld();
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-/// Remove object from world
-//////////////////////////////////////////////////////////////////////////////////////////
-void Object::RemoveFromWorld(bool free_guid)
+void Object::registerToWorld(WorldMap& map)
 {
-    if (m_WorldMap != nullptr)
-    {
-        OnPreRemoveFromWorld();
+    if (m_WorldMap == &map)
+        return;
 
-        WorldMap* m = m_WorldMap;
-        m_WorldMap = nullptr;
+    m_WorldMap = &map;
+    m_instanceId = map.getInstanceId();
+    m_mapId = map.getBaseMap()->getMapId();
+    event_Relocate();
+}
 
-        m->RemoveObject(this, free_guid);
+void Object::unregisterFromWorld()
+{
+    m_WorldMap = nullptr;
+    m_instanceId = INSTANCEID_NOT_IN_WORLD;
+    m_mapId = MAPID_NOT_IN_WORLD;
+    event_Relocate();
+}
 
-        OnRemoveFromWorld();
-
-        //shouldnt need to clear, spell destructor will erase
-        //m_pendingSpells.clear();
-
-        m_instanceId = INSTANCEID_NOT_IN_WORLD;
-        m_mapId = MAPID_NOT_IN_WORLD;
-        //m_inQueue is set to true when AddToWorld() is called. AddToWorld() queues the Object to be pushed, but if it's not pushed and RemoveFromWorld()
-        //is called, m_inQueue will still be true even if the Object is no more inworld, nor queued.
-        m_inQueue = false;
-
-        // update our event holder
-        event_Relocate();
-    }
-    else
-    {
-        sLogger.failure("Object::RemoveFromWorld tried to remove object without a valid mapMgr (nullptr)");
-    }
+void Object::destroy()
+{
+    getWorldMap()->getSpawnManager().despawn(getGuid(), 0);
 }
 
 float Object::CalcDistance(Object const* Ob) const
@@ -4433,45 +4305,13 @@ int32_t Object::event_GetInstanceID()
     return m_instanceId;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-/// Object has an active state
-//////////////////////////////////////////////////////////////////////////////////////////
-bool Object::CanActivate()
+void Object::activate()
 {
-    switch (m_objectTypeId)
-    {
-        case TYPEID_UNIT:
-        {
-            if (!isPet())
-                return true;
-        }
-        break;
-
-        case TYPEID_GAMEOBJECT:
-        {
-            return true;
-        }
-        break;
-    }
-
-    return false;
-}
-
-void Object::Activate(WorldMap* mgr)
-{
-    mgr->addObjectToActiveSet(this);
-
-    // Objects are active so set to true.
     Active = true;
 }
 
-void Object::deactivate(WorldMap* mgr)
+void Object::deactivate()
 {
-    if (mgr == nullptr)
-        return;
-
-    mgr->removeObjectFromActiveSet(this);
-
     Active = false;
 }
 
@@ -4561,8 +4401,7 @@ void Object::outPacketToSet(uint16_t Opcode, uint16_t Len, const void* Data, boo
         return;
 
     // We are on Object level, which means we can't send it to ourselves so we only send to Players inrange
-    std::shared_lock<std::shared_mutex> playerLock(m_inRangePlayerSetMutex);
-    for (const auto& itr : mInRangePlayersSet)
+    for (const auto& itr : getInRangePlayersSet())
     {
         if (itr)
             itr->outPacket(Opcode, Len, Data);
@@ -4575,8 +4414,7 @@ void Object::sendMessageToSet(WorldPacket* data, bool /*bToSelf*/, bool /*myteam
         return;
 
     uint32_t myphase = GetPhase();
-    std::shared_lock<std::shared_mutex> playerLock(m_inRangePlayerSetMutex);
-    for (const auto& itr : mInRangePlayersSet)
+    for (const auto& itr : getInRangePlayersSet())
     {
         if (itr && (itr->GetPhase() & myphase) != 0)
             itr->sendPacket(data);
@@ -4589,8 +4427,7 @@ void Object::sendMessageToSet(WorldPacket* data, Player const* skipp)
         return;
 
     uint32_t myphase = GetPhase();
-    std::shared_lock<std::shared_mutex> playerLock(m_inRangePlayerSetMutex);
-    for (const auto& itr : mInRangePlayersSet)
+    for (const auto& itr : getInRangePlayersSet())
     {
         if (itr && (itr->GetPhase() & myphase) != 0 && itr != skipp)
             itr->sendPacket(data);
@@ -4600,8 +4437,7 @@ void Object::sendMessageToSet(WorldPacket* data, Player const* skipp)
 void Object::SendCreatureChatMessageInRange(Creature* creature, uint32_t textId, Unit* target/* = nullptr*/)
 {
     uint32_t myphase = GetPhase();
-    std::shared_lock<std::shared_mutex> playerLock(m_inRangePlayerSetMutex);
-    for (const auto& itr : mInRangePlayersSet)
+    for (const auto& itr : getInRangePlayersSet())
     {
         Object* object = itr;
         if (object && (object->GetPhase() & myphase) != 0)
@@ -4643,7 +4479,10 @@ Object* Object::getWorldMapObject(const uint64_t & guid) const
     if (!IsInWorld())
         return nullptr;
 
-    return getWorldMap()->getObject(guid);
+    WoWGuid wowGuid;
+    wowGuid.init(guid);
+
+    return getWorldMap()->getObject2(wowGuid);
 }
 
 Pet* Object::getWorldMapPet(const uint64_t & guid) const
@@ -4654,7 +4493,7 @@ Pet* Object::getWorldMapPet(const uint64_t & guid) const
     WoWGuid wowGuid;
     wowGuid.init(guid);
 
-    return getWorldMap()->getPet(wowGuid.getGuidLowPart());
+    return getWorldMap()->getPet2(wowGuid);
 }
 
 Unit* Object::getWorldMapUnit(const uint64_t & guid) const
@@ -4662,7 +4501,10 @@ Unit* Object::getWorldMapUnit(const uint64_t & guid) const
     if (!IsInWorld())
         return nullptr;
 
-    return getWorldMap()->getUnit(guid);
+    WoWGuid wowGuid;
+    wowGuid.init(guid);
+
+    return getWorldMap()->getUnit2(wowGuid);
 }
 
 Player* Object::getWorldMapPlayer(const uint64_t & guid) const
@@ -4673,7 +4515,7 @@ Player* Object::getWorldMapPlayer(const uint64_t & guid) const
     WoWGuid wowGuid;
     wowGuid.init(guid);
 
-    return getWorldMap()->getPlayer(wowGuid.getGuidLowPart());
+    return getWorldMap()->getPlayer2(wowGuid);
 }
 
 Creature* Object::getWorldMapCreature(const uint64_t & guid) const
@@ -4684,7 +4526,7 @@ Creature* Object::getWorldMapCreature(const uint64_t & guid) const
     WoWGuid wowGuid;
     wowGuid.init(guid);
 
-    return getWorldMap()->getCreature(wowGuid.getGuidLowPart());
+    return getWorldMap()->getCreature2(wowGuid);
 }
 
 GameObject* Object::getWorldMapGameObject(const uint64_t & guid) const
@@ -4695,7 +4537,7 @@ GameObject* Object::getWorldMapGameObject(const uint64_t & guid) const
     WoWGuid wowGuid;
     wowGuid.init(guid);
 
-    return getWorldMap()->getGameObject(wowGuid.getGuidLowPart());
+    return getWorldMap()->getGameObject2(wowGuid);
 }
 
 DynamicObject* Object::getWorldMapDynamicObject(const uint64_t & guid) const
@@ -4706,28 +4548,7 @@ DynamicObject* Object::getWorldMapDynamicObject(const uint64_t & guid) const
     WoWGuid wowGuid;
     wowGuid.init(guid);
 
-    return getWorldMap()->getDynamicObject(wowGuid.getGuidLowPart());
-}
-
-MapCell* Object::GetMapCell() const
-{
-    if (m_WorldMap)
-        return m_WorldMap->getCell(m_mapCell_x, m_mapCell_y);
-    return nullptr;
-}
-
-void Object::SetMapCell(MapCell* cell)
-{
-    if (cell == nullptr)
-    {
-        //mapcell coordinates are uint16_t, so using uint32_t(-1) will always make GetMapCell() return NULL.
-        m_mapCell_x = m_mapCell_y = uint32_t(-1);
-    }
-    else
-    {
-        m_mapCell_x = cell->getPositionX();
-        m_mapCell_y = cell->getPositionY();
-    }
+    return getWorldMap()->getDynamicObject2(wowGuid);
 }
 
 void Object::SendAIReaction(uint32_t reaction)
@@ -5171,36 +4992,23 @@ Creature* Object::summonCreature(uint32_t entry, LocationVector position, Creatu
     return nullptr;
 }
 
-GameObject* Object::summonGameObject(uint32_t entryID, LocationVector pos, QuaternionData const& rot, uint32_t spawnTime, GOSummonType summonType)
+GameObject* Object::summonGameObject(uint32_t entry, LocationVector position, QuaternionData const& rot, uint32_t spawnTime, GOSummonType summonType)
 {
-    auto gameobject_info = sMySQLStore.getGameObjectProperties(entryID);
-    if (gameobject_info == nullptr)
+    if (WorldMap* map = getWorldMap())
     {
-        sLogger.debug("Error looking up entry in CreateAndSpawnGameObject");
-        return nullptr;
+        if (GameObject* summon = map->summonGameObject(entry, position, rot, 0, this))
+        {
+            if (isPlayer() || (isCreature() && summonType == GO_SUMMON_TIMED_OR_CORPSE_DESPAWN)) //not sure how to handle this
+                ToUnit()->addGameObject(summon);
+            else
+                summon->setSpawnedByDefault(false);
+
+            summon->setRespawnTime(spawnTime);
+            return summon;
+        }
     }
 
-    sLogger.debug("CreateAndSpawnGameObject: By Entry '{}'", entryID);
-
-    WorldMap* map = getWorldMap();
-    if (!map)
-        return nullptr;
-
-    GameObject* go = map->createGameObject(entryID);
-    if (!go->create(entryID, map, GetPhase(), pos, rot, GO_STATE_CLOSED, sObjectMgr.generateGameObjectSpawnId()))
-    {
-        delete go;
-        return nullptr;
-    }
-
-    go->setRespawnTime(spawnTime);
-    if (isPlayer() || (isCreature() && summonType == GO_SUMMON_TIMED_OR_CORPSE_DESPAWN)) //not sure how to handle this
-        ToUnit()->addGameObject(go);
-    else
-        go->setSpawnedByDefault(false);
-
-    map->PushObject(go);
-    return go;
+    return nullptr;
 }
 
 bool Object::GetRandomPoint(float rad, float & outx, float & outy, float & outz) { return GetPoint(Util::getRandomFloat(float(M_PI * 2)), rad, outx, outy, outz); }

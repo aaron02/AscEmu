@@ -291,7 +291,13 @@ void Arena::OnCreate()
 {
     // push gates into world
     for (std::set<GameObject*>::iterator itr = m_gates.begin(); itr != m_gates.end(); ++itr)
-        (*itr)->PushToWorld(m_mapMgr);
+    {
+        if ((*itr)->IsInWorld())
+            continue;
+
+        // Attach Objects to WorldMap
+        m_mapMgr->getObjectFactory().attachToWorld((*itr));
+    }
 }
 
 void Arena::HookOnShadowSight()

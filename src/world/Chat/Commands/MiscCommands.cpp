@@ -356,7 +356,7 @@ bool ChatCommandHandler::HandleGoCreatureSpawnCommand(const char* args, WorldSes
         {
             if (creatureSpawn->id == spawn_id)
             {
-                m_session->GetPlayer()->safeTeleport(creatureSpawn->mapId, 0, LocationVector(creatureSpawn->x, creatureSpawn->y, creatureSpawn->z));
+                m_session->GetPlayer()->safeTeleport(creatureSpawn->mapId, 0, creatureSpawn->spawnPoint);
                 return true;
             }
         }
@@ -538,7 +538,7 @@ bool ChatCommandHandler::HandleKillCommand(const char* args, WorldSession* m_ses
                     spell->prepare(&targets);
 
                     greenSystemMessage(m_session, "Killed Creature {}.", creature->GetCreatureProperties()->Name);
-                    sGMLog.writefromsession(m_session, "used kill command on Creature %u [%s], spawn ID: %u", creature->getEntry(), creature->GetCreatureProperties()->Name.c_str(), creature->spawnid);
+                    sGMLog.writefromsession(m_session, "used kill command on Creature %u [%s], spawn ID: %u", creature->getEntry(), creature->GetCreatureProperties()->Name.c_str(), creature->getSpawnId());
                     break;
                 }
                 case TYPEID_PLAYER:
@@ -763,7 +763,7 @@ bool ChatCommandHandler::HandleWorldPortCommand(const char* args, WorldSession* 
         return true;
     }
 
-    if (x >= Map::Terrain::_maxX || x <= Map::Terrain::_minX || y <= Map::Terrain::_minY || y >= Map::Terrain::_maxY)
+    if (x >= visibility::Terrain::MaxX || x <= visibility::Terrain::MinX || y <= visibility::Terrain::MinY || y >= visibility::Terrain::MaxY)
     {
         redSystemMessage(m_session, "<x> <y> value is out of range!");
         return true;
@@ -782,7 +782,7 @@ bool ChatCommandHandler::HandleGPSCommand(const char* args, WorldSession* m_sess
     uint64_t guid = m_session->GetPlayer()->getTargetGuid();
     if (guid != 0)
     {
-        if ((obj = m_session->GetPlayer()->getWorldMap()->getUnit(guid)) == 0)
+        if ((obj = m_session->GetPlayer()->getWorldMapUnit(guid)) == 0)
         {
             systemMessage(m_session, "You should select a character or a creature.");
             return true;
@@ -928,7 +928,8 @@ bool ChatCommandHandler::HandleInvisibleCommand(const char* /*args*/, WorldSessi
         }
     }
 
-    selected_player->updateVisibility();
+    if (selected_player->IsInWorld())
+        selected_player->getWorldMap()->refreshVisibilityForObject(selected_player);
 
     return true;
 }

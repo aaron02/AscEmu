@@ -144,6 +144,9 @@ void WorldSession::handleAchievmentQueryOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleInrangeQuestgiverQuery(WorldPacket& /*recvPacket*/)
 {
+    if (!_player || !_player->IsInWorld())
+        return;
+
     std::vector<QuestgiverInrangeStatus> questgiverSet;
     QuestgiverInrangeStatus temp;
 
@@ -214,7 +217,7 @@ void WorldSession::handleItemNameQueryOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleCorpseQueryOpcode(WorldPacket& /*recvPacket*/)
 {
-    const auto corpse = sObjectMgr.getCorpseByOwner(_player->getGuidLow());
+    const auto corpse = (_player->getWorldMap() ? _player->getWorldMap()->getRegistry().getCorpseByOwner(_player->getGuidLow()) : nullptr);
     if (corpse == nullptr)
         return;
 

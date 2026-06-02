@@ -50,21 +50,27 @@ public:
     GameObject(uint64_t guid);
     ~GameObject();
 
+    //virtual void onPreAttachToWorld() override;
+    virtual void onAttachToWorld() override;
+
+    virtual void onPreDetachFromWorld() override;
+    virtual void onDetachFromWorld() override;
+
     bool loadFromDB(MySQLStructure::GameobjectSpawn* spawn, WorldMap* map, bool addToWorld);
     void saveToDB(bool newSpawn = false);
     void deleteFromDB();
     bool create(uint32_t entry, WorldMap* map, uint32_t phase, LocationVector const& position, QuaternionData const&  rotation, GameObject_State state, uint32_t spawnId = 0);
 
+    uint32_t getLockId() const;
+
     uint32_t getSpawnId() const { return m_spawnId; }
     void setSpawnId(uint32_t spawnId) { m_spawnId = spawnId; }
 
     void despawn(uint32_t delay /*milliseconds*/, uint32_t forceRespawntime /*seconds*/);
-    void expireAndDelete();
-    void RemoveFromWorld(bool free_guid);
 
     void setRespawnTime(int32_t respawn);
     time_t getRespawnTime() const { return m_respawnTime; }
-    void saveRespawnTime(uint32_t forceDelay = 0);
+
     void respawn();
     uint32_t getRespawnDelay() const { return m_respawnDelayTime; }
     bool isSpawned() const
@@ -218,11 +224,9 @@ public:
 
         GameObjectAIScript* GetScript();
 
-        void OnPushToWorld();
-        void onRemoveInRangeObject(Object* pObj);
+        void onRemoveInRangeObject(Object* pObj) override;
 
         uint32_t GetGOReqSkill();
-        MapCell* m_respawnCell = nullptr;
 
         void SetOverrides(uint32_t go_overrides) { m_overrides = go_overrides; }
         uint32_t GetOverrides() { return m_overrides; }
@@ -243,6 +247,9 @@ public:
         uint32_t _fields[getSizeOfStructure(WoWGameObject)];
 
         uint32_t m_overrides = 0;             //See enum GAMEOBJECT_OVERRIDES!
+
+    protected:
+        void setCreateBits(UpdateMask* updateMask, Player* target) const override;
 
     //MIT
     public:
@@ -467,8 +474,6 @@ class GameObject_SpellFocus : public GameObject
 public:
     GameObject_SpellFocus(uint64_t GUID);
     ~GameObject_SpellFocus();
-
-    void OnPushToWorld();
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////

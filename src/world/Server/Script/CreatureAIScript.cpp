@@ -270,7 +270,7 @@ Creature* CreatureAIScript::spawnCreature(uint32_t entry, float posX, float posY
     if (_creature->getWorldMap()->getInterface() == nullptr)
         return nullptr;
 
-    Creature* creature = _creature->getWorldMap()->getInterface()->spawnCreature(entry, LocationVector(posX, posY, posZ, posO), true, true, 0, 0, phase);
+    Creature* creature = _creature->getWorldMap()->getInterface()->spawnCreature(entry, LocationVector(posX, posY, posZ, posO), phase);
     if (creature == nullptr)
         return nullptr;
 
@@ -1392,7 +1392,7 @@ void CreatureAIScript::_unsetTargetToChannel()
 
 Unit* CreatureAIScript::_getTargetToChannel()
 {
-    return _creature->getWorldMap()->getUnit(_creature->getChannelObjectGuid());
+    return _creature->getWorldMapUnit(_creature->getChannelObjectGuid());
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////

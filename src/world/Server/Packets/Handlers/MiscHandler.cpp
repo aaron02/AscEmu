@@ -580,7 +580,7 @@ void WorldSession::handleGameobjReportUseOpCode(WorldPacket& recvPacket)
 
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJ_REPORT_USE: {} (guid.low)", srlPacket.guid.getGuidLow());
 
-    const auto gameobject = _player->getWorldMap()->getGameObject(srlPacket.guid.getGuidLow());
+    const auto gameobject = _player->getWorldMapGameObject(srlPacket.guid.getRawGuid());
     if (gameobject == nullptr)
         return;
 
@@ -698,7 +698,7 @@ void WorldSession::handleLootRollOpcode(WorldPacket& recvPacket)
     {
         case HighGuid::GameObject:
         {
-            auto gameObject = _player->getWorldMap()->getGameObject(srlPacket.objectGuid.getGuidLowPart());
+            auto gameObject = _player->getWorldMapGameObject(srlPacket.objectGuid.getRawGuid());
             if (gameObject == nullptr)
                 return;
 
@@ -714,7 +714,7 @@ void WorldSession::handleLootRollOpcode(WorldPacket& recvPacket)
         } break;
         case HighGuid::Unit:
         {
-            auto creature = _player->getWorldMap()->getCreature(srlPacket.objectGuid.getGuidLowPart());
+            auto creature = _player->getWorldMapCreature(srlPacket.objectGuid.getRawGuid());
             if (creature == nullptr)
                 return;
 
@@ -892,7 +892,7 @@ void WorldSession::handleResurrectResponse(WorldPacket& recvPacket)
     if (!_player->isAlive())
         return;
 
-    auto player = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
+    auto player = _player->getWorldMapPlayer(srlPacket.guid.getRawGuid());
     if (player == nullptr)
         player = sObjectMgr.getPlayer(srlPacket.guid.getGuidLow());
 
@@ -1261,7 +1261,7 @@ void WorldSession::handleCorpseReclaimOpcode(WorldPacket& recvPacket)
     if (srlPacket.guid.getRawGuid() == 0)
         return;
 
-    auto corpse = sObjectMgr.getCorpseByGuid(srlPacket.guid.getGuidLow());
+    auto corpse = _player->getWorldMap() ? _player->getWorldMap()->getRegistry().getCorpse(srlPacket.guid) : nullptr;
     if (corpse == nullptr)
         return;
 
@@ -2059,7 +2059,7 @@ void WorldSession::handleGameObjectUse(WorldPacket& recvPacket)
 
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJ_USE: {} (gobj guidLow)", srlPacket.guid.getGuidLowPart());
 
-    auto gameObject = _player->getWorldMap()->getGameObject(srlPacket.guid.getGuidLowPart());
+    auto gameObject = _player->getWorldMapGameObject(srlPacket.guid.getRawGuid());
     if (!gameObject)
         return;
 
@@ -2112,7 +2112,7 @@ void WorldSession::handleInspectOpcode(WorldPacket& recvPacket)
 
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT: {} (player guid)", static_cast<uint32_t>(srlPacket.guid));
 
-    auto inspectedPlayer = _player->getWorldMap()->getPlayer(static_cast<uint32_t>(srlPacket.guid));
+    auto inspectedPlayer = _player->getWorldMapPlayer(srlPacket.guid);
     if (inspectedPlayer == nullptr)
     {
         sLogger.debug("Error received CMSG_INSPECT for unknown player!");
@@ -2773,7 +2773,7 @@ void WorldSession::HandleMirrorImageOpcode(WorldPacket& recv_data)
 
     recv_data >> GUID;
 
-    Unit* Image = _player->getWorldMap()->getUnit(GUID);
+    Unit* Image = _player->getWorldMapUnit(GUID);
     if (Image == nullptr)
         return; // ups no unit found with that GUID on the map. Spoofed packet?
 
@@ -2781,7 +2781,7 @@ void WorldSession::HandleMirrorImageOpcode(WorldPacket& recv_data)
         return;
 
     uint64_t CasterGUID = Image->getCreatedByGuid();
-    Unit* Caster = _player->getWorldMap()->getUnit(CasterGUID);
+    Unit* Caster = _player->getWorldMapUnit(CasterGUID);
 
     if (Caster == nullptr)
         return; // apperantly this mirror image mirrors nothing, poor lonely soul :(Maybe it's the Caster's ghost called Casper

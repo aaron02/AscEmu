@@ -162,7 +162,7 @@ std::unique_ptr<WorldMap> MapMgr::createWorldMap(uint32_t mapId, uint32_t unload
     auto map = std::make_unique<WorldMap>(baseMap, mapId, unloadTime, 0, InstanceDifficulty::Difficulties::DUNGEON_NORMAL);
 
     // Load Saved Respawns when existing
-    map->loadRespawnTimes();
+    map->getSpawnManager().loadRespawnTimes();
 
     // Initialize Map Script and Load Static Spawns
     map->initialize();
@@ -320,7 +320,7 @@ InstanceMap* MapMgr::createInstance(uint32_t mapId, uint32_t InstanceId, Instanc
     auto map = std::make_unique<InstanceMap>(baseMap, mapId, worldConfig.server.mapUnloadTime * 1000, InstanceId, difficulty, InstanceTeam);
 
     // Load Saved Respawns when existing
-    map->loadRespawnTimes();
+    map->getSpawnManager().loadRespawnTimes();
 
     // Initialize Map Script and Load Static Spawns
     map->initialize();
@@ -330,7 +330,8 @@ InstanceMap* MapMgr::createInstance(uint32_t mapId, uint32_t InstanceId, Instanc
     map->createInstanceData(load_data);
     
     // In Instances we load all Cells
-    map->updateAllCells(true);
+    // todo aaron02 maprework
+    //map->updateAllCells(true);
 
     // Save pointer to InstanceMap to avoid casting later -Appled
     auto* instMap = map.get();
@@ -370,7 +371,8 @@ BattlegroundMap* MapMgr::createBattleground(uint32_t mapId)
     map->initialize();
 
     // In Battlegrounds we load all Cells
-    map->updateAllCells(true);
+    // todo aaron02 maprework
+    //map->updateAllCells(true);
 
     // Save pointer to BattlegroundMap to avoid casting later -Appled
     auto* bgMap = map.get();

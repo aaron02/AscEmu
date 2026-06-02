@@ -93,7 +93,7 @@ void WorldSession::handleRequestVehicleSwitchSeat(WorldPacket& recvPacket)
     {
         GetPlayer()->callChangeSeat(seatId);
     }
-    else if (Unit* vehUnit = GetPlayer()->getWorldMap()->getUnit(guid.getRawGuid()))
+    else if (Unit* vehUnit = GetPlayer()->getWorldMapUnit(guid.getRawGuid()))
     {
         if (Vehicle* vehicle = vehUnit->getVehicleKit())
         {
@@ -171,7 +171,7 @@ void WorldSession::handleRemoveVehiclePassenger(WorldPacket& recvPacket)
     if (srlPacket.guid == 0)
         return;
 
-    const auto passengerUnit = _player->getWorldMap()->getUnit(srlPacket.guid);
+    const auto passengerUnit = _player->getWorldMapUnit(srlPacket.guid);
     if (!passengerUnit)
         return;
 
@@ -206,7 +206,7 @@ void WorldSession::handleEnterVehicle(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto unit = _player->getWorldMap()->getUnit(srlPacket.guid);
+    const auto unit = _player->getWorldMapUnit(srlPacket.guid);
     if (unit == nullptr)
         return;
 

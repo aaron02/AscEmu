@@ -156,14 +156,13 @@ public: //\todo Zyres: public fpr LuaEngine, sort out why
     // Essential functions
 
     void Update(unsigned long time_passed);                                 // hides function Object::Update
-    // void AddToWorld();                                                   // not used
-    // void AddToWorld(WorldMap* pMapMgr);                                  // not used
-    // void PushToWorld(WorldMap*);                                         // not used
-    virtual void RemoveFromWorld(bool free_guid);                           // hides virtual function Object::RemoveFromWorld
-    // void OnPrePushToWorld();                                             // not used
-    virtual void OnPushToWorld();                                           // hides virtual function Object::OnPushToWorld
-    // void OnPreRemoveFromWorld();                                         // not used
-    // void OnRemoveFromWorld();                                            // not used
+
+    //virtual void onPreAttachToWorld() {}
+    virtual void onAttachToWorld() override;
+
+    virtual void onPreDetachFromWorld() override;
+    // virtual void onDetachFromWorld() override;
+
     virtual void die(Unit* pAttacker, uint32_t damage, uint32_t spellid);
 
 private:
@@ -866,6 +865,8 @@ public:
     uint32_t getTransformAura() const;
     void setTransformAura(uint32_t auraId);
 
+    void queueInitialVisiblePacketsForPlayer(Player* target) override;
+
     // Sends packet for new or removed aura
     void sendAuraUpdate(Aura* aur, bool remove);
     void sendFullAuraUpdate();
@@ -923,8 +924,6 @@ public:
     bool isInvisible() const;
 
     void setVisible(const bool visible);
-
-    void updateVisibility();
 
 private:
      // Stealth
@@ -1063,9 +1062,8 @@ public:
     void smsg_AttackStart(Unit* pVictim);
     void smsg_AttackStop(Unit* pVictim);
 
-    virtual void addToInRangeObjects(Object* pObj);
-    virtual void onRemoveInRangeObject(Object* pObj);
-    void clearInRangeSets();
+    void onRemoveInRangeObject(Object* pObj) override;
+
 
     bool setDetectRangeMod(uint64_t guid, int32_t amount);
     void unsetDetectRangeMod(uint64_t guid);
@@ -1082,7 +1080,7 @@ public:
     void removeGameObject(GameObject* gameObj, bool del);
     void removeGameObject(uint32_t spellId, bool del);
 
-    uint32_t m_objectSlots[4] = { 0 };
+    WoWGuid m_objectSlots[4] = {};
 
     void removeAllGameObjects();
 
@@ -1229,6 +1227,7 @@ public:
 
     void possess(Unit* unitTarget, uint32_t delay = 0);
     void unPossess();
+    void setPossessedVisibilityRoles(bool possessed);
 
     // noInterrupt counter set through possess/unpossess
     uint16_t hasNoInterrupt() const { return m_noInterrupt; }

@@ -31,7 +31,6 @@
 #include "Data/Flags.hpp"
 #include "Logging/Logger.hpp"
 #include "Management/ObjectMgr.hpp"
-#include "Map/Cells/MapCell.hpp"
 #include "Spell/SpellMgr.hpp"
 #include "Management/Battleground/Battleground.hpp"
 #include "Server/Packets/SmsgGameobjectCustomAnim.h"
@@ -131,8 +130,73 @@ GameObject::~GameObject()
         myScript = nullptr;
     }
 
-    if (m_respawnCell)
-        m_respawnCell->_respawnObjects.erase(this);
+    delete m_spawn;
+    m_spawn = nullptr;
+}
+
+void GameObject::onAttachToWorld()
+{
+    if (m_model)
+    {
+        if (Transporter* trans = ToTransport())
+            trans->setDelayedAddModelToMap();
+        else
+            getWorldMap()->insertGameObjectModel(*m_model);
+    }
+
+    if (mEvent != nullptr)
+    {
+        if (mEvent->mEventScript != nullptr)
+        {
+            mEvent->mEventScript->OnGameObjectPushToWorld(mEvent, this);
+        }
+    }
+
+    if (GetScript())
+    {
+        GetScript()->OnCreate();
+        GetScript()->OnSpawn();
+    }
+
+    if (m_WorldMap && m_WorldMap->getScript())
+    {
+        m_WorldMap->getScript()->OnGameObjectPushToWorld(this);
+    }
+
+    Object::onAttachToWorld();
+}
+
+void GameObject::onPreDetachFromWorld()
+{
+    if (m_model)
+    {
+        if (getWorldMap()->containsGameObjectModel(*m_model))
+            getWorldMap()->removeGameObjectModel(*m_model);
+    }
+}
+
+void GameObject::onDetachFromWorld()
+{
+    if (m_deleted)
+        return;
+
+    m_deleted = true;
+
+    setLootState(GO_NOT_READY);
+    sendGameobjectDespawnAnim();
+
+    setState(GO_STATE_CLOSED);
+
+    if (IsInWorld())
+    {
+        if (m_model)
+            if (getWorldMap()->containsGameObjectModel(*m_model))
+                getWorldMap()->removeGameObjectModel(*m_model);
+
+        sEventMgr.RemoveEvents(this);
+    }
+
+    Object::onDetachFromWorld();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -335,29 +399,25 @@ bool GameObject::loadFromDB(MySQLStructure::GameobjectSpawn* spawn, WorldMap* ma
 
     if (!GetGameObjectProperties()->getDespawnPossibility() && !GetGameObjectProperties()->isDespawnAtAction())
     {
-        setFlags(GO_FLAG_NEVER_DESPAWN);
+        addFlags(GO_FLAG_NEVER_DESPAWN);
         m_respawnDelayTime = 0;
         m_respawnTime = 0;
     }
     else
     {
         m_respawnDelayTime = spawn->spawntimesecs;
-        m_respawnTime = map->getGORespawnTime(spawn->id);
+        m_respawnTime = map->getSpawnManager().getGORespawnTime(spawn->id);
 
         // ready to respawn
         if (m_respawnTime && m_respawnTime <= Util::getTimeNow())
         {
             m_respawnTime = 0;
-            map->removeRespawnTime(SPAWN_TYPE_GAMEOBJECT, spawn->id);
+            map->getSpawnManager().deleteRespawnFromDB(SPAWN_TYPE_GAMEOBJECT2, spawn->id);
         }
     }
 
-    m_spawn = spawn;
-
-    // add to insert Pool
-    if (addToWorld)
-        map->AddObject(this);
-
+    delete m_spawn;
+    m_spawn = new MySQLStructure::GameobjectSpawn(*spawn);
     return true;
 }
 
@@ -379,9 +439,23 @@ void GameObject::saveToDB(bool newSpawn)
 {
     if (m_spawn == nullptr)
     {
-        sLogger.failure("Saving to Database failed for GameObject with entry {} spawnId {}, no SpawnData available", getEntry(), getSpawnId());
-        return;
+        m_spawn = new MySQLStructure::GameobjectSpawn;
+        m_spawn->id = m_spawnId ? m_spawnId : sObjectMgr.generateGameObjectSpawnId();
+        m_spawnId = m_spawn->id;
+        m_spawn->origine = "gameobject_spawns";
     }
+
+    if (m_spawn->origine.empty())
+        m_spawn->origine = "gameobject_spawns";
+
+    m_spawn->entry = getEntry();
+    m_spawn->map = GetMapId();
+    m_spawn->phase = GetPhase();
+    m_spawn->spawnPoint = LocationVector(GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation());
+    m_spawn->rotation = QuaternionData(getParentRotation(0), getParentRotation(1), getParentRotation(2), getParentRotation(3));
+    m_spawn->spawntimesecs = static_cast<uint32_t>(m_respawnDelayTime);
+    m_spawn->state = GameObject_State(getState());
+
     std::stringstream ss;
 
     if (newSpawn)
@@ -439,6 +513,12 @@ void GameObject::saveToDB(bool newSpawn)
             << "max_build >= "
             << VERSION_STRING;
     }
+
+    auto [gx, gy] = visibility::worldToGrid(m_spawn->spawnPoint);
+    const int gid = visibility::packGridId(gx, gy);
+
+    // Add spawn to map
+    getWorldMap()->getSpawnManager().getSpawnsListAndCreate(gid)->GameobjectSpawns.push_back(m_spawn);
 
     WorldDatabase.Execute(ss.str().c_str());
 }
@@ -509,10 +589,10 @@ bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationV
     m_model = createModel();
 
     setGoType(static_cast<uint8_t>(gameobject_properties->type));
+
     m_prevGoState = state;
     setState(state);
     setArtKit(0);
-
     switch (gameobject_properties->type)
     {
         case GAMEOBJECT_TYPE_FISHINGHOLE:
@@ -563,6 +643,7 @@ bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationV
             break;
     }
 
+
     InitAI();
 
     if (spawnId)
@@ -570,18 +651,11 @@ bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationV
 
     if (uint32_t linkedEntry = gameobject_properties->getLinkedGameObjectEntry())
     {
-        GameObject* linkedGO = map->createGameObject(linkedEntry);
+        GameObject* linkedGO = map->getSpawnManager().summonGameObject(linkedEntry, position, rotation);
         if (linkedGO)
         {
-            if (linkedGO->create(linkedEntry, map, phase, position, rotation, GO_STATE_CLOSED))
-            {
-                setLinkedTrap(linkedGO);
-                linkedGO->PushToWorld(map);
-            }
-            else
-            {
-                delete linkedGO;
-            }
+            linkedGO->m_phase = phase;
+            setLinkedTrap(linkedGO);
         }
     }
 
@@ -610,11 +684,11 @@ void GameObject::respawn()
 
         if (getSpawnId())
         {
-            MapCell* pCell = getWorldMap()->getCellByCoords(GetSpawnX(), GetSpawnY());
-            if (pCell == nullptr)
-                pCell = GetMapCell();
-
-            getWorldMap()->doRespawn(SPAWN_TYPE_GAMEOBJECT, this, getSpawnId(), pCell->getPositionX(), pCell->getPositionY());
+            getWorldMap()->getSpawnManager().respawnNow(SPAWN_TYPE_GAMEOBJECT2, getSpawnId());
+        }
+        else
+        {
+            getWorldMap()->getSpawnManager().respawnNow(SPAWN_TYPE_GAMEOBJECT2, getGuid());
         }
     }
 }
@@ -665,6 +739,38 @@ QuaternionData GameObject::getWorldRotation() const
         return QuaternionData(resultRotation.x, resultRotation.y, resultRotation.z, resultRotation.w);
     }
     return localRotation;
+}
+
+void GameObject::setCreateBits(UpdateMask* updateMask, Player* target) const
+{
+    Object::setCreateBits(updateMask, target);
+
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, object_field_created_by.guid));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, object_field_created_by.guid) + 1);
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, display_id));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, flags));
+
+    for (uint8_t i = 0; i < GAMEOBJECT_ROTATION_COUNT; ++i)
+        updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, rotation) + i);
+
+#if VERSION_STRING < WotLK
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, state));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, x));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, y));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, z));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, o));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, dynamic));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, faction_template));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, type));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, level));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, art_kit));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, animation_progress));
+#else
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, dynamic));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, faction_template));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, level));
+    updateMask->SetBit(getOffsetForStructuredField(WoWGameObject, bytes_1));
+#endif
 }
 
 void GameObject::updatePackedRotation()
@@ -753,7 +859,7 @@ public:
     G3D::Vector3 GetPosition() const override { return G3D::Vector3(_owner->GetPositionX(), _owner->GetPositionY(), _owner->GetPositionZ()); }
     float GetOrientation() const override { return _owner->GetOrientation(); }
     float GetScale() const override { return _owner->getScale(); }
-    void DebugVisualizeCorner(G3D::Vector3 const& corner) const override { const_cast<GameObject*>(_owner)->getWorldMap()->createAndSpawnCreature(1, LocationVector(corner.x, corner.y, corner.z, 0)); }
+    void DebugVisualizeCorner(G3D::Vector3 const& corner) const override { const_cast<GameObject*>(_owner)->getWorldMap()->getSpawnManager().summonCreature(1, LocationVector(corner.x, corner.y, corner.z, 0)); }
 
 private:
     GameObject const* _owner;
@@ -866,14 +972,16 @@ void GameObject::Update(unsigned long time_passed)
                         }
 
                         // Respawn timer
-                        getWorldMap()->AddObject(this);
+                        getWorldMap()->getObjectFactory().attachToWorld(this);
                     }
                 }
             }
 
             // Set respawn timer
             if (m_loadedFromDB && m_respawnTime > 0)
-                saveRespawnTime();
+            {
+                getWorldMap()->getSpawnManager().ensureRespawnScheduled(SPAWN_TYPE_GAMEOBJECT2, m_spawnId, getEntry(), m_respawnTime);
+            }
 
             if (isSpawned())
             {
@@ -977,7 +1085,7 @@ void GameObject::Update(unsigned long time_passed)
             else if (getCreatedByGuid() || getSpellId())
             {
                 setRespawnTime(0);
-                Delete();
+                destroy();
                 return;
             }
 
@@ -998,11 +1106,7 @@ void GameObject::Update(unsigned long time_passed)
             if (!m_spawnedByDefault)
             {
                 m_respawnTime = 0;
-
-                if (m_spawnId)
-                    despawn(0, 0);
-                else
-                    Delete();
+                despawn(0, 0);
 
                 return;
             }
@@ -1035,66 +1139,11 @@ void GameObject::despawn(uint32_t delay, uint32_t forceRespawntime)
         if (GetScript())
             GetScript()->OnDespawn();
 
-        if (m_spawn && m_loadedFromDB)
-        {
-            uint32_t const respawnDelay = (forceRespawntime > 0) ? forceRespawntime : m_spawn->spawntimesecs;
-            saveRespawnTime(respawnDelay);
-        }
-        else if (!m_loadedFromDB) // Respawning for non Database Loaded Objects
-        {
-            /* Get our originating mapcell */
-            if (MapCell* pCell = GetMapCell())
-            {
-                pCell->_respawnObjects.insert(this);
-                sEventMgr.RemoveEvents(this);
+        uint32_t respawnDelay = forceRespawntime;
+        if (respawnDelay == 0 && m_loadedFromDB && m_spawn)
+            respawnDelay = m_spawn->spawntimesecs;
 
-                m_respawnCell = pCell;
-                uint32_t const respawnDelay = (forceRespawntime > 0) ? forceRespawntime : 0;
-                saveRespawnTime(respawnDelay);
-                RemoveFromWorld(false);
-            }
-            else
-            {
-                sLogger.failure("GameObject::Despawn tries to respawn go {} without a valid MapCell, return!", this->getEntry());
-            }
-            return;
-        }
-
-        RemoveFromWorld(true);
-        expireAndDelete();
-    }
-}
-
-void GameObject::saveRespawnTime(uint32_t forceDelay)
-{
-    if (m_spawn && (forceDelay || m_respawnTime > Util::getTimeNow()) && m_spawnedByDefault)
-    {
-        // for Gameobjects not Loaded from Database
-        if (!m_loadedFromDB)
-        {
-            RespawnInfo ri;
-            ri.type = SPAWN_TYPE_GAMEOBJECT;
-            ri.spawnId = getSpawnId();
-            ri.entry = getEntry();
-            ri.time = m_respawnTime;
-            ri.obj = this;
-            ri.cellX = m_spawnLocation.x;
-            ri.cellY = m_spawnLocation.y;
-
-            bool success = getWorldMap()->addRespawn(ri);
-            if (success)
-                getWorldMap()->saveRespawnDB(ri);
-            return;
-        }
-
-        /* Get our originating mapcell */
-        if (MapCell* pCell = GetMapCell())
-        {
-            m_respawnCell = pCell;
-
-            time_t thisRespawnTime = forceDelay ? Util::getTimeNow() + forceDelay : m_respawnTime;
-            getWorldMap()->saveRespawnTime(SPAWN_TYPE_GAMEOBJECT, m_spawnId, getEntry(), thisRespawnTime, m_spawnLocation.x, m_spawnLocation.y);
-        }
+        getWorldMap()->getSpawnManager().despawn(getGuid(), respawnDelay);
     }
 }
 
@@ -1156,7 +1205,7 @@ void GameObject::useDoorOrButton(uint32_t time_to_restore, bool alternative /* =
 void GameObject::switchDoorOrButton(bool activate, bool alternative /* = false */)
 {
     if (activate)
-        setFlags(GO_FLAG_NONSELECTABLE);
+        addFlags(GO_FLAG_NONSELECTABLE);
     else
         removeFlags(GO_FLAG_NONSELECTABLE);
 
@@ -1203,53 +1252,16 @@ void GameObject::addUniqueUse(Player* player)
     m_unique_users.insert(player->getGuid());
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-// Summoned Go's
-//////////////////////////////////////////////////////////////////////////////////////////
-
-void GameObject::expireAndDelete()
-{
-    if (m_deleted)
-        return;
-
-    m_deleted = true;
-
-    setLootState(GO_NOT_READY);
-    sendGameobjectDespawnAnim();
-
-    setState(GO_STATE_CLOSED);
-
-    // remove any events
-    sEventMgr.RemoveEvents(this);
-    if (IsInWorld())
-    {
-        RemoveFromWorld(true);
-        delete this;
-    }
-    else
-    {
-        delete this;
-    }
-}
-
-void GameObject::RemoveFromWorld(bool free_guid)
-{
-    if (IsInWorld())
-    {
-        if (m_model)
-            if (getWorldMap()->containsGameObjectModel(*m_model))
-                getWorldMap()->removeGameObjectModel(*m_model);
-
-        sEventMgr.RemoveEvents(this);
-        Object::RemoveFromWorld(free_guid);
-    }
-}
-
 // MIT End
 
 GameObjectProperties const* GameObject::GetGameObjectProperties() const
 {
     return gameobject_properties;
+}
+
+uint32_t GameObject::getLockId() const
+{
+    return gameobject_properties ? gameobject_properties->getLockId() : 0;
 }
 
 void GameObject::SetGameObjectProperties(GameObjectProperties const* go_prop) { gameobject_properties = go_prop; }
@@ -1307,49 +1319,23 @@ void GameObject::CallScriptUpdate()
 
 GameObjectAIScript* GameObject::GetScript() { return myScript; }
 
-void GameObject::OnPushToWorld()
-{
-    if (m_model)
-    {
-        if (Transporter* trans = ToTransport())
-            trans->setDelayedAddModelToMap();
-        else
-            getWorldMap()->insertGameObjectModel(*m_model);
-    }
-
-    Object::OnPushToWorld();
-    if (mEvent != nullptr)
-    {
-        if (mEvent->mEventScript != nullptr)
-        {
-            mEvent->mEventScript->OnGameObjectPushToWorld(mEvent, this);
-        }
-    }
-
-    if (GetScript())
-    {
-        GetScript()->OnCreate();
-        GetScript()->OnSpawn();
-    }
-
-    if (m_WorldMap && m_WorldMap->getScript())
-    {
-        m_WorldMap->getScript()->OnGameObjectPushToWorld(this);
-        m_WorldMap->getScript()->addObject(this);
-    }
-}
-
 void GameObject::onRemoveInRangeObject(Object* pObj)
 {
     Object::onRemoveInRangeObject(pObj);
+
     auto* const owner = getUnitOwner();
+    if (!owner || !pObj)
+        return;
+
     if (m_summonedGo && owner == pObj)
     {
         for (uint8_t i = 0; i < 4; i++)
-            if (owner->m_objectSlots[i] == getGuidLow())
-                owner->m_objectSlots[i] = 0;
+        {
+            if (owner->m_objectSlots[i] == GetNewGUID())
+                owner->m_objectSlots[i].clear();
+        }
 
-        expireAndDelete();
+        destroy();
     }
 }
 
@@ -1882,11 +1868,6 @@ GameObject_SpellFocus::GameObject_SpellFocus(uint64_t GUID) : GameObject(GUID)
 GameObject_SpellFocus::~GameObject_SpellFocus()
 { }
 
-void GameObject_SpellFocus::OnPushToWorld()
-{
-    GameObject::OnPushToWorld();
-}
-
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Goober
 GameObject_Goober::GameObject_Goober(uint64_t GUID) : GameObject(GUID)
@@ -1940,7 +1921,7 @@ void GameObject_Goober::onUse(Player* player)
     if (uint32_t trapEntry = info->goober.linked_trap_id)
         triggerLinkedGameObject(trapEntry, player);
 
-    setFlags(GO_FLAG_NONSELECTABLE);
+    addFlags(GO_FLAG_NONSELECTABLE);
     setLootState(GO_ACTIVATED, player);
 
     if (info->goober.custom_anim)
@@ -2145,7 +2126,7 @@ void GameObject_FishingNode::_internalUpdateOnState(unsigned long /*timeDiff*/)
                 auto* const caster = getPlayerOwner();
                 if (caster)
                 {
-                    setFlags(GO_FLAG_NEVER_DESPAWN);
+                    addFlags(GO_FLAG_NEVER_DESPAWN);
                     sendGameobjectCustomAnim();
                 }
 
@@ -2231,7 +2212,7 @@ void GameObject_Ritual::onUse(Player* player)
         unsigned long MaxMembers = GetRitual()->GetMaxMembers();
         for (unsigned long i = 0; i < MaxMembers; i++)
         {
-            plr = player->getWorldMap()->getPlayer(GetRitual()->GetMemberGUIDBySlot(i));
+            plr = player->getWorldMapPlayer(GetRitual()->GetMemberGUIDBySlot(i));
             if (plr != nullptr)
             {
                 plr->setChannelObjectGuid(0);
@@ -2252,7 +2233,7 @@ void GameObject_Ritual::onUse(Player* player)
             if (target == nullptr || !target->IsInWorld())
                 return;
 
-            spell = sSpellMgr.newSpell(player->getWorldMap()->getPlayer(GetRitual()->GetCasterGUID()), info, true, nullptr);
+            spell = sSpellMgr.newSpell(player->getWorldMapPlayer(GetRitual()->GetCasterGUID()), info, true, nullptr);
             targets.setUnitTarget(target->getGuid());
             spell->prepare(&targets);
         }
@@ -2261,8 +2242,8 @@ void GameObject_Ritual::onUse(Player* player)
             uint32_t victimid = Util::getRandomUInt(GetRitual()->GetMaxMembers() - 1);
 
             // kill the sacrifice player
-            Player* psacrifice = player->getWorldMap()->getPlayer(GetRitual()->GetMemberGUIDBySlot(victimid));
-            Player* pCaster = getWorldMap()->getPlayer(GetRitual()->GetCasterGUID());
+            Player* psacrifice = player->getWorldMapPlayer(GetRitual()->GetMemberGUIDBySlot(victimid));
+            Player* pCaster = getWorldMapPlayer(GetRitual()->GetCasterGUID());
             if (!psacrifice || !pCaster)
                 return;
 
@@ -2283,11 +2264,11 @@ void GameObject_Ritual::onUse(Player* player)
         }
         else if (gameobject_properties->entry == 179944)    // Summoning portal for meeting stones
         {
-            plr = player->getWorldMap()->getPlayer(GetRitual()->GetTargetGUID());
+            plr = player->getWorldMapPlayer(GetRitual()->GetTargetGUID());
             if (!plr)
                 return;
 
-            Player* pleader = player->getWorldMap()->getPlayer(GetRitual()->GetCasterGUID());
+            Player* pleader = player->getWorldMapPlayer(GetRitual()->GetCasterGUID());
             if (!pleader)
                 return;
 
@@ -2297,7 +2278,7 @@ void GameObject_Ritual::onUse(Player* player)
             spell->prepare(&targets2);
 
             // expire the gameobject
-            expireAndDelete();
+            destroy();
         }
         else if (gameobject_properties->entry == 186811 || gameobject_properties->entry == 181622)
         {
@@ -2305,10 +2286,10 @@ void GameObject_Ritual::onUse(Player* player)
             if (info == NULL)
                 return;
 
-            spell = sSpellMgr.newSpell(player->getWorldMap()->getPlayer(GetRitual()->GetCasterGUID()), info, true, nullptr);
+            spell = sSpellMgr.newSpell(player->getWorldMapPlayer(GetRitual()->GetCasterGUID()), info, true, nullptr);
             SpellCastTargets targets2(GetRitual()->GetCasterGUID());
             spell->prepare(&targets2);
-            expireAndDelete();
+            destroy();
         }
     }
 }
@@ -2360,7 +2341,7 @@ void GameObject_SpellCaster::onUse(Player* player)
     addUse();
 
     if (getUseCount() == 0)
-        expireAndDelete();
+        destroy();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -2389,18 +2370,15 @@ void GameObject_Meetingstone::onUse(Player* player)
     if (pPlayer->getGuid() == player->getGuid())
         return;
 
+    QuaternionData rot = QuaternionData::fromEulerAnglesZYX(player->GetOrientation(), 0.f, 0.f);
+
     // Create the summoning portal
-    GameObject* pGo = player->getWorldMap()->createGameObject(179944);
+    GameObject* pGo = player->getWorldMap()->getSpawnManager().summonGameObject(179944, player->GetPosition(), rot);
     if (pGo == nullptr)
         return;
 
     GameObject_Ritual* rGo = static_cast<GameObject_Ritual*>(pGo);
-
-    QuaternionData rot = QuaternionData::fromEulerAnglesZYX(player->GetOrientation(), 0.f, 0.f);
-
-    rGo->create(179944, player->getWorldMap(), player->GetPhase(), player->GetPosition(), rot, GO_STATE_CLOSED);
     rGo->GetRitual()->Setup(player->getGuidLow(), pPlayer->getGuidLow(), 18540);
-    rGo->PushToWorld(player->getWorldMap());
 
     player->setChannelObjectGuid(rGo->getGuid());
     player->setChannelSpellId(rGo->GetRitual()->GetSpellID());

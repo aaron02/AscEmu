@@ -81,7 +81,7 @@ Player* Aura::GetPlayerCaster()
     }
 
     if (m_target->getWorldMap())
-        return m_target->getWorldMap()->getPlayer(WoWGuid::getGuidLowPartFromUInt64(m_casterGuid));
+        return m_target->getWorldMapPlayer(m_casterGuid);
 
     return nullptr;
 }
@@ -110,7 +110,7 @@ Unit* Aura::GetUnitCaster()
         return m_target;
 
     if (m_target->getWorldMap())
-        return m_target->getWorldMap()->getUnit(m_casterGuid);
+        return m_target->getWorldMapUnit(m_casterGuid);
 
     return nullptr;
 }
@@ -301,7 +301,7 @@ void Aura::EventUpdateGroupAA(AuraEffectModifier* /*aurEff*/, float r)
         AreaAuraList::iterator itr2 = itr;
         ++itr;
 
-        Player* tp = m_target->getWorldMap()->getPlayer(WoWGuid::getGuidLowPartFromUInt64(*itr2));
+        Player* tp = m_target->getWorldMapPlayer(*itr2);
 
         bool removable = false;
         if (tp == nullptr)
@@ -412,7 +412,7 @@ void Aura::EventUpdateRaidAA(AuraEffectModifier* /*aurEff*/, float r)
         AreaAuraList::iterator itr2 = itr;
         ++itr;
 
-        Player* tp = m_target->getWorldMap()->getPlayer(WoWGuid::getGuidLowPartFromUInt64(*itr2));
+        Player* tp = m_target->getWorldMapPlayer(*itr2);
         bool removable = false;
 
         if (tp == nullptr)
@@ -501,7 +501,7 @@ void Aura::EventUpdateFriendAA(AuraEffectModifier* /*aurEff*/, float r)
         AreaAuraList::iterator itr2 = itr;
         ++itr;
 
-        Unit* tu = u->getWorldMap()->getUnit(*itr2);
+        Unit* tu = u->getWorldMapUnit(*itr2);
         bool removable = false;
 
         if (tu == nullptr)
@@ -568,7 +568,7 @@ void Aura::EventUpdateEnemyAA(AuraEffectModifier* /*aurEff*/, float r)
         AreaAuraList::iterator itr2 = itr;
         ++itr;
 
-        Unit* tu = u->getWorldMap()->getUnit(*itr2);
+        Unit* tu = u->getWorldMapUnit(*itr2);
         bool removable = false;
 
         if (tu == nullptr)
@@ -690,7 +690,7 @@ void Aura::EventUpdateAreaAura(uint8_t effIndex, float r)
 
     for (AreaAuraList::iterator itr = targets.begin(); itr != targets.end(); ++itr)
     {
-        auto unit = m_target->getWorldMap()->getUnit(*itr);
+        auto unit = m_target->getWorldMapUnit(*itr);
         if (unit == nullptr)
             return;
 
@@ -710,7 +710,7 @@ void Aura::ClearAATargets()
 
     for (AreaAuraList::iterator itr = targets.begin(); itr != targets.end(); ++itr)
     {
-        Unit* tu = m_target->getWorldMap()->getUnit(*itr);
+        Unit* tu = m_target->getWorldMapUnit(*itr);
 
         if (tu == nullptr)
             continue;
@@ -728,7 +728,7 @@ void Aura::ClearAATargets()
 #if VERSION_STRING >= TBC
     if (m_spellInfo->hasEffect(SPELL_EFFECT_APPLY_OWNER_AREA_AURA))
     {
-        Unit* u = m_target->getWorldMap()->getUnit(m_target->getCreatedByGuid());
+        Unit* u = m_target->getWorldMapUnit(m_target->getCreatedByGuid());
 
         if (u != nullptr)
             u->removeAllAurasById(spellid);
@@ -829,8 +829,7 @@ void Aura::SpellAuraModPossess(AuraEffectModifier* /*aurEff*/, bool apply)
             m_target->setCharmedByGuid(0);
             m_target->removeUnitFlags(UNIT_FLAG_PLAYER_CONTROLLED_CREATURE | UNIT_FLAG_PVP_ATTACKABLE);
             m_target->setFaction(m_target->getCharmTempVal());
-            m_target->updateInRangeOppositeFactionSet();
-        }
+            }
         else
         {
             //mob woke up and realized he was controlled. He will turn to controller and also notify the other mobs he is fighting that they should attack the caster
@@ -927,7 +926,6 @@ void Aura::SpellAuraModCharm(AuraEffectModifier* aurEff, bool apply)
         m_target->addUnitStateFlag(UNIT_STATE_CHARMED);
         m_target->setCharmTempVal(m_target->getFactionTemplate());
         m_target->setFaction(caster->getFactionTemplate());
-        m_target->updateInRangeOppositeFactionSet();
         m_target->getAIInterface()->Init(m_target, caster);
         m_target->setCharmedByGuid(caster->getGuid());
         caster->setCharmGuid(target->getGuid());
@@ -947,7 +945,6 @@ void Aura::SpellAuraModCharm(AuraEffectModifier* aurEff, bool apply)
         m_target->removeUnitStateFlag(UNIT_STATE_CHARMED);
         m_target->setFaction(m_target->getCharmTempVal());
         m_target->getThreatManager().clearAllThreat();
-        m_target->updateInRangeOppositeFactionSet();
         m_target->getAIInterface()->Init(m_target);
         m_target->setCharmedByGuid(0);
 
@@ -1612,7 +1609,8 @@ void Aura::SpellAuraModStealth(AuraEffectModifier* aurEff, bool apply)
         }
     }
 
-    m_target->updateVisibility();
+    if (m_target->IsInWorld())
+        m_target->getWorldMap()->refreshVisibilityForObject(m_target);
 }
 
 void Aura::SpellAuraModStealthDetection(AuraEffectModifier* aurEff, bool apply)
@@ -1656,7 +1654,8 @@ void Aura::SpellAuraModInvisibility(AuraEffectModifier* aurEff, bool apply)
         }
     }
 
-    m_target->updateVisibility();
+    if (m_target->IsInWorld())
+        m_target->getWorldMap()->refreshVisibilityForObject(m_target);
 }
 
 void Aura::SpellAuraModInvisibilityDetection(AuraEffectModifier* aurEff, bool apply)
@@ -1674,7 +1673,10 @@ void Aura::SpellAuraModInvisibilityDetection(AuraEffectModifier* aurEff, bool ap
             m_target->modInvisibilityDetection(InvisibilityFlag(aurEff->getEffectMiscValue()), -aurEff->getEffectDamage());
 
         if (m_target->isPlayer())
-            m_target->updateVisibility();
+        {
+            if (m_target->IsInWorld())
+                m_target->getWorldMap()->refreshVisibilityForObject(m_target);
+        }
     }
 }
 
@@ -3058,7 +3060,7 @@ void Aura::SpellAuraMechanicImmunity(AuraEffectModifier* aurEff, bool apply)
         // Demonic Circle hack
         if (m_spellInfo->getId() == 48020 && m_target->isPlayer() && m_target->hasAurasWithId(62388))
         {
-            GameObject* obj = m_target->getWorldMap()->getGameObject(m_target->m_objectSlots[0]);
+            GameObject* obj = m_target->getWorldMapGameObject(m_target->m_objectSlots[0].getRawGuid());
 
             if (obj != nullptr)
             {
@@ -3400,7 +3402,7 @@ void Aura::SpellAuraChannelDeathItem(AuraEffectModifier* aurEff, bool apply)
 
             if (m_target->isDead())
             {
-                Player* pCaster = m_target->getWorldMap()->getPlayer((uint32_t)m_casterGuid);
+                Player* pCaster = m_target->getWorldMapPlayer(m_casterGuid);
                 if (!pCaster)
                     return;
                 /*int32_t delta=pCaster->getLevel()-m_target->getLevel();
@@ -5682,7 +5684,7 @@ void Aura::HandleAuraControlVehicle(AuraEffectModifier* aurEff, bool apply)
         if (getSpellId() == 53111) // Devour Humanoid
         {
             if (caster->getObjectTypeId() == TYPEID_UNIT)
-                caster->ToCreature()->Despawn(0, 0);
+                caster->ToCreature()->despawn(0, 0);
         }
 
         if (seatId == m_target->getVehicleKit()->getSeatForNumberPassenger(caster))

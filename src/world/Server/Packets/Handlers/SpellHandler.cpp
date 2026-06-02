@@ -34,7 +34,7 @@ void WorldSession::handleSpellClick(WorldPacket& recvPacket)
     uint64_t unitGuid;
     recvPacket >> unitGuid;
 
-    Unit* unitTarget = _player->getWorldMap()->getUnit(unitGuid);
+    Unit* unitTarget = _player->getWorldMapUnit(unitGuid);
     if (!unitTarget || !unitTarget->IsInWorld() || !unitTarget->isCreature())
         return;
 
@@ -308,7 +308,7 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
         return;
     }
 
-    Unit* petUnit = _player->getWorldMap()->getUnit(srlPacket.petGuid);
+    Unit* petUnit = _player->getWorldMapUnit(srlPacket.petGuid);
     if (petUnit == nullptr)
     {
         sLogger.failure("Pet entity cannot be found for player {}.", _player->getGuidLow());
@@ -439,7 +439,7 @@ void WorldSession::handleUpdateProjectilePosition(WorldPacket& recvPacket)
 
     recvPacket >> casterGuid >> spellId >> castCount >> x >> y >> z;
 
-    Unit* caster = _player->getWorldMap()->getUnit(casterGuid);
+    Unit* caster = _player->getWorldMapUnit(casterGuid);
     if (caster == nullptr)
         return;
 

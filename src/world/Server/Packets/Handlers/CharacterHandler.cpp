@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (c) 2014-2026 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
@@ -343,9 +343,7 @@ uint8_t WorldSession::deleteCharacter(WoWGuid guid)
 
         CharacterDatabase.WaitExecute("DELETE FROM characters WHERE guid = %u", guid.getGuidLow());
 
-        const auto corpse = sObjectMgr.getCorpseByOwner(guid.getGuidLow());
-        if (corpse)
-            CharacterDatabase.Execute("DELETE FROM corpses WHERE guid = %u", corpse->getGuidLow());
+        // Runtime corpses are map-local now. Persistent corpse rows are cleaned by owner-aware corpse handling elsewhere.
 
         CharacterDatabase.Execute("DELETE FROM playeritems WHERE ownerguid=%u", guid.getGuidLow());
         CharacterDatabase.Execute("DELETE FROM gm_tickets WHERE playerguid = %u", guid.getGuidLow());
@@ -741,7 +739,25 @@ void WorldSession::fullLogin(Player* player)
 
     // add us to the world if we are not already added
     if (canEnterWorld && !player->getWorldMap())
-        player->AddToWorld();
+    {
+        const auto mapInfo = sMySQLStore.getWorldMapInfo(player->GetMapId());
+        if (mapInfo == nullptr || player->GetMapId() >= MAX_NUM_MAPS)
+            return;
+
+        WorldMap* map = sMapMgr.findWorldMap(player->GetMapId(), player->GetInstanceID());
+
+        if (map == nullptr)
+        {
+            sLogger.failure("AddToWorld() failed for Object with GUID {} MapId {} InstanceId {}", std::to_string(player->getGuid()), player->GetMapId(), player->GetInstanceID());
+            return;
+        }
+
+        map->onPlayerEnter(player);
+    }
+    else
+    {
+        sLogger.failure("Cant Enter World: failed for Object with GUID {} MapId {} InstanceId {}", std::to_string(player->getGuid()), player->GetMapId(), player->GetInstanceID());
+    }
     //////////////////////////////////////////////////////////////////////////////////////////
 
 #if VERSION_STRING == Mop

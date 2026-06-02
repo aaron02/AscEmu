@@ -34,8 +34,8 @@ typedef MovementMgr::Spline<double>                         TransportSpline;
 typedef std::vector<KeyFrame>                               KeyFrameVec;
 typedef std::unordered_map<uint32_t, TransportTemplate>     TransportTemplates;
 typedef std::set<Transporter*>                              TransporterSet;
-typedef std::unordered_map<uint32_t, Transporter*>          TransporterMap;
-typedef std::unordered_map<uint32_t, TransporterSet>        TransporterInstancedMap;
+typedef std::unordered_map<uint32_t /*lowGuid*/, Transporter*>          TransporterMap;
+typedef std::unordered_map<uint32_t /*instanceId*/, TransporterSet>        TransporterInstancedMap;
 typedef std::unordered_map<uint32_t, std::set<uint32_t>>    TransportInstanceMap;
 
 typedef std::map<uint32_t, WDB::Structures::TransportAnimationEntry const*> TransportPathContainer;
@@ -174,10 +174,13 @@ public:
     void addTransport(Transporter* transport);
 
     Transporter* getTransporter(uint32_t guid);
+    Transporter* getTransporterByEntry(uint32_t entry) const;
+    uint64_t getTransporterGuidByEntry(uint32_t entry) const;
+
     TransportTemplate const* getTransportTemplate(uint32_t entry) const;
     TransportAnimation const* getTransportAnimInfo(uint32_t entry) const;
 
-    std::mutex _TransportLock;
+    mutable std::mutex _TransportLock;
 
 private:
     TransportHandler() = default;

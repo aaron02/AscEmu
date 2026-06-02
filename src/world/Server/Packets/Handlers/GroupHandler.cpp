@@ -750,7 +750,7 @@ void WorldSession::handlePartyMemberStatsOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    const auto requestedPlayer = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
+    const auto requestedPlayer = _player->getWorldMapPlayer(srlPacket.guid.getRawGuid());
     if (_player->getGroup() == nullptr || requestedPlayer == nullptr)
     {
         SendPacket(SmsgPartyMemberStatsFull(srlPacket.guid, nullptr).serialise().get());
@@ -760,7 +760,7 @@ void WorldSession::handlePartyMemberStatsOpcode(WorldPacket& recvPacket)
     if (!_player->getGroup()->HasMember(requestedPlayer))
         return;
 
-    if (_player->isVisibleObject(requestedPlayer->getGuid()))
+    if (_player->seesGuid(requestedPlayer->GetNewGUID()))
         return;
 
     SendPacket(SmsgPartyMemberStatsFull(requestedPlayer->getGuid(), requestedPlayer).serialise().get());

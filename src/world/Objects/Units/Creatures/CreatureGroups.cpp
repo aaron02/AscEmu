@@ -35,17 +35,19 @@ void FormationMgr::addCreatureToGroup(uint32_t leaderSpawnId, Creature* creature
 
         // With dynamic spawn the creature may have just respawned
         // we need to find previous instance of creature and delete it from the formation, as it'll be invalidated
-        for (const auto& pair : map->_sqlids_creatures)
-        {
-            if (pair.first == creature->getSpawnId())
-            {
-                Creature* other = pair.second;
-                if (other == creature)
-                    continue;
+        std::vector<Creature*> creatures;
+        map->getRegistry().snapshotCreatures(creatures);
 
-                if (itr->second->hasMember(other))
-                    itr->second->removeMember(other);
-            }
+        for (Creature* other : creatures)
+        {
+            if (!other || other == creature)
+                continue;
+
+            if (other->getSpawnId() != creature->getSpawnId())
+                continue;
+
+            if (itr->second->hasMember(other))
+                itr->second->removeMember(other);
         }
     }
     else

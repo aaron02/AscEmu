@@ -85,7 +85,7 @@ void Spell::FillTargetMap(uint32_t i)
         wowGuid.init(m_targets.getUnitTargetGuid());
         if (wowGuid.isPet())
         {
-            Pet* p = m_caster->getWorldMap()->getPet(wowGuid.getGuidLowPart());
+            Pet* p = m_caster->getWorldMapPet(wowGuid.getRawGuid());
             if (p != nullptr)
                 AddTarget(i, TargetType, p->getUnitOwner());
         }
@@ -163,7 +163,7 @@ void Spell::AddChainTargets(uint32_t i, uint32_t targetType, float /*r*/, uint32
     if (!m_caster->IsInWorld())
         return;
 
-    Object* targ = m_caster->getWorldMap()->getObject(m_targets.getUnitTargetGuid());
+    Object* targ = m_caster->getWorldMapObject(m_targets.getUnitTargetGuid());
 
     if (targ == nullptr)
         return;
@@ -226,7 +226,7 @@ void Spell::AddChainTargets(uint32_t i, uint32_t targetType, float /*r*/, uint32
 
 void Spell::AddPartyTargets(uint32_t i, uint32_t targetType, float r, uint32_t /*maxtargets*/)
 {
-    Object* u = m_caster->getWorldMap()->getObject(m_targets.getUnitTargetGuid());
+    Object* u = m_caster->getWorldMapObject(m_targets.getUnitTargetGuid());
     if (u == nullptr)
         u = m_caster;
 
@@ -265,7 +265,7 @@ void Spell::AddPartyTargets(uint32_t i, uint32_t targetType, float r, uint32_t /
 
 void Spell::AddRaidTargets(uint32_t i, uint32_t targetType, float r, uint32_t /*maxtargets*/, bool /*partylimit*/)
 {
-    Object* u = m_caster->getWorldMap()->getObject(m_targets.getUnitTargetGuid());
+    Object* u = m_caster->getWorldMapObject(m_targets.getUnitTargetGuid());
     if (u == nullptr)
         u = m_caster;
 
@@ -310,7 +310,7 @@ void Spell::AddAOETargets(uint32_t i, uint32_t targetType, float r, uint32_t max
     if (targetType & (SPELL_TARGET_AREA_PARTY | SPELL_TARGET_AREA_RAID) && !(p_caster == nullptr && !m_caster->isPet() && (!m_caster->isCreature() || !m_caster->isTotem())))
         return;
 
-    Object* tarobj = m_caster->getWorldMap()->getObject(m_targets.getUnitTargetGuid());
+    Object* tarobj = m_caster->getWorldMapObject(m_targets.getUnitTargetGuid());
 
     if (targetType & SPELL_TARGET_AREA_SELF)
         source = m_caster->GetPosition();
@@ -473,7 +473,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 if (u_caster->getTargetGuid())
                 {
                     //generate targets for things like arcane missiles trigger, tame pet, etc
-                    Object* target = u_caster->getWorldMap()->getObject(u_caster->getTargetGuid());
+                    Object* target = u_caster->getWorldMapObject(u_caster->getTargetGuid());
                     if (target != nullptr)
                     {
                         if (target->isCreatureOrPlayer())
@@ -498,7 +498,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 if (u_caster->getChannelObjectGuid())
                 {
                     //generate targets for things like arcane missiles trigger, tame pet, etc
-                    Object* target = u_caster->getWorldMap()->getObject(u_caster->getChannelObjectGuid());
+                    Object* target = u_caster->getWorldMapObject(u_caster->getChannelObjectGuid());
                     if (target != nullptr)
                     {
                         if (target->isCreatureOrPlayer())
@@ -518,7 +518,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 else if (u_caster->getTargetGuid())
                 {
                     //generate targets for things like arcane missiles trigger, tame pet, etc
-                    Object* target = u_caster->getWorldMap()->getObject(u_caster->getTargetGuid());
+                    Object* target = u_caster->getWorldMapObject(u_caster->getTargetGuid());
                     if (target != nullptr)
                     {
                         if (target->isCreatureOrPlayer())
@@ -538,7 +538,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 }
                 else if (u_caster->isCreature() && u_caster->isTotem())
                 {
-                    Unit* target = u_caster->getWorldMap()->getUnit(GetSinglePossibleEnemy(i));
+                    Unit* target = u_caster->getWorldMapUnit(GetSinglePossibleEnemy(i));
                     if (target != nullptr)
                     {
                         t->addTargetMask(TARGET_FLAG_UNIT);
@@ -549,7 +549,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
 
             if (TargetType & SPELL_TARGET_REQUIRE_FRIENDLY)
             {
-                Unit* target = u_caster->getWorldMap()->getUnit(GetSinglePossibleFriend(i));
+                Unit* target = u_caster->getWorldMapUnit(GetSinglePossibleFriend(i));
                 if (target != nullptr)
                 {
                     t->addTargetMask(TARGET_FLAG_UNIT);
@@ -596,7 +596,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
             //spells like blizzard, rain of fire
             if (u_caster->getChannelObjectGuid())
             {
-                Object* target = u_caster->getWorldMap()->getObject(u_caster->getChannelObjectGuid());
+                Object* target = u_caster->getWorldMapObject(u_caster->getChannelObjectGuid());
                 if (target)
                 {
                     t->addTargetMask(TARGET_FLAG_DEST_LOCATION | TARGET_FLAG_UNIT);

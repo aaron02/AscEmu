@@ -31,7 +31,7 @@ void WorldSession::handleInitiateTradeOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto playerTarget = _player->getWorldMapPlayer(srlPacket.guid.getGuidLow());
+    const auto playerTarget = _player->getWorldMapPlayer(srlPacket.guid.getRawGuid());
 #else
     WoWGuid targetGuid;
 

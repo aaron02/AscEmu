@@ -17,7 +17,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Spell/Definitions/SpellEffects.hpp"
 #include "Objects/Units/Players/Player.hpp"
 
-DynamicObject::DynamicObject(uint32_t high, uint32_t low)
+DynamicObject::DynamicObject(uint64_t guid)
 {
     m_objectType |= TYPE_DYNAMICOBJECT;
     m_objectTypeId = TYPEID_DYNAMICOBJECT;
@@ -44,7 +44,7 @@ DynamicObject::DynamicObject(uint32_t high, uint32_t low)
     m_updateMask.SetCount(getSizeOfStructure(WoWDynamicObject));
 
     setOType(TYPE_DYNAMICOBJECT | TYPE_OBJECT);
-    setGuid(low, high);
+    setGuid(guid);
 
     setScale(1.0f);
 }
@@ -100,9 +100,9 @@ void DynamicObject::create(Unit* caster, Spell* spell, LocationVector lv, uint32
     m_phase = caster->GetPhase();
 
     if (spell->g_caster)
-        PushToWorld(spell->g_caster->getWorldMap());
+        spell->g_caster->getWorldMap()->getObjectFactory().attachToWorld(this);
     else
-        PushToWorld(caster->getWorldMap());
+        caster->getWorldMap()->getObjectFactory().attachToWorld(this);    
 
     if (caster->m_dynamicObject != nullptr)
         caster->m_dynamicObject->remove();
@@ -156,7 +156,7 @@ void DynamicObject::updateTargets()
 
         for (auto jtr = m_targets.begin(); jtr != m_targets.end();)
         {
-            Unit* target = getWorldMap() ? getWorldMap()->getUnit(*jtr) : nullptr;
+            Unit* target = getWorldMap() ? getWorldMapUnit(*jtr) : nullptr;
 
             auto jtr2 = jtr;
             ++jtr;
@@ -181,7 +181,7 @@ void DynamicObject::updateTargets()
 
 void DynamicObject::onRemoveInRangeObject(Object* pObj)
 {
-    if (pObj->isCreatureOrPlayer())
+    if (pObj && pObj->isCreatureOrPlayer())
         m_targets.erase(pObj->getGuid());
 
     Object::onRemoveInRangeObject(pObj);
@@ -191,28 +191,25 @@ void DynamicObject::remove()
 {
     if (!IsInWorld())
     {
-        delete this;
         return;
     }
 
     for (auto const targetGuid : m_targets)
     {
-        if (Unit* target = m_WorldMap->getUnit(targetGuid))
+        if (Unit* target = getWorldMapUnit(targetGuid))
             target->removeAllAurasById(m_spellInfo->getId());
     }
 
     sendGameobjectDespawnAnim();
 
     if (IsInWorld())
-        RemoveFromWorld(true);
+        destroy();
 
     if (m_unitCaster && m_spellInfo->getChannelInterruptFlags() != 0)
     {
         m_unitCaster->setChannelObjectGuid(0);
         m_unitCaster->setChannelSpellId(0);
     }
-
-    delete this;
 }
 
  //////////////////////////////////////////////////////////////////////////////////////////
@@ -264,7 +261,7 @@ void DynamicObject::setDynamicZ(float z)
 #endif
 }
 
-float DynamicObject::getDynamicO() const { return m_position.x; }
+float DynamicObject::getDynamicO() const { return m_position.o; }
 void DynamicObject::setDynamicO(float o)
 {
     m_position.o = o;

@@ -1057,7 +1057,7 @@ void Group::UpdateAllOutOfRangePlayersFor(Player* pPlayer)
             if (!plr || plr == pPlayer)
                 continue;
 
-            if (!plr->isVisibleObject(pPlayer->getGuid()))
+            if (!plr->seesGuid(pPlayer->GetNewGUID()))
             {
                 UpdateOutOfRangePlayer(plr, false, &data);
                 pPlayer->getSession()->SendPacket(&data);
@@ -1389,7 +1389,7 @@ void Group::SendLootUpdates(Object* o)
                     for (const auto itr2 : sGrp->getGroupMembers())
                     {
                         if (Player* loggedInPlayer = sObjectMgr.getPlayer(itr2->guid))
-                            if (loggedInPlayer->isVisibleObject(o->getGuid()))       // Save updates for non-existent creatures
+                            if (loggedInPlayer->seesGuid(o->GetNewGUID()))       // Save updates for non-existent creatures
                                 loggedInPlayer->getUpdateMgr().pushUpdateData(&buf, 1);
                     }
                 }
@@ -1403,7 +1403,7 @@ void Group::SendLootUpdates(Object* o)
                 if (pLooter == nullptr)
                     pLooter = sObjectMgr.getPlayer(GetLeader()->guid);
 
-                if (pLooter->isVisibleObject(o->getGuid()))
+                if (pLooter->seesGuid(o->GetNewGUID()))
                 {
                     Unit* victim = dynamic_cast<Unit*>(o);
 
@@ -1561,7 +1561,7 @@ void Group::UpdateAchievementCriteriaForInrange(Object* o, AchievementCriteriaTy
         for (const auto itr2 : sGrp->getGroupMembers())
         {
             if (Player* loggedInPlayer = sObjectMgr.getPlayer(itr2->guid))
-                if (loggedInPlayer->isVisibleObject(o->getGuid()))
+                if (loggedInPlayer->seesGuid(o->GetNewGUID()))
                     loggedInPlayer->updateAchievementCriteria(type, miscvalue1, miscvalue2, time);
         }
     }

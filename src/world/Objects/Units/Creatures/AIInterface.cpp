@@ -833,7 +833,7 @@ bool AIInterface::canOwnerAttackUnit(Unit* pUnit) const
     }
 
     // Map Visibility Range but not more than the Distance of 2 Cells
-    auto distance = std::min<float>(m_Unit->getWorldMap()->getVisibilityRange(), Map::Cell::cellSize * 2);
+    auto distance = std::min<float>(m_Unit->getWorldMap()->getVisibilityRange(), visibility::Cell::Size * 2);
 
     if (auto* const unit = m_Unit->getUnitOwner())
     {
@@ -2300,7 +2300,7 @@ void AIInterface::updateTotem(uint32_t p_time)
             Spell* pSpell = sSpellMgr.newSpell(m_Unit, totemspell, true, 0);
             Unit* nextTarget = getCurrentTarget();
             if (nextTarget == NULL ||
-                (!m_Unit->getWorldMap()->getUnit(nextTarget->getGuid()) ||
+                (!m_Unit->getWorldMapUnit(nextTarget->getGuid()) ||
                     !nextTarget->isAlive() ||
                     !(m_Unit->isInRange(nextTarget->GetPosition(), pSpell->getSpellInfo()->custom_base_range_or_radius_sqr)) ||
                     !m_Unit->isValidAttackableTarget(nextTarget, pSpell->getSpellInfo())
@@ -2711,7 +2711,7 @@ void AIInterface::eventLeaveCombat(Unit* /*pUnit*/, uint32_t /*misc1*/)
                 for (auto spawns : data->spawns)
                 {
                     if (spawns.second && spawns.second->m_spawn && !spawns.second->isAlive())
-                        spawns.second->Despawn(0, 1000);
+                        spawns.second->despawn(0, 1000);
                 }
             }
         }
@@ -2830,7 +2830,7 @@ void AIInterface::eventUnitDied(Unit* pUnit, uint32_t /*misc1*/)
             }
 
             // Killed Group checks
-            auto spawnGroupData = sMySQLStore.getSpawnGroupDataBySpawn(pCreature->spawnid);
+            auto spawnGroupData = sMySQLStore.getSpawnGroupDataBySpawn(pCreature->getSpawnId());
 
             // Spawn Group Handling
             if (spawnGroupData && spawnGroupData->groupId)
@@ -2838,7 +2838,7 @@ void AIInterface::eventUnitDied(Unit* pUnit, uint32_t /*misc1*/)
                 bool killed = true;
                 for (auto spawns : spawnGroupData->spawns)
                 {
-                    if (!unitMapMgr->getRespawnInfo(SPAWN_TYPE_CREATURE, spawns.first))
+                    if (!unitMapMgr->getSpawnManager().getRespawnTime(SPAWN_TYPE_CREATURE2, spawns.first))
                         killed = false;
                 }
 

@@ -241,21 +241,9 @@ private:
     // Corpse
 public:
     void loadCorpsesForInstance(WorldMap* _worldMap);
-    Corpse* loadCorpseByGuid(uint32_t _corpseGuid);
-
-    Corpse* createCorpse();
-    void removeCorpse(const Corpse*);
-
-    Corpse* getCorpseByGuid(uint32_t _corpseGuid) const;
-    Corpse* getCorpseByOwner(uint32_t _playerGuid) const;
-
-    void unloadCorpseCollector();
     void addCorpseDespawnTime(const Corpse* _corpse) const;
+    void deleteCorpseRecordsForPlayer(uint64_t ownerGuid) const;
     void delinkCorpseForPlayer(const Player* _player) const;
-
-private:
-    std::unordered_map<uint32_t, std::unique_ptr<Corpse>> m_corpses;
-    mutable std::mutex m_corpseLock;
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Vendors

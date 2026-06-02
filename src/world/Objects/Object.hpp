@@ -15,11 +15,13 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Macros/MapsMacros.hpp"
 #include "Spell/Definitions/ProcFlags.hpp"
 #include "Units/UnitDefines.hpp"
+#include "Map/Visibility/VisibilityTypes.hpp"
 
 #include <set>
 #include <map>
 #include <mutex>
 #include <shared_mutex>
+#include <atomic>
 
 #include "DamageInfo.hpp"
 
@@ -82,32 +84,21 @@ public:
     // updated by EventableObject
     void Update(unsigned long /*time_passed*/) {}
 
-    // adds/queues object to world and links WorldMap to it if possible
-    virtual void AddToWorld();
+    virtual void onPreAttachToWorld() {}
+    virtual void onAttachToWorld();
 
-    // adds/queues objext to world and links WorldMap to it
-    virtual void AddToWorld(WorldMap* pMapMgr);
-
-    // Unlike addtoworld it pushes it directly ignoring add pool this can only be called from the thread of WorldMap!
-    void PushToWorld(WorldMap*);
-
-    // removes object from world and queue
-    virtual void RemoveFromWorld(bool free_guid);
+    virtual void onPreDetachFromWorld() {}
+    virtual void onDetachFromWorld() {}
 
     // True if object exists in world, else false
-    bool IsInWorld() const { return m_WorldMap != NULL; }
+    bool IsInWorld() const { return m_WorldMap != nullptr; }
 
-    // is called BEFORE pushing the Object in the game world
-    virtual void OnPrePushToWorld() {}
+    void registerToWorld(WorldMap& map);
+    void unregisterFromWorld();
 
-    // is called AFTER pushing the Object in the game world
-    virtual void OnPushToWorld() {}
+    // destroys teh current Object
+    virtual void destroy();
 
-    // is called BEFORE removing the Object from the game world
-    virtual void OnPreRemoveFromWorld() {}
-
-    // is called AFTER removing the Object from the game world
-    virtual void OnRemoveFromWorld() {}
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Object values
@@ -178,6 +169,15 @@ public:
 
     //! This includes any nested objects we have, inventory for example.
     virtual uint32_t buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* target);
+
+    // Called immediately before a create update block is built for a viewer.
+    // Use this to make sure zero-valued-but-required create fields are present.
+    virtual void prepareInitialCreateForPlayer(Player* target);
+
+    // Called immediately after the create update block was queued.
+    // Use this only for packets that the client expects after object creation
+    // (for example initial aura packets).
+    virtual void queueInitialVisiblePacketsForPlayer(Player* target);
 
     // Forces update for WoWData field
     void forceBuildUpdateValueForField(uint32_t field, Player* target);
@@ -252,24 +252,16 @@ public:
     void removeSpellModifierFromCurrentSpells(AuraEffectModifier const* aur);
 
     //////////////////////////////////////////////////////////////////////////////////////////
-    // InRange sets
-private:
-    std::vector<Object*> mInRangeObjectsSet;
-    std::vector<Object*> mInRangePlayersSet;
-    std::vector<Object*> mInRangeOppositeFactionSet;
-    std::vector<Object*> mInRangeSameFactionSet;
-
-    mutable std::mutex m_inRangeSetMutex;
-    mutable std::mutex m_inRangeFactionSetMutex;
-    mutable std::shared_mutex m_inRangePlayerSetMutex;
-
+    // Legacy in-range query API
+    //
+    // The old per-object in-range vectors were removed. These methods now return
+    // snapshots from the map SpatialIndex so the SpatialIndex/VisibilitySystem stays
+    // the single source of truth.
 public:
-    // general
-    virtual void clearInRangeSets();
-    virtual void addToInRangeObjects(Object* pObj);
-    virtual void onRemoveInRangeObject(Object* /*pObj*/) {}
-
-    void removeSelfFromInrangeSets();
+    // Called by the new visibility/spatial bridge when another object leaves this object's
+    // effective visibility/range. This keeps the old side effects (summon cleanup, escort
+    // cleanup, charm cleanup, dynamic aura target cleanup) without keeping old in-range sets.
+    virtual void onRemoveInRangeObject(Object* pObj);
 
     // Objects
     std::vector<Object*> getInRangeObjectsSet() const;
@@ -278,7 +270,6 @@ public:
     size_t getInRangeObjectsCount() const;
 
     bool isObjectInInRangeObjectsSet(Object* pObj) const;
-    void removeObjectFromInRangeObjectsSet(Object* pObj);
 
     // Players
     std::vector<Object*> getInRangePlayersSet() const;
@@ -286,21 +277,11 @@ public:
 
     // Opposite Faction
     std::vector<Object*> getInRangeOppositeFactionSet() const;
-
     bool isObjectInInRangeOppositeFactionSet(Object* pObj) const;
-    void updateInRangeOppositeFactionSet();
 
-    void addInRangeOppositeFaction(Object* obj);
-    void removeObjectFromInRangeOppositeFactionSet(Object* obj);
-
-    // same faction
+    // Same Faction
     std::vector<Object*> getInRangeSameFactionSet() const;
-
     bool isObjectInInRangeSameFactionSet(Object* pObj) const;
-    void updateInRangeSameFactionSet();
-
-    void addInRangeSameFaction(Object* obj);
-    void removeObjectFromInRangeSameFactionSet(Object* obj);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Object faction
@@ -468,13 +449,8 @@ public:
         bool IsWithinLOS(LocationVector location);
 
         // Only for WorldMap use
-        MapCell* GetMapCell() const;
-        uint32_t GetMapCellX() { return m_mapCell_x; }
-        uint32_t GetMapCellY() { return m_mapCell_y; }
-        // Only for WorldMap use
-        void SetMapCell(MapCell* cell);
-        // Only for WorldMap use
         WorldMap* getWorldMap() const { return m_WorldMap; }
+        void setWorldMap(WorldMap* map) { m_WorldMap = map; }
 
         Object* getWorldMapObject(const uint64_t & guid) const;
         Pet* getWorldMapPet(const uint64_t & guid) const;
@@ -673,20 +649,10 @@ public:
         bool Active = false;
 
     public:
-        bool IsActive() { return Active; }
-        virtual bool CanActivate();
-        virtual void Activate(WorldMap* mgr);
-        virtual void deactivate(WorldMap* mgr);
-        // Player is in pvp queue.
-        bool m_inQueue = false;
-        void SetMapMgr(WorldMap* mgr) { m_WorldMap = mgr; }
+        bool isActive() { return Active; }
+        virtual void activate();
+        virtual void deactivate();
 
-        void Delete()
-        {
-            if (IsInWorld())
-                RemoveFromWorld(true);
-            delete this;
-        }
         // Play's a sound to players in range.
         void PlaySoundToSet(uint32_t sound_entry);
         // Is the player in a battleground?
@@ -769,4 +735,31 @@ public:
         bool GetPoint(float angle, float rad, float & outx, float & outy, float & outz, bool sloppypath = false);
         bool GetRandomPoint(float rad, float & outx, float & outy, float & outz);
         bool GetRandomPoint(float rad, LocationVector & out);
+
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////
+        // WorldObjectRegistry RAII Logic
+        //////////////////////////////////////////////////////////////////////////////////////////////////////
+    public:
+        // RAII-Pin
+        struct UpdatePin
+        {
+            explicit UpdatePin(Object* o) : obj(o)
+            {
+                if (obj)
+                    obj->update_pin_.fetch_add(1, std::memory_order_acq_rel);
+            }
+            ~UpdatePin()
+            {
+                if (obj)
+                    obj->update_pin_.fetch_sub(1, std::memory_order_acq_rel);
+            }
+
+            Object* obj;
+        };
+
+        uint32_t updatePinCount() const { return update_pin_.load(std::memory_order_acquire); }
+
+    private:
+        std::atomic<uint32_t> update_pin_{ 0 };
 };

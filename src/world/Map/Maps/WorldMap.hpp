@@ -20,6 +20,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "InstanceDefines.hpp"
 #include "Debugging/Errors.h"
 #include "Map/SpawnGroups.hpp"
+#include "Map/Management/TerrainMgr.hpp"
 
 #include "Map/Visibility/VisibilitySystem.hpp"
 #include "Map/Management/ObjectFactory.hpp"

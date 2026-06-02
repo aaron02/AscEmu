@@ -16,12 +16,14 @@ This file is released under the MIT license. See README-MIT for more information
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
 #include <functional>
 
 #include "WoWGuid.hpp"
 #include "LocationVector.h"
 
+class Object;
 class Player;
 class Creature;
 class GameObject;

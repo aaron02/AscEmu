@@ -49,6 +49,7 @@ class ByteBuffer;
 class WorldPacket;
 class DynamicObject;
 
+class BaseMap;
 class InstanceScript;
 class MapScriptInterface;
 class Object;

@@ -10,6 +10,11 @@ This file is released under the MIT license. See README-MIT for more information
 
 namespace AscEmu::Packets
 {
+    // Wire format (uint32 + uint8) verified identical for both Classic and TBC - only the meaning
+    // of the uint32 differs (LFG dungeon entry vs. area id). Gated to TBC only below because
+    // that's the only side AscEmu currently sends it from (Player::sendMeetingStoneSetQueuePacket,
+    // called only from MeetingStoneMgr.cpp); Classic's own group+area-id queue that would send
+    // this is not implemented.
     class SmsgMeetingstoneSetQueue : public ManagedPacket
     {
     public:
@@ -35,6 +40,9 @@ namespace AscEmu::Packets
 
         bool internalSerialise(WorldPacket& packet) override
         {
+            if (!m_protocol.isTbc())
+                return false;
+
             packet << dungeonId << status;
             return true;
         }

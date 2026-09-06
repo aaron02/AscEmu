@@ -644,6 +644,31 @@ protected:
         void handleLfgGetStatusOpcode(WorldPacket& recvPacket);      //>= WotLK
 
         //////////////////////////////////////////////////////////////////////////////////////////
+        // MeetingStoneHandler.cpp
+        // TBC-only "Looking For Group" matchmaking (predates the WotLK+ Dungeon Finder above -
+        // do not confuse the two, they are unrelated systems using unrelated opcodes). Classic's
+        // own meeting-stone mechanic is a different, simpler group+area-id queue that is not
+        // implemented here (see MeetingStoneMgr.hpp).
+    protected:
+        bool m_meetingStoneAutoJoin = false;
+        bool m_meetingStoneAutoFill = false;
+
+        void handleSetLookingForGroupOpcode(WorldPacket& recvPacket);
+        void handleClearLookingForGroupOpcode(WorldPacket& recvPacket);
+        void handleSetLookingForMoreOpcode(WorldPacket& recvPacket);
+        void handleClearLookingForMoreOpcode(WorldPacket& recvPacket);
+        void handleLfgSetAutoJoinOpcode(WorldPacket& recvPacket);
+        void handleLfgClearAutoJoinOpcode(WorldPacket& recvPacket);
+        void handleLfmSetAutoFillOpcode(WorldPacket& recvPacket);
+        void handleLfmClearAutoFillOpcode(WorldPacket& recvPacket);
+        void handleMeetingstoneInfoOpcode(WorldPacket& recvPacket);
+        void handleAcceptLfgMatchOpcode(WorldPacket& recvPacket);
+        void handleDeclineLfgMatchOpcode(WorldPacket& recvPacket);
+        void handleCancelPendingLfgOpcode(WorldPacket& recvPacket);
+        void handleMeetingStoneSetCommentOpcode(WorldPacket& recvPacket);
+        void handleMsgLookingForGroupOpcode(WorldPacket& recvPacket);
+
+        //////////////////////////////////////////////////////////////////////////////////////////
         // LootHandler.cpp
     public:
         Loot* getItemLootFromHighGuidType(WoWGuid wowGuid);
@@ -778,6 +803,7 @@ protected:
         //////////////////////////////////////////////////////////////////////////////////////////
         // MovementHandler.cpp
         void handleSetActiveMoverOpcode(WorldPacket& recvPacket);
+        void handleMoveTimeSkippedOpcode(WorldPacket& recvPacket);
         void updatePlayerMovementVars(uint16_t opcode);
         bool isHackDetectedInMovementData(uint16_t opcode);
 

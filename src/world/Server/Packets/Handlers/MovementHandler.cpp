@@ -65,6 +65,28 @@ void WorldSession::handleSetActiveMoverOpcode(WorldPacket& recvPacket)
 #endif
 }
 
+// Client tells us it skipped `timeSkipped` ms of its own movement clock (e.g. after a lag spike),
+// so we shift our tracked timestamp for the mover forward by the same amount and echo the skip to
+// everyone else who can see the mover, so their view of its movement clock stays in sync too.
+void WorldSession::handleMoveTimeSkippedOpcode(WorldPacket& recvPacket)
+{
+    uint64_t guid;
+    uint32_t timeSkipped;
+    recvPacket >> guid;
+    recvPacket >> timeSkipped;
+
+    Unit* mover = _player->m_controledUnit;
+    if (mover == nullptr || guid != mover->getGuid())
+        return;
+
+    mover->obj_movement_info.update_time += timeSkipped;
+
+    WorldPacket data(MSG_MOVE_TIME_SKIPPED, 16);
+    data << WoWGuid(mover->getGuid());
+    data << timeSkipped;
+    mover->sendMessageToSet(&data, false);
+}
+
 void WorldSession::updatePlayerMovementVars(uint16_t opcode)
 {
     if (opcode == MSG_MOVE_FALL_LAND || sessionMovementInfo.flags & MOVEFLAG_SWIMMING)

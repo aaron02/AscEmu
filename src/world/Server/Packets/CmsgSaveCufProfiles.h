@@ -34,7 +34,6 @@ namespace AscEmu::Packets
             return false;
         }
 
-        // Mop 5.4.8 bit layout, verified against ProjectSkyfire/SkyFire_548
         bool deserialiseMop(WorldPacket& packet)
         {
             profileCount = static_cast<uint8_t>(packet.readBits(19));
@@ -98,7 +97,6 @@ namespace AscEmu::Packets
             return true;
         }
 
-        // Cataclysm 4.3.4 bit layout, verified against The-Cataclysm-Preservation-Project/TrinityCore
         bool deserialiseCata(WorldPacket& packet)
         {
             profileCount = static_cast<uint8_t>(packet.readBits(20));

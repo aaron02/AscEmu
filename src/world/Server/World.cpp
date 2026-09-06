@@ -14,6 +14,7 @@ This file is released under the MIT license. See README-MIT for more information
 #endif
 
 #include "Management/LFG/LFGMgr.hpp"
+#include "Management/MeetingStone/MeetingStoneMgr.hpp"
 #include "Management/Loot/LootMgr.hpp"
 #include "Management/WordFilter.hpp"
 #include "Management/WeatherMgr.hpp"
@@ -135,6 +136,9 @@ void World::finalize()
 
     sLogger.info("LfgMgr : ~LfgMgr()");
     sLfgMgr.finalize();
+
+    sLogger.info("MeetingStoneQueue : ~MeetingStoneQueue()");
+    sMeetingStoneQueue.finalize();
 
     sLogger.info("ChannelMgr : ~ChannelMgr()");
     sChannelMgr.finalize();
@@ -781,6 +785,13 @@ bool World::setInitialWorldSettings()
     sLogger.info("World : Loading LFG rewards...");
     sLfgMgr.initialize();
     sLfgMgr.LoadRewards();
+#endif
+
+#if VERSION_STRING == TBC
+    // TBC-only Meeting Stone "Looking For Group" matchmaking - unrelated to the WotLK+ LFG
+    // Dungeon Finder initialized just above. Classic's own meeting-stone mechanic is a different,
+    // simpler group+area-id queue that is not implemented.
+    sMeetingStoneQueue.initialize();
 #endif
 
     sGuildMgr.loadGuildDataFromDB();

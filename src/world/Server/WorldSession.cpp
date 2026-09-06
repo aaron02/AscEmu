@@ -721,6 +721,7 @@ void WorldSession::registerOpcodeHandler()
     registry.registerOpcode(CMSG_MOVE_SET_FLY, &WorldSession::handleMovementOpcodes, true, true, true, false, true);
     registry.registerOpcode(CMSG_MOVE_NOT_ACTIVE_MOVER, &WorldSession::handleMoveNotActiveMoverOpcode, true, true, true, true, false);
     registry.registerOpcode(CMSG_SET_ACTIVE_MOVER, &WorldSession::handleSetActiveMoverOpcode, false, true, true, true, true);
+    registry.registerOpcode(CMSG_MOVE_TIME_SKIPPED, &WorldSession::handleMoveTimeSkippedOpcode, false, true, false, false, false);
     registry.registerOpcode(CMSG_MOVE_CHNG_TRANSPORT, &WorldSession::handleMovementOpcodes, true, true, true, true, true);
     registry.registerOpcode(CMSG_MOVE_FALL_RESET, &WorldSession::handleMovementOpcodes, false, false, false, true, true);
 
@@ -831,7 +832,7 @@ void WorldSession::registerOpcodeHandler()
     // Groups / Raids
     registry.registerOpcode(CMSG_GROUP_INVITE, &WorldSession::handleGroupInviteOpcode, true, true, true, true, true);
     // Client-side only cancel of a not-yet-answered outgoing invite; the invite simply expires
-    // client-side, so the server has nothing to undo (matches TrinityCore's own Handle_NULL binding)
+    // client-side, so the server has nothing to undo
     registry.registerOpcode(CMSG_GROUP_CANCEL, &WorldSession::nothingToHandle, true, true, true, true, true);
     registry.registerOpcode(CMSG_GROUP_ACCEPT, &WorldSession::handleGroupAcceptOpcode, true, true, true, true, true);
     registry.registerOpcode(CMSG_GROUP_DECLINE, &WorldSession::handleGroupDeclineOpcode, true, true, true, true, true);
@@ -856,8 +857,10 @@ void WorldSession::registerOpcodeHandler()
     registry.registerOpcode(CMSG_SET_PARTY_ASSIGNMENT, &WorldSession::handleSetPartyAssignmentOpcode, false, false, false, false, true);
     registry.registerOpcode(CMSG_GROUP_INITIATE_ROLE_POLL, &WorldSession::handleGroupInitiateRolePollOpcode, false, false, false, false, true);
 
-    // LFG System
-    registry.registerOpcode(CMSG_SET_LFG_COMMENT, &WorldSession::handleLfgSetCommentOpcode, true, true, true, false, false);
+    // LFG System (WotLK+ Dungeon Finder)
+    // CMSG_SET_LFG_COMMENT is shared with the TBC-only Meeting Stone system below - only route
+    // it here for WotLK, where the modern Dungeon Finder's comment actually gets used.
+    registry.registerOpcode(CMSG_SET_LFG_COMMENT, &WorldSession::handleLfgSetCommentOpcode, false, false, true, false, false);
     registry.registerOpcode(CMSG_LFG_JOIN, &WorldSession::handleLfgJoinOpcode, false, false, true, true, true);
     registry.registerOpcode(CMSG_LFG_LEAVE, &WorldSession::handleLfgLeaveOpcode, false, false, true, true, true);
     registry.registerOpcode(CMSG_SEARCH_LFG_JOIN, &WorldSession::handleLfgSearchOpcode, false, false, true, true, false);
@@ -868,6 +871,34 @@ void WorldSession::registerOpcodeHandler()
     registry.registerOpcode(CMSG_LFD_PLAYER_LOCK_INFO_REQUEST, &WorldSession::handleLfgPlayerLockInfoRequestOpcode, false, false, true, true, false);
     registry.registerOpcode(CMSG_LFG_TELEPORT, &WorldSession::handleLfgTeleportOpcode, false, false, true, true, true);
     registry.registerOpcode(CMSG_LFD_PARTY_LOCK_INFO_REQUEST, &WorldSession::handleLfgPartyLockInfoRequestOpcode, false, false, true, true, false);
+
+    // Meeting Stone "Looking For Group" matchmaking - TBC ONLY, do not confuse with the WotLK+
+    // Dungeon Finder above.
+    //
+    // Verified independently for both Classic and TBC (not just assumed identical): Classic's
+    // meeting stones use a completely different, simpler mechanic - the whole group queues by
+    // area id via CMSG_MEETINGSTONE_JOIN/LEAVE/INFO. TBC replaced that with the per-player
+    // LFG(3 slots)/LFM slot system below (CMSG_SET_LOOKING_FOR_GROUP etc.) and stopped handling
+    // CMSG_MEETINGSTONE_JOIN/LEAVE/CHEAT entirely - CMSG_MEETINGSTONE_INFO survives only as an
+    // empty logging stub, which is what handleMeetingstoneInfoOpcode replicates. Classic's own
+    // group+area-id system is not implemented here and is out of scope for this opcode-warning
+    // fix - none of the below is registered for Classic.
+#if VERSION_STRING == TBC
+    registry.registerOpcode(CMSG_SET_LOOKING_FOR_GROUP, &WorldSession::handleSetLookingForGroupOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_CLEAR_LOOKING_FOR_GROUP, &WorldSession::handleClearLookingForGroupOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_SET_LOOKING_FOR_MORE, &WorldSession::handleSetLookingForMoreOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_CLEAR_LOOKING_FOR_MORE, &WorldSession::handleClearLookingForMoreOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_LFG_SET_AUTOJOIN, &WorldSession::handleLfgSetAutoJoinOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_LFG_CLEAR_AUTOJOIN, &WorldSession::handleLfgClearAutoJoinOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_LFM_SET_AUTOFILL, &WorldSession::handleLfmSetAutoFillOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_LFM_CLEAR_AUTOFILL, &WorldSession::handleLfmClearAutoFillOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_MEETINGSTONE_INFO, &WorldSession::handleMeetingstoneInfoOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_ACCEPT_LFG_MATCH, &WorldSession::handleAcceptLfgMatchOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_DECLINE_LFG_MATCH, &WorldSession::handleDeclineLfgMatchOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_CANCEL_PENDING_LFG, &WorldSession::handleCancelPendingLfgOpcode, false, true, false, false, false);
+    registry.registerOpcode(CMSG_SET_LFG_COMMENT, &WorldSession::handleMeetingStoneSetCommentOpcode, false, true, false, false, false);
+    registry.registerOpcode(MSG_LOOKING_FOR_GROUP, &WorldSession::handleMsgLookingForGroupOpcode, false, true, false, false, false);
+#endif
 
     // Taxi / NPC Interaction
     registry.registerOpcode(CMSG_ENABLETAXI, &WorldSession::handleEnabletaxiOpcode, false, true, true, true, false);
@@ -1177,7 +1208,7 @@ void WorldSession::registerOpcodeHandler()
     registry.registerOpcode(CMSG_FAR_SIGHT, &WorldSession::handleFarSightOpcode, true, true, true, true, true);
     registry.registerOpcode(CMSG_LFG_GET_STATUS, &WorldSession::handleLfgGetStatusOpcode, false, false, true, true, true);
     registry.registerOpcode(CMSG_VOICE_SESSION_ENABLE, &WorldSession::Unhandled, true, false, true, true, false);
-    registry.registerOpcode(CMSG_SET_ACTIVE_VOICE_CHANNEL, &WorldSession::Unhandled, true, false, true, false, false);
+    registry.registerOpcode(CMSG_SET_ACTIVE_VOICE_CHANNEL, &WorldSession::Unhandled, true, true, true, false, false);
 
     // new since cata
     registry.registerOpcode<STATUS_AUTHED>(CMSG_OBJECT_UPDATE_FAILED, &WorldSession::handleObjectUpdateFailedOpcode, false, false, false, true, true);

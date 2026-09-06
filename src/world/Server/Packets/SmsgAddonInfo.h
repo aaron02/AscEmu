@@ -85,7 +85,12 @@ namespace AscEmu::Packets
                         if (itr.crc != STANDARD_ADDON_CRC)
                         {
                             packet << uint8_t(1);
-                            packet.append(PublicKey, 264);
+                            // PublicKey (pre-Cata) is a self-contained 264-byte TBC/Classic reply
+                            // blob with its own baked-in "2,1,1" header and trailing bytes. Here we
+                            // already wrote our own header above, so only the raw 256-byte modulus
+                            // (PublicKey offset 3) belongs here - appending the full blob would
+                            // insert 8 duplicate bytes and desync every addon after this one.
+                            packet.append(PublicKey + 3, 256);
                         }
                         else
                         {

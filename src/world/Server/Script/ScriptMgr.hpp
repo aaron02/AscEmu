@@ -5,12 +5,19 @@ This file is released under the MIT license. See README-MIT for more information
 
 #pragma once
 
+#include "AEVersion.hpp"
 #include "ScriptMgrDefines.hpp"
 #include "Platform/SymbolVisibility.hpp"
 #include "HookInterfaceDefines.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellScript.hpp"
 #include "Spell/SpellScriptDefines.hpp"
+
 #include <cstdint>
 #include <mutex>
+#include <span>
+#include <vector>
 
 struct DamageInfo;
 struct AuraEffectModifier;
@@ -134,8 +141,9 @@ public:
     void register_go_gossip(uint32_t, GossipScript*);
 
     // Mutliple Entry Registers
-    void register_creature_script(uint32_t* entries, exp_create_creature_ai callback);
-    void register_gameobject_script(uint32_t* entries, exp_create_gameobject_ai callback);
+    void registerCreatureScript(std::span<const uint32_t> entries, exp_create_creature_ai callback);
+    void registerGameobjectScript(std::span<const uint32_t> entries, exp_create_gameobject_ai callback);
+
     void register_dummy_aura(uint32_t* entries, exp_handle_dummy_aura callback);
     void register_dummy_spell(uint32_t* entries, exp_handle_dummy_spell callback);
     void register_script_effect(uint32_t* entries, exp_handle_script_effect callback);

@@ -1444,13 +1444,13 @@ uint32_t const SummonEntries[2] = { NPC_CULT_FANATIC, NPC_CULT_ADHERENT };
 
 uint32_t const BoneSpikeSummonId[3] = { 69062, 72669, 72670 };
 
-static uint32_t gunshipIds[] =
+inline constexpr uint32_t GUNSHIP_IDS[] =
 {
     NPC_GB_SKYBREAKER,
     NPC_GB_ORGRIMS_HAMMER
 };
 
-static uint32_t canonIds[] =
+inline constexpr uint32_t CANON_IDS[] =
 {
     NPC_GB_ALLIANCE_CANON,
     NPC_GB_HORDE_CANON

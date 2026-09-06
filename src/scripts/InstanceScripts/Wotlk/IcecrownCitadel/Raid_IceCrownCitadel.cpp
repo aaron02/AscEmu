@@ -1098,7 +1098,7 @@ void SetupICC(ScriptMgr* mgr)
     mgr->register_creature_script(NPC_SE_HIGH_OVERLORD_SAURFANG, &OverlordSaurfangEvent::Create);
     mgr->register_creature_script(CN_DEATHBRINGER_SAURFANG, &DeathbringerSaurfangAI::Create);
     //mgr->register_creature_script(CN_VALITHRIA_DREAMWALKER, &ValithriaDreamwalkerAI::Create);
-    mgr->register_creature_script(gunshipIds, &GunshipAI::Create);
+    mgr->registerCreatureScript(GUNSHIP_IDS, &GunshipAI::Create);
 
     //Spell Bone Storm
     mgr->register_spell_script(SPELL_BONE_STORM_EFFECT, new BoneStormDamage);
@@ -1170,7 +1170,7 @@ void SetupICC(ScriptMgr* mgr)
 
     mgr->register_creature_script(NPC_GB_GUNSHIP_HULL, GunshipHullAI::Create);
 
-    mgr->register_creature_script(canonIds, GunshipCanonAI::Create);
+    mgr->registerCreatureScript(CANON_IDS, GunshipCanonAI::Create);
 
     uint32_t achievementCriteriaIds[] =
     {

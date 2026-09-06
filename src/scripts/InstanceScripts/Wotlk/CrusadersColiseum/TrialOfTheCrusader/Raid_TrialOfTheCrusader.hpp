@@ -214,7 +214,7 @@ enum Creatures
     NPC_ANUBARAK                        = 34564
 };
 
-static uint32_t NPC_BARRET[] =
+inline constexpr uint32_t NPC_BARRET[] =
 {
     NPC_BARRETT_BEASTS,
     NPC_BARRETT_BEASTS_HC,

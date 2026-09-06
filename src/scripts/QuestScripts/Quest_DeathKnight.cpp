@@ -105,7 +105,7 @@ enum UnworthyInitiatePhase
     PHASE_ATTACKING                 = 4,
 };
 
-uint32_t acherus_soul_prison[12] =
+constexpr uint32_t ACHERUS_SOUL_PRISON[12] =
 {
     191577,
     191580,
@@ -121,7 +121,7 @@ uint32_t acherus_soul_prison[12] =
     191590
 };
 
-uint32_t acherus_unworthy_initiate[5] =
+constexpr uint32_t ACHERUS_UNWORTHY_INITIATE[5] =
 {
     29519,
     29520,
@@ -252,7 +252,7 @@ public:
 
                     for (uint8_t i = 0; i < 12; ++i)
                     {
-                        if (GameObject* temp_prison = findNearestGameObject(acherus_soul_prison[i], 30))
+                        if (GameObject* temp_prison = findNearestGameObject(ACHERUS_SOUL_PRISON[i], 30))
                         {
                             if (getCreature()->isInDist(temp_prison, 99.0f))
                                 prison = temp_prison;
@@ -518,8 +518,8 @@ void SetupDeathKnight(ScriptMgr* mgr)
     mgr->register_dummy_spell(SPELL_RUNE_II, &PreparationForBattleEffect);
     mgr->register_quest_script(12593, new QuestInServiceOfLichKing);
 
-    mgr->register_gameobject_script(acherus_soul_prison, &AcherusSoulPrison::Create);
-    mgr->register_creature_script(acherus_unworthy_initiate, UnworthyInitiateAI::Create);
+    mgr->registerGameobjectScript(ACHERUS_SOUL_PRISON, &AcherusSoulPrison::Create);
+    mgr->registerCreatureScript(ACHERUS_UNWORTHY_INITIATE, UnworthyInitiateAI::Create);
     mgr->register_creature_script(29521, UnworthyInitiateAnchorAI::Create);
     mgr->register_spell_script(SPELL_DK_INITIATE_VISUAL, new DK_INITIATE_VISUAL);
 

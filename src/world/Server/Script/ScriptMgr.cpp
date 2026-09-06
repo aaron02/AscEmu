@@ -735,16 +735,20 @@ void ScriptMgr::register_instance_script(uint32_t pMapId, exp_create_instance_ai
     mInstances.insert(InstanceCreateMap::value_type(pMapId, pCallback));
 }
 
-void ScriptMgr::register_creature_script(uint32_t* entries, exp_create_creature_ai callback)
+void ScriptMgr::registerCreatureScript(std::span<const uint32_t> entries, exp_create_creature_ai callback)
 {
-    for (uint32_t y = 0; entries[y] != 0; ++y)
-        register_creature_script(entries[y], callback);
+    for (uint32_t entry : entries)
+    {
+        register_creature_script(entry, callback);
+    }
 }
 
-void ScriptMgr::register_gameobject_script(uint32_t* entries, exp_create_gameobject_ai callback)
+void ScriptMgr::registerGameobjectScript(std::span<const uint32_t> entries, exp_create_gameobject_ai callback)
 {
-    for (uint32_t y = 0; entries[y] != 0; ++y)
-        register_gameobject_script(entries[y], callback);
+    for (uint32_t entry : entries)
+    {
+        register_gameobject_script(entry, callback);
+    }
 }
 
 void ScriptMgr::register_dummy_aura(uint32_t* entries, exp_handle_dummy_aura callback)

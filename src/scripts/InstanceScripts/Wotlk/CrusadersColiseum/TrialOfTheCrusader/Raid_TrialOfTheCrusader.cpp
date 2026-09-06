@@ -1021,7 +1021,7 @@ void SetupTrialOfTheCrusader(ScriptMgr* mgr)
     mgr->register_creature_gossip(NPC_BARRETT_FACTION, BarretGossipScript);
     mgr->register_creature_gossip(NPC_BARRETT_VALKYR, BarretGossipScript);
     mgr->register_creature_gossip(NPC_BARRETT_LK, BarretGossipScript);
-    mgr->register_creature_script(NPC_BARRET, &BarretAI::Create);
+    mgr->registerCreatureScript(NPC_BARRET, &BarretAI::Create);
 
     mgr->register_creature_script(NPC_TIRION_FORDRING, &TirionAI::Create);
     mgr->register_creature_script(NPC_GARROSH, &GaroshAI::Create);

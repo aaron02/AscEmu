@@ -42,7 +42,7 @@ void AddonMgr::LoadFromDB()
         uint32_t knownAddonsCount = 0;
         uint32_t bannedAddonsCount = 0;
 
-        auto const dbcMaxBannedAddon = static_cast<uint32_t>(sBannedAddOnsStore.getNumRows());
+        auto const dbcMaxBannedAddon = static_cast<uint32_t>(sBannedAddOnsStore.size());
 
         do
         {

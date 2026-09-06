@@ -1775,17 +1775,13 @@ Trainer const* ObjectMgr::getTrainer(uint32_t _entry) const
 
 void ObjectMgr::loadCreatureDisplayInfo()
 {
-    for (uint32_t i = 0; i < sCreatureDisplayInfoStore.getNumRows(); ++i)
+    for (const auto& displayInfoEntry : sCreatureDisplayInfoStore | std::views::values)
     {
-        const auto* const displayInfoEntry = sCreatureDisplayInfoStore.lookupEntry(i);
-        if (displayInfoEntry == nullptr)
-            continue;
-
         CreatureDisplayInfoData data;
-        data.id = displayInfoEntry->id;
-        data.modelId = displayInfoEntry->modelId;
-        data.extendedDisplayInfoId = displayInfoEntry->extendedDisplayInfoId;
-        data.creatureModelScale = displayInfoEntry->creatureModelScale;
+        data.id = displayInfoEntry.id;
+        data.modelId = displayInfoEntry.modelId;
+        data.extendedDisplayInfoId = displayInfoEntry.extendedDisplayInfoId;
+        data.creatureModelScale = displayInfoEntry.creatureModelScale;
         data.modelInfo = sCreatureModelDataStore.lookupEntry(data.modelId);
         if (data.modelInfo != nullptr)
         {
@@ -1793,7 +1789,7 @@ void ObjectMgr::loadCreatureDisplayInfo()
                 data.isModelInvisibleStalker = true;
         }
 
-        m_creatureDisplayInfoData.insert(std::make_pair(displayInfoEntry->id, data));
+        m_creatureDisplayInfoData.insert(std::make_pair(displayInfoEntry.id, data));
     }
 }
 
@@ -2382,26 +2378,16 @@ Pet* ObjectMgr::createPet(uint32_t _entry, WDB::Structures::SummonPropertiesEntr
 
 void ObjectMgr::loadPetSpellCooldowns()
 {
-    for (uint32_t i = 0; i < sCreatureSpellDataStore.getNumRows(); ++i)
+    for (auto const& creatureSpellData : sCreatureSpellDataStore | std::views::values)
     {
-        const auto cretureSpellData = sCreatureSpellDataStore.lookupEntry(i);
-
         for (uint8_t j = 0; j < 3; ++j)
         {
-            if (cretureSpellData == nullptr)
-                continue;
+            uint32_t spellId = creatureSpellData.spells[j];
+            uint32_t cooldown = creatureSpellData.cooldowns[j] * 10;
 
-            uint32_t spellId = cretureSpellData->spells[j];
-            uint32_t cooldown = cretureSpellData->cooldowns[j] * 10;
-
-            if (spellId != 0)
+            if (spellId != 0 && cooldown != 0)
             {
-                auto petCooldownPair = m_petSpellCooldowns.find(spellId);
-                if (petCooldownPair == m_petSpellCooldowns.end())
-                {
-                    if (cooldown)
-                        m_petSpellCooldowns.insert(std::make_pair(spellId, cooldown));
-                }
+                m_petSpellCooldowns.try_emplace(spellId, cooldown);
             }
         }
     }

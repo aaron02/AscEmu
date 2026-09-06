@@ -371,24 +371,20 @@ bool ChatCommandHandler::HandleLookupFactionCommand(const char* args, WorldSessi
     greenSystemMessage(m_session, "Starting search of faction `{}`...", x);
     auto startTime = Util::TimeNow();
     uint32_t count = 0;
-    for (uint32_t index = 0; index < sFactionStore.getNumRows(); ++index)
+    for (auto const& faction : sFactionStore | std::views::values)
     {
-        WDB::Structures::FactionEntry const* faction = sFactionStore.lookupEntry(index);
-        if (faction != nullptr)
+        std::string y = std::string(faction.name);
+
+        AscEmu::Util::Strings::toLowerCase(y);
+        if (AscEmu::Util::Strings::contains(x, y))
         {
-            std::string y = std::string(faction->name);
+            SendHighlightedName(m_session, "Faction", faction.name.c_str(), y, x, faction.id);
 
-            AscEmu::Util::Strings::toLowerCase(y);
-            if (AscEmu::Util::Strings::contains(x, y))
+            ++count;
+            if (count == 25)
             {
-                SendHighlightedName(m_session, "Faction", faction->name.c_str(), y, x, faction->id);
-
-                ++count;
-                if (count == 25)
-                {
-                    redSystemMessage(m_session, "More than 25 results returned. aborting.");
-                    break;
-                }
+                redSystemMessage(m_session, "More than 25 results returned. aborting.");
+                break;
             }
         }
     }

@@ -189,12 +189,9 @@ namespace {
         if (!areaMapCollection)
             return;
 
-        for (uint32_t i = 0; i < sMapStore.getNumRows(); ++i)
+        for (auto const& mapObject : sMapStore | std::views::values)
         {
-            if (auto const* mapObject = sMapStore.lookupEntry(i))
-            {
-                areaMapCollection->insert({mapObject->id, mapObject->linkedZone});
-            }
+            areaMapCollection->insert({mapObject.id, mapObject.linkedZone});
         }
     }
 
@@ -203,40 +200,34 @@ namespace {
         sMapDifficultyMap.clear();
 
         // Fill the map difficulty map with data from MapDifficultyStore if available Cata / MoP
-        for (uint32_t i = 0; i < sMapDifficultyStore.getNumRows(); ++i)
+        for (auto const& entry : sMapDifficultyStore | std::views::values)
         {
-            if (auto const* entry = sMapDifficultyStore.lookupEntry(i))
-            {
-                uint32_t const key = Util::MAKE_PAIR32(static_cast<uint16_t>(entry->mapId), static_cast<uint16_t>(entry->difficulty));
-                sMapDifficultyMap[key] = WDB::Structures::MapDifficulty(
-                    entry->raidDuration,
-                    entry->maxPlayers,
-                    !entry->message.empty()
-                );
-            }
+            uint32_t const key = Util::MAKE_PAIR32(static_cast<uint16_t>(entry.mapId), static_cast<uint16_t>(entry.difficulty));
+            sMapDifficultyMap[key] = WDB::Structures::MapDifficulty(
+                entry.raidDuration,
+                entry.maxPlayers,
+                !entry.message.empty()
+            );
         }
 
         // Fallback classic, tbc and wotlk, where MapDifficultyStore is not available
-        if (sMapDifficultyStore.getNumRows() == 0)
+        if (sMapDifficultyStore.empty())
         {
-            for (uint32_t i = 0; i < sMapStore.getNumRows(); ++i)
+            for (auto const& entry : sMapStore | std::views::values)
             {
-                if (auto const* entry = sMapStore.lookupEntry(i))
-                {
-                    uint32_t const maxPlayers = (entry->getAddon() < 1)
-                                                    ? (entry->isRaid() ? 40 : 5)
-                                                    : (entry->isRaid() ? 25 : 5);
+                uint32_t const maxPlayers = (entry.getAddon() < 1)
+                                                ? (entry.isRaid() ? 40 : 5)
+                                                : (entry.isRaid() ? 25 : 5);
 
-                    if (!entry->getResetTimeHeroic())
-                    {
-                        sMapDifficultyMap[Util::MAKE_PAIR32(static_cast<uint16_t>(entry->id), InstanceDifficulty::Difficulties::DUNGEON_NORMAL)] =
-                            WDB::Structures::MapDifficulty(entry->getResetTimeNormal(), maxPlayers, false);
-                    }
-                    else
-                    {
-                        sMapDifficultyMap[Util::MAKE_PAIR32(static_cast<uint16_t>(entry->id), InstanceDifficulty::Difficulties::DUNGEON_HEROIC)] =
-                            WDB::Structures::MapDifficulty(entry->getResetTimeHeroic(), maxPlayers, false);
-                    }
+                if (!entry.getResetTimeHeroic())
+                {
+                    sMapDifficultyMap[Util::MAKE_PAIR32(static_cast<uint16_t>(entry.id), InstanceDifficulty::Difficulties::DUNGEON_NORMAL)] =
+                        WDB::Structures::MapDifficulty(entry.getResetTimeNormal(), maxPlayers, false);
+                }
+                else
+                {
+                    sMapDifficultyMap[Util::MAKE_PAIR32(static_cast<uint16_t>(entry.id), InstanceDifficulty::Difficulties::DUNGEON_HEROIC)] =
+                        WDB::Structures::MapDifficulty(entry.getResetTimeHeroic(), maxPlayers, false);
                 }
             }
         }
@@ -249,24 +240,20 @@ namespace {
             classPowers.fill(TOTAL_PLAYER_POWER_TYPES);
         }
 
-        for (uint32_t i = 0; i < sChrPowerTypesStore.getNumRows(); ++i)
+        for (auto const& powerEntry : sChrPowerTypesStore | std::views::values)
         {
-            auto const* powerEntry = sChrPowerTypesStore.lookupEntry(i);
-            if (!powerEntry)
-                continue;
-
             // Boundary Checks against Out-of-Bounds access
-            if (powerEntry->classId >= MAX_PLAYER_CLASSES || powerEntry->power >= TOTAL_PLAYER_POWER_TYPES)
+            if (powerEntry.classId >= MAX_PLAYER_CLASSES || powerEntry.power >= TOTAL_PLAYER_POWER_TYPES)
                 continue;
 
             uint8_t index = 1;
             for (uint8_t power = POWER_TYPE_MANA; power < TOTAL_PLAYER_POWER_TYPES; ++power)
             {
-                if (powerIndexByClass[powerEntry->classId][power] != TOTAL_PLAYER_POWER_TYPES)
+                if (powerIndexByClass[powerEntry.classId][power] != TOTAL_PLAYER_POWER_TYPES)
                     ++index;
             }
 
-            powerIndexByClass[powerEntry->classId][powerEntry->power] = index;
+            powerIndexByClass[powerEntry.classId][powerEntry.power] = index;
         }
     }
 }
@@ -754,17 +741,14 @@ bool loadDBCs()
         }
     );
 
-    for (uint32_t i = 0; i < sMapDifficultyStore.getNumRows(); ++i)
+    for (auto const& entry : sMapDifficultyStore | std::views::values)
     {
-        if (auto entry = sMapDifficultyStore.lookupEntry(i))
-        {
-            uint32_t key = Util::MAKE_PAIR32(static_cast<uint16_t>(entry->mapId), static_cast<uint16_t>(entry->difficulty));
-            sMapDifficultyMap[key] = WDB::Structures::MapDifficulty(
-                entry->raidDuration,
-                entry->maxPlayers,
-                !entry->message.empty()
-            );
-        }
+        uint32_t key = Util::MAKE_PAIR32(static_cast<uint16_t>(entry.mapId), static_cast<uint16_t>(entry.difficulty));
+        sMapDifficultyMap[key] = WDB::Structures::MapDifficulty(
+            entry.raidDuration,
+            entry.maxPlayers,
+            !entry.message.empty()
+        );
     }
 
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sNameGenStore, dbc_path, "NameGen.dbc");

@@ -7830,35 +7830,32 @@ void Player::updateChannels()
 #endif
 
     // Update only default channels
-    for (uint8_t i = 0; i < sChatChannelsStore.getNumRows(); ++i)
+    for (auto const& channelDbc : sChatChannelsStore | std::views::values)
     {
-        const auto channelDbc = sChatChannelsStore.lookupEntry(i);
-        if (channelDbc == nullptr)
-            continue;
-
         Channel* oldChannel = nullptr;
 
-        m_mutexChannel.lock();
-        for (auto _channel : m_channels)
         {
-            if (_channel->getChannelId() == i)
+            std::scoped_lock lock(m_mutexChannel);
+            for (auto* channel : m_channels)
             {
-                // Found same channel
-                oldChannel = _channel;
-                break;
+                if (channel->getChannelId() == channelDbc.id)
+                {
+                    // Found same channel
+                    oldChannel = channel;
+                    break;
+                }
             }
         }
-        m_mutexChannel.unlock();
 
-        if (sChannelMgr.canPlayerJoinDefaultChannel(this, areaEntry, channelDbc))
+        if (sChannelMgr.canPlayerJoinDefaultChannel(this, areaEntry, &channelDbc))
         {
-            auto channelName = sChannelMgr.generateChannelName(channelDbc, areaEntry);
+            auto channelName = sChannelMgr.generateChannelName(&channelDbc, areaEntry);
 
-            auto newChannel = sChannelMgr.getOrCreateChannel(channelName, this, channelDbc->id);
+            auto newChannel = sChannelMgr.getOrCreateChannel(channelName, this, channelDbc.id);
             if (newChannel == nullptr)
             {
                 // should not happen
-                sLogger.failure("Player::updateChannels : Could not create new channel {} with name {}", channelDbc->id, channelName);
+                sLogger.failure("Player::updateChannels : Could not create new channel {} with name {}", channelDbc.id, channelName);
                 continue;
             }
 
@@ -11561,10 +11558,9 @@ void Player::sendSmsgInitialFactions()
 
 void Player::initialiseReputation()
 {
-    for (uint32_t i = 0; i < sFactionStore.getNumRows(); ++i)
+    for (auto const& factionEntry : sFactionStore | std::views::values)
     {
-        WDB::Structures::FactionEntry const* factionEntry = sFactionStore.lookupEntry(i);
-        addNewFaction(factionEntry, 0, true);
+        addNewFaction(&factionEntry, 0, true);
     }
 }
 

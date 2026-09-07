@@ -34,12 +34,20 @@ namespace MapManagement::AreaManagement
     {
         m_areaContainer = container;
 
+        m_areaIdByMapIdCollection.clear();
+        m_areaByFlagCollection.clear();
+
         // Preload this stuff to make lookups easier elsewhere in code
         for (const auto& area : *m_areaContainer | std::views::values)
         {
             if (area.zone == 0 && area.map_id != 0 && area.map_id != 1 && area.map_id != 530 && area.map_id != 571)
             {
                 m_areaIdByMapIdCollection.emplace(area.map_id, area.id);
+            }
+
+            if (area.explore_flag != 0)
+            {
+                m_areaByFlagCollection[area.explore_flag] = &area;
             }
         }
     }
@@ -76,7 +84,17 @@ namespace MapManagement::AreaManagement
         {
             if (const auto* tile = worldMap->getTerrain()->getTile(pos.x, pos.y))
             {
-                adtAreaId = tile->m_map.getArea(pos.x, pos.y);
+                uint32_t const rawMapValue = tile->m_map.getArea(pos.x, pos.y);
+
+                if (auto const* area = getAreaByExploreFlag(rawMapValue))
+                {
+                    adtAreaId = area->id;
+                }
+                else
+                {
+                    adtAreaId = rawMapValue;
+                }
+
                 tileMapHeight = tile->m_map.getHeight(pos.x, pos.y);
             }
         }
@@ -171,5 +189,22 @@ namespace MapManagement::AreaManagement
         }
 
         return getAreaByMapId(mapId);
+    }
+
+    WDB::Structures::AreaTableEntry const* AreaStorage::getAreaByExploreFlag(uint32_t exploreFlag)
+    {
+        if (exploreFlag == 0 || !m_areaContainer)
+            return nullptr;
+
+#if VERSION_STRING <= WotLK
+        // Legacy maps store explore_flag in terrain .map files
+        if (const auto it = m_areaByFlagCollection.find(exploreFlag); it != m_areaByFlagCollection.end())
+        {
+            return it->second;
+        }
+#endif
+
+        // Fallback for missing entries or Cata/MoP direct ID lookups
+        return m_areaContainer->lookupEntry(exploreFlag);
     }
 } // MapManagement::AreaManagement

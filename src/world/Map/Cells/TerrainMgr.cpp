@@ -492,7 +492,7 @@ ZLiquidStatus TileMap::getLiquidStatus(LocationVector pos, uint8_t ReqLiquidType
         uint32_t liqTypeIdx = liquidEntry->Type;
         if (entry < 21)
         {
-            if (WDB::Structures::AreaTableEntry const* area = sAreaStore.lookupEntry(getArea(pos.x, pos.y)))
+            if (WDB::Structures::AreaTableEntry const* area = MapManagement::AreaManagement::AreaStorage::getAreaByExploreFlag(getArea(pos.x, pos.y)))
             {
 #if VERSION_STRING > Classic
                 uint32_t overrideLiquid = area->liquid_type_override[liquidEntry->Type];

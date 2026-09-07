@@ -307,7 +307,7 @@ namespace WDB::Structures::Raw
         uint32_t faction_id;
         uint32_t model_male;
         uint32_t model_female;
-        uint32_t base_language;
+        uint32_t team_id;
         uint32_t cinematic_id;
         char const* name[namePatternTbcWotlk];
         uint32_t expansion;
@@ -322,7 +322,7 @@ namespace WDB::Structures::Raw
         uint32_t faction_id;
         uint32_t model_male;
         uint32_t model_female;
-        uint32_t base_language;
+        uint32_t team_id;
         uint32_t cinematic_id;
         char const* name;
         uint32_t expansion;
@@ -335,7 +335,7 @@ namespace WDB::Structures::Raw
         uint32_t faction_id;
         uint32_t model_male;
         uint32_t model_female;
-        uint32_t base_language;
+        uint32_t team_id;
         uint32_t cinematic_id;
         char const* name;
         uint32_t expansion;

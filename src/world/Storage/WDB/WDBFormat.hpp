@@ -39,8 +39,8 @@ static std::map<std::string, MultiversionFormatTable> dbcFieldDefines =
         "AreaTable.dbc",
         {
             "niiiixxxxxissssssssxixxxi"/*Classic*/,
-            "iiinixxxxxissssssssssssssssxiiiiixx"/*BC*/,
-            "iiinixxxxxissssssssssssssssxiiiiixxx"/*WotLK*/,
+            "niiiixxxxxissssssssssssssssxiiiiixx"/*BC*/,
+            "niiiixxxxxissssssssssssssssxiiiiixxx"/*WotLK*/,
             "niiiiiiiiiisiiiiiffiiiiiii"/*Cata*/,
             "niiiixxxxxxxisiiiiifxxxxxxxxxx"/*Mop*/
         }

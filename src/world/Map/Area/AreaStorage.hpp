@@ -32,6 +32,7 @@ namespace MapManagement::AreaManagement
         inline static WDB::WDBStore<WDB::Structures::AreaTableEntry> const* m_areaContainer;
         inline static MapEntryPair m_map_storage;
         inline static AreaIdByMapId m_areaIdByMapIdCollection;
+        inline static std::unordered_map<uint32_t, WDB::Structures::AreaTableEntry const*> m_areaByFlagCollection;
 
     public:
         static void initialise(WDB::WDBStore<WDB::Structures::AreaTableEntry> const* container);
@@ -45,6 +46,7 @@ namespace MapManagement::AreaManagement
         static WDB::Structures::AreaTableEntry const* getAreaById(uint32_t areaId);
         static WDB::Structures::AreaTableEntry const* getAreaByMapId(uint32_t mapId);
         static WDB::Structures::AreaTableEntry const* getExactArea(WorldMap* worldMap, LocationVector const& pos, uint32_t phaseMask);
+        static WDB::Structures::AreaTableEntry const* getAreaByExploreFlag(uint32_t exploreFlag);
 
         /* Get ID */
         static uint32_t getIdByMapId(uint32_t mapId);

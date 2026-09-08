@@ -6,6 +6,7 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "ManagedPacket.h"
+#include "WoWGuid.hpp"
 
 #include <cstdint>
 
@@ -14,7 +15,7 @@ namespace AscEmu::Packets
     class SmsgSpiritHealerConfirm : public ManagedPacket
     {
     public:
-        uint64_t guid;
+        WoWGuid guid;
 
         SmsgSpiritHealerConfirm() : SmsgSpiritHealerConfirm(0)
         {
@@ -27,12 +28,39 @@ namespace AscEmu::Packets
         }
 
     protected:
-        size_t expectedSize() const override { return m_minimum_size; }
+        size_t expectedSize() const override { return 8; }
 
         bool internalSerialise(WorldPacket& packet) override
         {
-            packet << guid;
-            return true;
+            if (m_protocol.expansion <= WoW::Expansion::_Cata)
+            {
+                packet << guid.getRawGuid();
+                return true;
+            }
+            else if (m_protocol.isMop())
+            {
+                packet.writeBit(guid[6]);
+                packet.writeBit(guid[5]);
+                packet.writeBit(guid[7]);
+                packet.writeBit(guid[1]);
+                packet.writeBit(guid[4]);
+                packet.writeBit(guid[2]);
+                packet.writeBit(guid[3]);
+                packet.writeBit(guid[0]);
+
+                packet.writeByteSeq(guid[0]);
+                packet.writeByteSeq(guid[4]);
+                packet.writeByteSeq(guid[2]);
+                packet.writeByteSeq(guid[3]);
+                packet.writeByteSeq(guid[7]);
+                packet.writeByteSeq(guid[6]);
+                packet.writeByteSeq(guid[5]);
+                packet.writeByteSeq(guid[1]);
+
+                return true;
+            }
+
+            return false;
         }
 
         bool internalDeserialise(WorldPacket& /*packet*/) override { return false; }

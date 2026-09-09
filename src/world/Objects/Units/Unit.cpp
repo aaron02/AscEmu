@@ -7521,7 +7521,14 @@ uint64_t Unit::getTaggerGuid() const
 
 bool Unit::isTagged() const
 {
-    return hasDynamicFlags(U_DYN_FLAG_TAGGED_BY_OTHER) || (m_taggerGuid != 0 && m_taggedBySummon);
+    // U_DYN_FLAG_TAGGED_BY_OTHER is only ever computed transiently per-viewer while
+    // building an outgoing update packet (see Object::buildValuesUpdate's per-target
+    // creature recompute) - it is never written back into this object's own stored
+    // dynamic-flags field, so hasDynamicFlags() here was always false for a normal
+    // (non-summon) tag and made isLootable()/isTagged() effectively unreachable.
+    // Check the actual stored tagger guid directly instead, matching the reference's
+    // hasLootRecipient() (m_lootRecipient || m_lootRecipientGroup).
+    return m_taggerGuid != 0;
 }
 
 bool Unit::isTaggableFor(Unit const* unit) const

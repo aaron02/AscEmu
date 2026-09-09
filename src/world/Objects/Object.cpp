@@ -2313,6 +2313,15 @@ void Object::BuildFieldUpdatePacket(Player* Target, uint32_t Index, uint32_t Val
     buf << (((uint32_t)(1)) << (Index % 32));
     buf << Value;
 
+#if VERSION_STRING == Mop
+    // Mop closes every values-update block with a dynamic-values section; for anything
+    // that isn't an item or a player this is a single zero byte meaning "no dynamic
+    // fields". buildValuesUpdate() already writes this trailer for the normal per-tick update path;
+    // without it here the block is one byte short, which desyncs the client's parse of every
+    // block that follows it in the same SMSG_UPDATE_OBJECT packet.
+    buf << static_cast<uint8_t>(0);
+#endif
+
     Target->getUpdateMgr().pushUpdateData(&buf, 1);
 }
 
@@ -2329,6 +2338,11 @@ void Object::BuildFieldUpdatePacket(ByteBuffer* buf, uint32_t Index, uint32_t Va
 
     *buf << (((uint32_t)(1)) << (Index % 32));
     *buf << Value;
+
+#if VERSION_STRING == Mop
+    // See the other BuildFieldUpdatePacket() overload above for why this is required.
+    *buf << static_cast<uint8_t>(0);
+#endif
 }
 
 uint32_t Object::BuildValuesUpdateBlockForPlayer(ByteBuffer* data, Player* target)
@@ -3661,7 +3675,22 @@ void Object::buildValuesUpdate(uint8_t updateType, ByteBuffer* data, UpdateMask*
                     else if (idx == getOffsetForStructuredField(WoWObject, dynamic_field))
 #endif
                     {
+#if VERSION_STRING == Mop
+                        // On Mop, U_DYN_FLAG_LOOTABLE is a persistent flag (set once on
+                        // Creature::die() when the kill produced loot, cleared once by the
+                        // loot-release handler once everything is taken - see Creature::die()
+                        // and handleLootReleaseOpcode in LootHandler.cpp) instead of something
+                        // re-derived on every broadcast. Stripping and re-adding it here from
+                        // HasLootForPlayer()/loot.isLooted() fights that persistent state: as
+                        // soon as one recompute call finds no unlooted content left for THIS
+                        // viewer (e.g. gold already collected by another group member), it wipes
+                        // the bit for every viewer and the Mop client falls back to attacking the
+                        // corpse instead of looting it. Only the tag/tap bits are viewer-relative
+                        // and need recomputing here.
+                        auto dynamicFlags = bitValue & ~(U_DYN_FLAG_TAGGED_BY_OTHER | U_DYN_FLAG_TAPPED_BY_PLAYER);
+#else
                         auto dynamicFlags = bitValue & ~(U_DYN_FLAG_LOOTABLE | U_DYN_FLAG_TAGGED_BY_OTHER | U_DYN_FLAG_TAPPED_BY_PLAYER);
+#endif
 
                         // Tagging
                         if (creature->getTaggerGuid())
@@ -3672,9 +3701,11 @@ void Object::buildValuesUpdate(uint8_t updateType, ByteBuffer* data, UpdateMask*
                                 dynamicFlags |= U_DYN_FLAG_TAPPED_BY_PLAYER;
                         }
 
+#if VERSION_STRING != Mop
                         // Loot
                         if (!creature->loot.isLooted() && creature->HasLootForPlayer(target))
                             dynamicFlags |= U_DYN_FLAG_LOOTABLE;
+#endif
 
                         bitValue = dynamicFlags;
                     }

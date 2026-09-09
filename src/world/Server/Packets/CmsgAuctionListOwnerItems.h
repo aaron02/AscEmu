@@ -27,7 +27,24 @@ namespace AscEmu::Packets
         {
         }
 
+        bool deserialise(WorldPacket& packet) override
+        {
+            if (packet.remaining() < expectedSize())
+                return false;
+
+            return internalDeserialise(packet);
+        }
+
     protected:
+        size_t expectedSize() const override
+        {
+            if (m_protocol.expansion <= WoW::Expansion::_Cata)
+                return m_minimum_size;
+            else if (m_protocol.isMop())
+                return 5; // uint32 listForm + packed guid mask byte
+            return 0;
+        }
+
         bool internalDeserialise(WorldPacket& packet) override
         {
             if (m_protocol.expansion < WoW::Expansion::_Mop)

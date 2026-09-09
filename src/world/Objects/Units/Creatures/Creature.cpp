@@ -498,7 +498,16 @@ void Creature::setDeathState(DeathState s)
 
         setTargetGuid(0);
 
+#if VERSION_STRING == Mop
+        // Verified against the 5.4.8 client protocol: on death only the NPC
+        // interaction flags (gossip/vendor/trainer/etc.) are cleared here, not the
+        // general unit flags field - clearing UNIT_FIELD_FLAGS here left the Mop
+        // client unable to tell the creature is dead, so it kept offering attack
+        // instead of loot.
+        setNpcFlags(UNIT_NPC_FLAG_NONE);
+#else
         setUnitFlags(UNIT_NPC_FLAG_NONE);
+#endif
 
         setMountDisplayId(0);
 
@@ -2737,15 +2746,6 @@ void Creature::die(Unit* pAttacker, uint32_t /*damage*/, [[maybe_unused]] uint32
 #endif
     setHealth(0);
 
-#if VERSION_STRING == Mop
-    // Mark the dynamic-flags field dirty so the client actually receives the
-    // dead/lootable/tapped state. Without this, buildValuesUpdate()'s per-target
-    // dynamic flag recompute never runs for a normal combat death (nothing else
-    // touches this field on the kill path), so the Mop client never learns the corpse
-    // is lootable and can end up leaving the model in a stale, non-corpse state.
-    setDynamicFlags(U_DYN_FLAG_DEAD);
-#endif
-
     removeAllNonPersistentAuras();
 
     if (pAttacker != nullptr)
@@ -2834,6 +2834,16 @@ void Creature::die(Unit* pAttacker, uint32_t /*damage*/, [[maybe_unused]] uint32
 
         // Generate Gold
         loot.generateGold(sMySQLStore.getCreatureProperties(getEntry()), getAIInterface()->getDifficultyType());
+
+#if VERSION_STRING == Mop
+        // Verified against the real 5.4.8 protocol (Skyfire-Mop's Unit::Kill): unlike the
+        // TAGGED_BY_OTHER/TAPPED_BY_PLAYER bits, U_DYN_FLAG_LOOTABLE is not recomputed per
+        // viewer on every broadcast - it is a persistent flag set once here (if this kill
+        // actually produced loot) and cleared once by the loot-release handler once
+        // everything has been taken (see handleLootReleaseOpcode in LootHandler.cpp).
+        if (!loot.empty())
+            setDynamicFlags(getDynamicFlags() | U_DYN_FLAG_LOOTABLE);
+#endif
 
         // Master Looting Ninja Checker
         if (!loot.items.empty() && worldConfig.player.deactivateMasterLootNinja)

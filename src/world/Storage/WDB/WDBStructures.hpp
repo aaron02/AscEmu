@@ -2872,5 +2872,9 @@ namespace WDB::Structures
     };
 
     typedef std::map<uint32_t, SpellEffect> SpellEffectMap;
+
+    // SpellPower.dbc is keyed by its own row id on Mop; the spell it belongs to is the
+    // spellId column, so like SpellEffect it needs a spell id -> row helper map.
+    typedef std::map<uint32_t, SpellPowerEntry const*> SpellPowerMap;
 #endif
 }

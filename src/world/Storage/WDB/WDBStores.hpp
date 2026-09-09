@@ -290,6 +290,8 @@ inline SERVER_DECL WDB::WDBStore<WDB::Structures::StableSlotPricesEntry> sStable
 #ifdef AE_MOP
     extern SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellMiscEntry> sSpellMiscStore;
     extern SERVER_DECL WDB::WDBContainer<WDB::Structures::ChrSpecializationEntry> sChrSpecializationStore;
+
+    WDB::Structures::SpellPowerEntry const* getSpellPowerEntry(uint32_t spellId);
 #endif
 
 

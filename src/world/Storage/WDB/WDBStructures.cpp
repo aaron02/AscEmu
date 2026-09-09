@@ -63,8 +63,13 @@ WDB::Structures::SpellPowerEntry const* WDB::Structures::SpellEntry::GetSpellPow
 {
 #if VERSION_STRING == Cata
     return SpellPowerId ? sSpellPowerStore.lookupEntry(SpellPowerId) : nullptr;
-#else
-    return sSpellPowerStore.lookupEntry(Id);
+#elif VERSION_STRING == Mop
+    // Verified against the 5.4.8 data layout: Spell.dbc has no SpellPowerId on Mop,
+    // SpellPower.dbc rows carry the spell they belong to in their spellId column. Looking the
+    // row up by the spell id returned the power data of an unrelated spell - for login
+    // casts that turned out to be a health-cost row, so Spell::takePower()
+    // damaged the caster on every login and killed fresh low level characters.
+    return getSpellPowerEntry(Id);
 #endif
 }
 

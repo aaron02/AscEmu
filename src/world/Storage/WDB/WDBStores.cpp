@@ -180,6 +180,7 @@ SERVER_DECL WDB::WDBContainer<WDB::Structures::ItemReforgeEntry> sItemReforgeSto
 #ifdef AE_MOP
 SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellMiscEntry> sSpellMiscStore;
 SERVER_DECL WDB::WDBContainer<WDB::Structures::ChrSpecializationEntry> sChrSpecializationStore;
+WDB::Structures::SpellPowerMap sSpellPowerMap;
 #endif
 
 namespace {
@@ -1150,6 +1151,26 @@ bool loadDBCs()
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellInterruptsStore, dbc_path, "SpellInterrupts.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellLevelsStore, dbc_path, "SpellLevels.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellPowerStore, dbc_path, "SpellPower.dbc");
+    #if VERSION_STRING == Mop
+    // note: SpellPower.dbc rows are not keyed by spell id on Mop, map them by their spellId column
+    {
+        for (uint32_t i = 0; i < sSpellPowerStore.getNumRows(); ++i)
+        {
+            WDB::Structures::SpellPowerEntry const* spellPower = sSpellPowerStore.lookupEntry(i);
+            if (spellPower == nullptr || spellPower->spellId == 0)
+                continue;
+
+            // A spell can own several rows (one per shapeshift form). Without a caster there is
+            // no form to match against, so keep the first row that does not require one - this
+            // is the row the reference picks for a caster without that shapeshift aura.
+            auto itr = sSpellPowerMap.find(spellPower->spellId);
+            if (itr == sSpellPowerMap.end())
+                sSpellPowerMap[spellPower->spellId] = spellPower;
+            else if (itr->second->ShapeShiftSpellId != 0 && spellPower->ShapeShiftSpellId == 0)
+                itr->second = spellPower;
+        }
+    }
+    #endif
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellScalingStore, dbc_path, "SpellScaling.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellShapeshiftStore, dbc_path, "SpellShapeshift.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellTargetRestrictionsStore, dbc_path, "SpellTargetRestrictions.dbc");
@@ -1184,6 +1205,17 @@ WDB::Structures::SpellEffectEntry const* GetSpellEffectEntry(uint32_t spellId, u
 uint8_t getPowerIndexByClass(uint8_t playerClass, uint8_t powerType)
 {
     return powerIndexByClass[playerClass][powerType];
+}
+#endif
+
+#if VERSION_STRING == Mop
+WDB::Structures::SpellPowerEntry const* getSpellPowerEntry(uint32_t spellId)
+{
+    WDB::Structures::SpellPowerMap::const_iterator itr = sSpellPowerMap.find(spellId);
+    if (itr == sSpellPowerMap.end())
+        return nullptr;
+
+    return itr->second;
 }
 #endif
 

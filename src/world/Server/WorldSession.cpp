@@ -1319,7 +1319,7 @@ void WorldSession::registerOpcodeHandler()
     registry.registerOpcode(CMSG_REPORT_PLAYER, &WorldSession::handleReportPlayerOpcode, false, false, false, true, false);
     registry.registerOpcode(CMSG_REQUEST_CEMETERY_LIST, &WorldSession::handleRequestCemeteryListOpcode, false, false, false, true, true);
     registry.registerOpcode(CMSG_REQUEST_HOTFIX, &WorldSession::handleRequestHotfix, false, false, false, true, true);
-    registry.registerOpcode(CMSG_RETURN_TO_GRAVEYARD, &WorldSession::handleReturnToGraveyardOpcode, false, false, false, true, false);
+    registry.registerOpcode(CMSG_RETURN_TO_GRAVEYARD, &WorldSession::handleReturnToGraveyardOpcode, false, false, false, true, true);
     registry.registerOpcode(CMSG_SUGGESTION_SUBMIT, &WorldSession::handleSuggestionOpcode, false, false, false, true, false);
     registry.registerOpcode(CMSG_LOG_DISCONNECT, &WorldSession::handleLogDisconnectOpcode, false, false, false, true, true);
     registry.registerOpcode(CMSG_PET_LEVEL_CHEAT, &WorldSession::Unhandled, false, false, false, true, false);

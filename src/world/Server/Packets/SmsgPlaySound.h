@@ -14,24 +14,64 @@ namespace AscEmu::Packets
     {
     public:
         uint32_t soundId;
+        WoWGuid sourceGuid;     // Mop
 
         SmsgPlaySound() : SmsgPlaySound(0)
         {
         }
 
-        SmsgPlaySound(uint32_t soundId) :
+        SmsgPlaySound(uint32_t soundId, WoWGuid sourceGuid = WoWGuid()) :
             ManagedPacket(SMSG_PLAY_SOUND, 0),
-            soundId(soundId)
+            soundId(soundId),
+            sourceGuid(sourceGuid)
         {
         }
 
     protected:
-        size_t expectedSize() const override { return 4; }
+        size_t expectedSize() const override
+        {
+            if (m_protocol.expansion <= WoW::Expansion::_Cata)
+                return 4;
+            else if (m_protocol.isMop())
+                return 4 + 9;
+
+            return 0;
+        }
 
         bool internalSerialise(WorldPacket& packet) override
         {
-            packet << soundId;
-            return true;
+            if (m_protocol.expansion <= WoW::Expansion::_Cata)
+            {
+                packet << soundId;
+
+                return true;
+            }
+            else if (m_protocol.isMop())
+            {
+                packet.writeBit(sourceGuid[2]);
+                packet.writeBit(sourceGuid[3]);
+                packet.writeBit(sourceGuid[7]);
+                packet.writeBit(sourceGuid[6]);
+                packet.writeBit(sourceGuid[0]);
+                packet.writeBit(sourceGuid[5]);
+                packet.writeBit(sourceGuid[4]);
+                packet.writeBit(sourceGuid[1]);
+
+                packet << soundId;
+
+                packet.writeByteSeq(sourceGuid[3]);
+                packet.writeByteSeq(sourceGuid[2]);
+                packet.writeByteSeq(sourceGuid[4]);
+                packet.writeByteSeq(sourceGuid[7]);
+                packet.writeByteSeq(sourceGuid[5]);
+                packet.writeByteSeq(sourceGuid[0]);
+                packet.writeByteSeq(sourceGuid[6]);
+                packet.writeByteSeq(sourceGuid[1]);
+
+                return true;
+            }
+            
+            return false;
         }
 
         bool internalDeserialise(WorldPacket& /*packet*/) override { return false; }

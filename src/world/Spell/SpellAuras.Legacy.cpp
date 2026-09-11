@@ -263,7 +263,7 @@ void Aura::EventUpdateGroupAA(AuraEffectModifier* /*aurEff*/, float r)
             if (m_target->GetInstanceID() != op->GetInstanceID())
                 continue;
 
-            if ((m_target->GetPhase() & op->GetPhase()) == 0)
+            if (!m_target->isInSamePhase(op))
                 continue;
 
             if (!op->isAlive())
@@ -295,7 +295,7 @@ void Aura::EventUpdateGroupAA(AuraEffectModifier* /*aurEff*/, float r)
         if (m_target->getDistanceSq(tp) > r)
             removable = true;
 
-        if ((m_target->GetPhase() & tp->GetPhase()) == 0)
+        if (!m_target->isInSamePhase(tp))
             removable = true;
 
         if ((tp->getGuid() != owner->getGuid()) && !tp->isInGroup())
@@ -372,7 +372,7 @@ void Aura::EventUpdateRaidAA(AuraEffectModifier* /*aurEff*/, float r)
                 if (m_target->getDistanceSq(op) > r)
                     continue;
 
-                if ((m_target->GetPhase() & op->GetPhase()) == 0)
+                if (!m_target->isInSamePhase(op))
                     continue;
 
                 if (!op->isAlive())
@@ -406,7 +406,7 @@ void Aura::EventUpdateRaidAA(AuraEffectModifier* /*aurEff*/, float r)
         if (m_target->getDistanceSq(tp) > r)
             removable = true;
 
-        if ((m_target->GetPhase() & tp->GetPhase()) == 0)
+        if (!m_target->isInSamePhase(tp))
             removable = true;
 
         if ((tp->getGuid() != owner->getGuid()) && !tp->isInGroup())
@@ -460,7 +460,7 @@ void Aura::EventUpdateFriendAA(AuraEffectModifier* /*aurEff*/, float r)
         if (u->getDistanceSq(ou) > r)
             continue;
 
-        if ((u->GetPhase() & ou->GetPhase()) == 0)
+        if (!u->isInSamePhase(ou))
             continue;
 
         if (!ou->isAlive())
@@ -501,7 +501,7 @@ void Aura::EventUpdateFriendAA(AuraEffectModifier* /*aurEff*/, float r)
         if (u->isNeutralTo(tu))
             removable = true;
 
-        if ((u->GetPhase() & tu->GetPhase()) == 0)
+        if (!u->isInSamePhase(tu))
             removable = true;
 
         if (removable)
@@ -530,7 +530,7 @@ void Aura::EventUpdateEnemyAA(AuraEffectModifier* /*aurEff*/, float r)
         if (u->getDistanceSq(ou) > r)
             continue;
 
-        if ((u->GetPhase() & ou->GetPhase()) == 0)
+        if (!u->isInSamePhase(ou))
             continue;
 
         if (!ou->isAlive())
@@ -568,7 +568,7 @@ void Aura::EventUpdateEnemyAA(AuraEffectModifier* /*aurEff*/, float r)
         if (u->isNeutralTo(tu))
             removable = true;
 
-        if ((u->GetPhase() & tu->GetPhase()) == 0)
+        if (!u->isInSamePhase(tu))
             removable = true;
 
         if (removable)
@@ -5995,10 +5995,18 @@ void Aura::SpellAuraPhase(AuraEffectModifier* aurEff, bool apply)
 
     if (apply)
     {
+#if VERSION_STRING >= Mop
+        // Mop stores the phase id in MiscValueB
+        const auto phaseId = static_cast<uint32_t>(m_spellInfo->getEffectMiscValueB(aurEff->getEffectIndex()));
+        sLogger.debug("SpellAuraPhase: spell {} MiscValue {} MiscValueB {} target {}", m_spellInfo->getId(), m_spellInfo->getEffectMiscValue(aurEff->getEffectIndex()), phaseId, m_target->getGuid());
+#else
+        const auto phaseId = static_cast<uint32_t>(m_spellInfo->getEffectMiscValue(aurEff->getEffectIndex()));
+#endif
+
         if (m_target->isPlayer())
-            static_cast<Player*>(m_target)->setPhase(PHASE_SET, m_spellInfo->getEffectMiscValue(aurEff->getEffectIndex()));
+            static_cast<Player*>(m_target)->setPhase(PHASE_SET, phaseId);
         else
-            m_target->setPhase(PHASE_SET, m_spellInfo->getEffectMiscValue(aurEff->getEffectIndex()));
+            m_target->setPhase(PHASE_SET, phaseId);
     }
     else
     {

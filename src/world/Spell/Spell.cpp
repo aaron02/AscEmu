@@ -2255,7 +2255,7 @@ SpellCastResult Spell::canCast(const bool secondCheck, uint32_t* parameter1, uin
                     continue;
 
                 // Skip objects from other phases
-                if (!(p_caster->GetPhase() & obj->GetPhase()))
+                if (!p_caster->isInSamePhase(obj))
                     continue;
 
                 const auto gameObjectInfo = obj->GetGameObjectProperties();

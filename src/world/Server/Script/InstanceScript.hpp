@@ -57,6 +57,11 @@ public:
     virtual void OnAreaTrigger(Player* /*pPlayer*/, uint32_t /*pAreaId*/) {}
     virtual void OnZoneChange(Player* /*pPlayer*/, uint32_t /*pNewZone*/, uint32_t /*pOldZone*/) {}
 
+    // Phase
+    // A map script may define which phases belong together (Mop maps use phase ids instead of a bitmask).
+    // Default keeps the bitmask semantic used by all maps without such a definition.
+    virtual bool arePhasesLinked(Object const* objectA, Object const* objectB) const;
+
     // Creature / GameObject - part of it is simple reimplementation for easier use Creature / GO < --- > Script
     virtual void OnCreatureDeath(Creature* /*pVictim*/, Unit* /*pKiller*/) {}
     virtual void OnCreaturePushToWorld(Creature* /*pCreature*/) {}

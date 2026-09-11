@@ -43,6 +43,8 @@ public:
 
     // Start for each row in worldmap_info an Instance
     void initialize();
+    // Continents are created before the script libraries are loaded - attach their map scripts afterwards
+    void loadContinentScripts();
     void initializeInstanceIds();
     EnterState canPlayerEnter(uint32_t mapid, uint32_t minLevel, Player* player, bool loginCheck = false, uint32_t requestedInstanceId = 0);
     void shutdown();

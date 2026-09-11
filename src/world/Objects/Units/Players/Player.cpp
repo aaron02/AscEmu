@@ -3142,7 +3142,7 @@ void Player::sendMessageToSet(WorldPacket* data, bool sendToSelf, bool sendToOwn
         if (sendToOwnTeam && player->getTeam() != getTeam())
             continue;
 
-        if ((player->GetPhase() & GetPhase()) == 0)
+        if (!player->isInSamePhase(this))
             continue;
 
         if (data->getOpcode() != SMSG_MESSAGECHAT)
@@ -8706,7 +8706,7 @@ void Player::acceptQuest(uint64_t guid, uint32_t quest_id)
     WoWGuid wowGuid;
     wowGuid.init(guid);
 
-    if (wowGuid.isUnit())
+    if (wowGuid.isUnit() || wowGuid.isVehicle())
     {
         Creature* quest_giver = getWorldMapCreature(guid);
         if (quest_giver)
@@ -9745,7 +9745,7 @@ void Player::sendPlayObjectSoundPacket(uint64_t objectGuid, uint32_t soundId)
 
 void Player::sendPlaySoundPacket(uint32_t soundId)
 {
-    SmsgPlaySound managedPacket(soundId);
+    SmsgPlaySound managedPacket(soundId, getGuid());
     m_session->sendManagedPacket(managedPacket);
 }
 

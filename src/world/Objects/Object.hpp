@@ -639,6 +639,8 @@ public:
 
         uint32_t GetPhase() const { return m_phase; }
         virtual void Phase(uint8_t command = PHASE_SET, uint32_t newphase = 1);
+        // Phase visibility check - consults the map script (InstanceScript::arePhasesLinked) when one exists
+        bool isInSamePhase(Object const* other) const;
 
         // SpellLog packets just to keep the code cleaner and better to read
         void SendSpellLog(Object* Caster, Object* Target, uint32_t Ability, uint8_t SpellLogType);

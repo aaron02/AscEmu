@@ -1834,7 +1834,7 @@ void Unit::setPhase(uint8_t command/* = PHASE_SET*/, uint32_t newPhase/* = 1*/)
 
 bool Unit::isWithinCombatRange(Unit* obj, float dist2compare)
 {
-    if (!obj || !IsInMap(obj) || !(GetPhase() == obj->GetPhase()))
+    if (!obj || !IsInMap(obj) || !isInSamePhase(obj))
         return false;
 
     float dx = GetPositionX() - obj->GetPositionX();
@@ -1850,7 +1850,7 @@ bool Unit::isWithinCombatRange(Unit* obj, float dist2compare)
 
 bool Unit::isWithinMeleeRangeAt(LocationVector const& pos, Unit* obj)
 {
-    if (!obj || !IsInMap(obj) || !(GetPhase() == obj->GetPhase()))
+    if (!obj || !IsInMap(obj) || !isInSamePhase(obj))
         return false;
 
     float dx = pos.getPositionX() - obj->GetPositionX();
@@ -2004,8 +2004,8 @@ bool Unit::canBeginCombat(Unit* target)
     // ...the two units need to be on the same map
     if (getWorldMap() != target->getWorldMap())
         return false;
-    // ...the two units need to be in the same phase
-    if (GetPhase() != target->GetPhase())
+    // ...the two units need to be in related phases
+    if (!isInSamePhase(target))
         return false;
     if (hasUnitStateFlag(UNIT_STATE_EVADING) || target->hasUnitStateFlag(UNIT_STATE_EVADING))
         return false;
@@ -5376,7 +5376,7 @@ bool Unit::_canSeeFrom(Object const* obj, Object const* viewpoint, bool stealthS
     // Visibility rules belong to this unit/player, while the physical viewpoint can
     // be a possessed unit, pet or farsight DynamicObject. The viewpoint phase is
     // authoritative for what exists around that remote camera position.
-    if ((viewpoint->GetPhase() & obj->GetPhase()) == 0)
+    if (!viewpoint->isInSamePhase(obj))
         return false;
 
     // Published objects can use a visibility range that differs from the map's

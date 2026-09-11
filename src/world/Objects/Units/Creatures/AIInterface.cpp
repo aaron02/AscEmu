@@ -1275,7 +1275,7 @@ void AIInterface::_updateTargets()
                     (*i2)->event_GetCurrentInstanceId() != m_Unit->event_GetCurrentInstanceId() ||
                     (*i2)->GetMapId() != m_Unit->GetMapId() ||
                     !(*i2)->isAlive() || m_Unit->getDistanceSq((*i2)) >= 2500.0f ||
-                    (*i2)->isInEvadeMode() || !((*i2)->m_phase & m_Unit->m_phase))
+                    (*i2)->isInEvadeMode() || !(*i2)->isInSamePhase(m_Unit))
                 {
                     m_assistTargets.erase(i2);
                 }

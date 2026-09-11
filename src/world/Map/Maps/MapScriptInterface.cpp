@@ -77,14 +77,12 @@ GameObject* MapScriptInterface::findNearestGoWithType(Object* o, uint32_t type)
 
     GameObject* best = nullptr;
     float bestD2 = std::numeric_limits<float>::infinity();
-    const uint32_t phase = o->GetPhase();
-
     for (const WoWGuid& g : ids)
     {
         GameObject* go = m_registry.getGameObject(g);
         if (!go || go->getWorldMap() != &m_worldMap) continue;
         if (go->getGoType() != type)         continue;
-        if ((go->GetPhase() & phase) == 0)   continue;
+        if (!o->isInSamePhase(go))          continue;
 
         const float d2 = o->getDistanceSq(go);
         if (d2 < bestD2) { bestD2 = d2; best = go; }

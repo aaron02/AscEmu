@@ -1240,7 +1240,7 @@ DamageInfo Object::doSpellHealing(Unit* victim, uint32_t spellId, float_t amt, b
                     if (itr)
                     {
                         auto obj = itr;
-                        if (itr->isCreatureOrPlayer() && static_cast<Unit*>(itr)->isAlive() && obj->isInRange(casterUnit, 8) && (casterUnit->GetPhase() & itr->GetPhase()))
+                        if (itr->isCreatureOrPlayer() && static_cast<Unit*>(itr)->isAlive() && obj->isInRange(casterUnit, 8) && casterUnit->isInSamePhase(itr))
                         {
                             // TODO: fix me!
 
@@ -1916,7 +1916,7 @@ bool Object::isValidAttackableTarget(Object const* target, SpellInfo const* bySp
                 // Check for map and phase though
                 if (!IsInWorld() || GetMapId() != target->GetMapId())
                     return false;
-                if (!(m_phase & target->m_phase))
+                if (!isInSamePhase(target))
                     return false;
             }
         }
@@ -2105,7 +2105,7 @@ bool Object::isValidAssistableTarget(Object const* target, SpellInfo const* bySp
                 // Check for map and phase though
                 if (!IsInWorld() || GetMapId() != target->GetMapId())
                     return false;
-                if (!(m_phase & target->m_phase))
+                if (!isInSamePhase(target))
                     return false;
             }
         }
@@ -4365,7 +4365,7 @@ void Object::setZoneId(uint32_t newZone)
 
 void Object::PlaySoundToSet(uint32_t sound_entry)
 {
-    SmsgPlaySound sendPacket(sound_entry);
+    SmsgPlaySound sendPacket(sound_entry, getGuid());
     PacketBroadcast::sendToSet(*this, sendPacket, true);
 }
 
@@ -4433,6 +4433,22 @@ void Object::Phase(uint8_t command, uint32_t newphase)
     }
 }
 
+bool Object::isInSamePhase(Object const* other) const
+{
+    if (other == nullptr)
+        return false;
+
+#if VERSION_STRING >= Mop
+    if (m_WorldMap != nullptr && m_WorldMap == other->m_WorldMap)
+    {
+        if (InstanceScript const* script = m_WorldMap->getScript())
+            return script->arePhasesLinked(this, other);
+    }
+#endif
+
+    return (m_phase & other->m_phase) != 0;
+}
+
 void Object::outPacketToSet(uint16_t Opcode, uint16_t Len, const void* Data, bool /*self*/)
 {
     if (!IsInWorld())
@@ -4453,13 +4469,12 @@ void Object::sendMessageToSet(WorldPacket* data, bool /*bToSelf*/, bool /*myteam
     if (!IsInWorld())
         return;
 
-    uint32_t myphase = GetPhase();
     thread_local std::vector<Player*> s_recipients;
     m_WorldMap->collectVisibilityRecipientsForObject(GetNewGUID(), s_recipients);
 
     for (Player* player : s_recipients)
     {
-        if (player && (player->GetPhase() & myphase) != 0)
+        if (player && isInSamePhase(player))
             player->sendPacket(data);
     }
 }
@@ -4469,13 +4484,12 @@ void Object::sendMessageToSet(WorldPacket* data, Player const* skipp)
     if (!IsInWorld())
         return;
 
-    uint32_t myphase = GetPhase();
     thread_local std::vector<Player*> s_recipients;
     m_WorldMap->collectVisibilityRecipientsForObject(GetNewGUID(), s_recipients);
 
     for (Player* player : s_recipients)
     {
-        if (player && (player->GetPhase() & myphase) != 0 && player != skipp)
+        if (player && isInSamePhase(player) && player != skipp)
             player->sendPacket(data);
     }
 }
@@ -4485,13 +4499,12 @@ void Object::SendCreatureChatMessageInRange(Creature* creature, uint32_t textId,
     if (!IsInWorld())
         return;
 
-    const uint32_t myphase = GetPhase();
     thread_local std::vector<Player*> s_recipients;
     m_WorldMap->collectVisibilityRecipientsForObject(GetNewGUID(), s_recipients);
 
     for (Player* player : s_recipients)
     {
-        if (!player || !player->getSession() || (player->GetPhase() & myphase) == 0)
+        if (!player || !player->getSession() || !isInSamePhase(player))
             continue;
 
         const uint32_t sessionLanguage = player->getSession()->language;

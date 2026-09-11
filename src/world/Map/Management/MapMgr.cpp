@@ -20,6 +20,8 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Map/Maps/BattleGroundMap.hpp"
 #include "Management/Battleground/Battleground.hpp"
 #include "Map/Maps/InstanceMap.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Server/Script/InstanceScript.hpp"
 #include "Objects/Units/Players/Player.hpp"
 #include "Server/World.h"
 #include "Server/WorldSession.h"
@@ -48,6 +50,21 @@ void MapMgr::initialize()
         }
 
         createBaseMap(mapInfo->second.mapid);
+    }
+}
+
+void MapMgr::loadContinentScripts()
+{
+    std::scoped_lock<std::mutex> lock(m_mapsLock);
+
+    for (const auto& [mapId, map] : m_WorldMaps)
+    {
+        if (map == nullptr || map->getScript() != nullptr)
+            continue;
+
+        map->loadInstanceScript();
+        if (map->getScript() != nullptr)
+            map->getScript()->OnLoad();
     }
 }
 

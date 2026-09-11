@@ -195,7 +195,7 @@ namespace AscEmu::Packets
                 if (ownTeamOnly && targetPlayer->getTeam() != sourcePlayer.getTeam())
                     continue;
 
-                if ((targetPlayer->GetPhase() & sourcePlayer.GetPhase()) == 0)
+                if (!targetPlayer->isInSamePhase(&sourcePlayer))
                     continue;
 
                 if (isChatMessage)
@@ -232,7 +232,7 @@ namespace AscEmu::Packets
                 if (targetSession == nullptr)
                     continue;
 
-                if ((targetPlayer->GetPhase() & source.GetPhase()) == 0)
+                if (!targetPlayer->isInSamePhase(&source))
                     continue;
 
                 targetSession->sendManagedPacket(packet);

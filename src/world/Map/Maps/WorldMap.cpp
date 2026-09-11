@@ -2418,8 +2418,6 @@ void WorldMap::sendChatMessageToCellPlayers(Object* obj, SmsgMessageChat& packet
 
     spatialIndex_->collectGuidsInCellsAroundPos<Player>(obj->GetPosition(), static_cast<int>(cell_radius), 0, s_guids);
 
-    const uint32_t senderPhase = obj->GetPhase();
-
     for (const WoWGuid& guid : s_guids)
     {
         Player* player = registry_->getPlayer(guid);
@@ -2429,7 +2427,7 @@ void WorldMap::sendChatMessageToCellPlayers(Object* obj, SmsgMessageChat& packet
         if (player->getWorldMap() != this)
             continue;
 
-        if ((player->GetPhase() & senderPhase) == 0)
+        if (!obj->isInSamePhase(player))
             continue;
 
         Object::UpdatePin pin(player);

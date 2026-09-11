@@ -44,6 +44,7 @@
 #include "Management/GameEventMgr.hpp"
 #include "Management/MailMgr.h"
 #include "Management/Loot/LootMgr.hpp"
+#include "Map/Management/MapMgr.hpp"
 #include "Network/Network.hpp"
 #include "Packets/SmsgServerMessage.h"
 #include "Script/ScriptMgr.hpp"
@@ -525,6 +526,7 @@ bool Master::run(int /*argc*/, char** /*argv*/)
 
     sSocketMgr.SpawnWorkerThreads();
     sScriptMgr.LoadScripts();
+    sMapMgr.loadContinentScripts();
     sSpellMgr.loadSpellScripts();
 
     if (worldConfig.startup.enableSpellIdDump)

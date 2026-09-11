@@ -94,8 +94,11 @@ namespace AscEmu::Packets
                 packet.writeByteSeq(guid[3]);
                 packet.writeByteSeq(guid[2]);
 
-                packet << uint32_t(1);              // size phaseIds
-                packet << uint16_t(phaseId);
+                const bool hasPhase = phaseId > 1;
+
+                packet << uint32_t(hasPhase ? 2 : 0);   // Phase.dbc ids
+                if (hasPhase)
+                    packet << uint16_t(phaseId);
 
                 packet.writeByteSeq(guid[0]);
                 packet.writeByteSeq(guid[6]);
@@ -112,7 +115,7 @@ namespace AscEmu::Packets
 
                 packet.writeByteSeq(guid[5]);
 
-                packet << uint32_t(phaseFlags);     // flags
+                packet << uint32_t(hasPhase ? 0 : 8);   // flags
             }
 
             return true;

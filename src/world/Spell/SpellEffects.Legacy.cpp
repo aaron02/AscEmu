@@ -89,6 +89,7 @@
 #include "Server/WorldSession.h"
 #include "Server/WorldSessionLog.hpp"
 #include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/HookInterface.hpp"
 #include "Server/Script/InstanceScript.hpp"
 #include "Storage/WDB/WDBStructures.hpp"
 #include "Utilities/Narrow.hpp"
@@ -251,7 +252,7 @@ pSpellEffect SpellEffectsHandler[TOTAL_SPELL_EFFECTS] =
     &Spell::spellEffectNotImplemented,          // 147 SPELL_EFFECT_NULL_147
     &Spell::spellEffectNotImplemented,          // 148 SPELL_EFFECT_NULL_148
     &Spell::spellEffectNotImplemented,          // 149 SPELL_EFFECT_NULL_149
-    &Spell::spellEffectNotImplemented,          // 150 SPELL_EFFECT_NULL_150
+    &Spell::spellEffectQuestStart,              // 150 SPELL_EFFECT_QUEST_START
     &Spell::spellEffectTriggerSpell,            // 151 SPELL_EFFECT_TRIGGER_SPELL
     &Spell::spellEffectNotImplemented,          // 152 SPELL_EFFECT_NULL_152
     &Spell::SpellEffectCreatePet,               // 153 SPELL_EFFECT_CREATE_PET
@@ -447,7 +448,7 @@ const char* SpellEffectNames[TOTAL_SPELL_EFFECTS] =
     "SPELL_EFFECT_NULL_147",                    //    147 Quest Fail
     "SPELL_EFFECT_NULL_148",                    //    148 unknown
     "SPELL_EFFECT_NULL_149",                    //    149 unknown
-    "SPELL_EFFECT_NULL_150",                    //    150 unknown
+    "SPELL_EFFECT_QUEST_START",                 //    150 Quest Start
     "SPELL_EFFECT_TRIGGER_SPELL",               //    151
     "SPELL_EFFECT_NULL_152",                    //    152 Summon Refer-a-Friend
     "SPELL_EFFECT_CREATE_PET",                  //    153 Create tamed pet
@@ -713,6 +714,56 @@ void Spell::spellEffectForceCast(uint8_t effectIndex)
 
     // TODO: original caster can also be gameobject
     m_unitTarget->castSpell(target, triggerInfo, true);
+}
+
+// Adds the quest in MiscValue to the log of the target player without a questgiver
+// (e.g. the class starting quests cast on character creation)
+void Spell::spellEffectQuestStart(uint8_t effectIndex)
+{
+    Player* player = m_playerTarget != nullptr ? m_playerTarget : p_caster;
+    if (player == nullptr)
+        return;
+
+    const auto questProperties = sMySQLStore.getQuestProperties(static_cast<uint32_t>(getSpellInfo()->getEffectMiscValue(effectIndex)));
+    if (questProperties == nullptr)
+        return;
+
+    const uint32_t status = sQuestMgr.PlayerMeetsReqs(player, questProperties, false);
+    sLogger.debug("spellEffectQuestStart: spell {} quest {} player {} status {}", getSpellInfo()->getId(), questProperties->id, player->getGuidLow(), status);
+    if (status != QuestStatus::Available && status != QuestStatus::Repeatable)
+        return;
+
+    if (questProperties->time != 0 && player->hasTimedQuestInQuestSlot())
+        return;
+
+    const uint8_t logSlot = player->getFreeQuestSlot();
+    if (logSlot >= MAX_QUEST_LOG_SIZE)
+        return;
+
+    auto* questLogEntry = player->createQuestLogInSlot(questProperties, logSlot);
+    if (questLogEntry == nullptr)
+        return;
+
+    questLogEntry->updatePlayerFields();
+    player->updateNearbyQuestGameObjects();
+
+    const SpellAreaForQuestMapBounds saBounds = { sSpellMgr.mSpellAreaForQuestMap.lower_bound(questProperties->id), sSpellMgr.mSpellAreaForQuestMap.upper_bound(questProperties->id) };
+    for (auto itr = saBounds.first; itr != saBounds.second; ++itr)
+    {
+        if (itr->second->autoCast && itr->second->fitsToRequirements(player, player->getZoneId(), player->getAreaId()))
+        {
+            if (!player->hasAurasWithId(itr->second->spellId))
+            {
+                player->castSpell(player, itr->second->spellId, true);
+            }
+        }
+    }
+
+    sQuestMgr.OnQuestAccepted(player, questProperties, nullptr);
+    sHookInterface.OnQuestAccept(player, questProperties, nullptr);
+
+    if (questLogEntry->canBeFinished())
+        questLogEntry->sendQuestComplete();
 }
 
 // MIT End
@@ -6020,8 +6071,17 @@ void Spell::SpellEffectForgetSpecialization(uint8_t effectIndex)
 void Spell::SpellEffectKillCredit(uint8_t effectIndex)
 {
     CreatureProperties const* ci = sMySQLStore.getCreatureProperties(getSpellInfo()->getEffectMiscValue(effectIndex));
-    if (m_playerTarget != nullptr && ci != nullptr)
-        sQuestMgr._OnPlayerKill(m_playerTarget, getSpellInfo()->getEffectMiscValue(effectIndex), false);
+    sLogger.debug("SpellEffectKillCredit: spell {} credit {} playerTarget {} properties {}", getSpellInfo()->getId(), getSpellInfo()->getEffectMiscValue(effectIndex), m_playerTarget != nullptr, ci != nullptr);
+
+#if VERSION_STRING >= Mop
+    // effects targeting the caster run without a target pointer, the credit goes to the casting player
+    Player* player = m_playerTarget != nullptr ? m_playerTarget : p_caster;
+#else
+    Player* player = m_playerTarget;
+#endif
+
+    if (player != nullptr && ci != nullptr)
+        sQuestMgr._OnPlayerKill(player, getSpellInfo()->getEffectMiscValue(effectIndex), false);
 }
 
 void Spell::SpellEffectRestorePowerPct(uint8_t effectIndex)

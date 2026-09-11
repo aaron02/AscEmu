@@ -161,7 +161,7 @@ enum SpellEffect
     SPELL_EFFECT_UNKNOWN_147,               //    147
     SPELL_EFFECT_UNKNOWN_148,               //    148
     SPELL_EFFECT_QUEST_FAIL,                //    149
-    SPELL_EFFECT_UNKNOWN_150,               //    150
+    SPELL_EFFECT_QUEST_START,               //    150
     SPELL_EFFECT_UNKNOWN_151,               //    151
     SPELL_EFFECT_UNKNOWN_152,               //    152
     SPELL_EFFECT_SUMMON_TARGET,             //    153

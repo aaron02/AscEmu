@@ -488,6 +488,7 @@ public:
     //void spellEffectActivateRunes(uint8_t effectIndex);
     //void spellEffectJumpTarget(uint8_t effectIndex);
     //void spellEffectJumpBehindTarget(uint8_t effectIndex);
+    void spellEffectQuestStart(uint8_t effectIndex);
 
 public:
     friend class DummySpellHandler;

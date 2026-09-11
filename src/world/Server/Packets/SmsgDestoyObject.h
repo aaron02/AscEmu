@@ -45,7 +45,7 @@ namespace AscEmu::Packets
                 packet.writeBit(oGuid[4]);
                 packet.writeBit(oGuid[1]);
 
-                packet << uint8_t(0);
+                packet.writeBit(0);     // onDeath: true lets the client play the death animation for the object
 
                 packet.writeBit(oGuid[7]);
                 packet.writeBit(oGuid[0]);

@@ -769,7 +769,8 @@ static inline constexpr uint8_t WOWPLAYER_SPELL_SCHOOL_COUNT = 7;
 static inline constexpr uint8_t WOWPLAYER_BUY_BACK_COUNT = 12;
 static inline constexpr uint8_t WOWPLAYER_ARENA_TEAM_SLOTS = 3;
 static inline constexpr uint8_t WOWPLAYER_DAILY_QUESTS_COUNT = 25;
-static inline constexpr uint8_t WOWPLAYER_QUEST_COUNT = 150;
+static inline constexpr uint8_t WOWPLAYER_QUEST_COUNT = 50;
+static inline constexpr uint8_t WOWPLAYER_QUEST_UNUSED_COUNT = 10;
 static inline constexpr uint8_t WOWPLAYER_VISIBLE_ITEM_COUNT = 19;
 static inline constexpr uint8_t WOWPLAYER_INVENTORY_SLOT_COUNT = 23;
 static inline constexpr uint8_t WOWPLAYER_PACK_SLOT_COUNT = 16;
@@ -810,12 +811,14 @@ union player_field_bytes_union
     uint32_t raw;
 };
 
+// 15 fields per slot, 50 slots (750 fields in total)
 struct WoWPlayer_Quest
 {
     uint32_t quest_id;
     uint32_t state;
     uint64_t required_mob_or_go;
     uint32_t expire_time;
+    std::array<uint32_t, WOWPLAYER_QUEST_UNUSED_COUNT> unused;
 };
 
 struct WoWPlayer_VisibleItem

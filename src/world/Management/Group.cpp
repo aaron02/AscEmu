@@ -971,6 +971,8 @@ void Group::UpdateAllOutOfRangePlayersFor(Player* pPlayer)
                     uint16_t questIdOffset = 3;
 #elif VERSION_STRING == TBC
                     uint16_t questIdOffset = 4;
+#elif VERSION_STRING >= Mop
+                    uint16_t questIdOffset = 15;
 #else
                     uint16_t questIdOffset = 5;
 #endif

@@ -893,6 +893,7 @@ protected:
         void handleQuestlogRemoveQuestOpcode(WorldPacket& recvPacket);
         void handlePushQuestToPartyOpcode(WorldPacket& recvPacket);
         void handleQuestPOIQueryOpcode(WorldPacket& recvPacket);        //> TBC
+        void handleQuestNpcQueryOpcode(WorldPacket& recvPacket);        //>= Mop
 
         //////////////////////////////////////////////////////////////////////////////////////////
         // SkillHandler.cpp

@@ -58,6 +58,8 @@
 #include "Server/Packets/SmsgQuestupdateAddItem.h"
 #include "Server/Packets/SmsgQuestupdateAddKill.h"
 #include "Storage/WorldStrings.h"
+
+#include <algorithm>
 #include "Utilities/Strings.hpp"
 #include "Server/Script/CreatureAIScript.hpp"
 #include "Server/Script/QuestScript.hpp"
@@ -1169,8 +1171,24 @@ QuestRelationList* QuestMgr::GetCreatureQuestList(uint32_t entryid)
     return itr == olist.end() ? nullptr : itr->second.get();
 }
 
+std::vector<uint32_t> const* QuestMgr::getQuestFinisherEntries(uint32_t questId) const
+{
+    const auto itr = m_questFinisherEntries.find(questId);
+    if (itr == m_questFinisherEntries.end())
+        return nullptr;
+
+    return &itr->second;
+}
+
 void QuestMgr::addCreatureQuest(uint32_t _entry, const QuestProperties* _questProp, uint8_t _type)
 {
+    if (_type & QUESTGIVER_QUEST_END)
+    {
+        auto& finisherEntries = m_questFinisherEntries[_questProp->id];
+        if (std::find(finisherEntries.begin(), finisherEntries.end(), _entry) == finisherEntries.end())
+            finisherEntries.push_back(_entry);
+    }
+
     const auto [itr, _] = m_npc_quests.try_emplace(_entry, Util::LazyInstanceCreator([] {
         return std::make_unique<QuestRelationList>();
     }));
@@ -1190,6 +1208,14 @@ void QuestMgr::addCreatureQuest(uint32_t _entry, const QuestProperties* _questPr
 
 void QuestMgr::addGameObjectQuest(uint32_t _entry, const QuestProperties* _questProp, uint8_t _type)
 {
+    if (_type & QUESTGIVER_QUEST_END)
+    {
+        auto& finisherEntries = m_questFinisherEntries[_questProp->id];
+        const uint32_t gameObjectEntry = _entry | 0x80000000;
+        if (std::find(finisherEntries.begin(), finisherEntries.end(), gameObjectEntry) == finisherEntries.end())
+            finisherEntries.push_back(gameObjectEntry);
+    }
+
     const auto [itr, _] = m_obj_quests.try_emplace(_entry, Util::LazyInstanceCreator([] {
         return std::make_unique<QuestRelationList>();
     }));

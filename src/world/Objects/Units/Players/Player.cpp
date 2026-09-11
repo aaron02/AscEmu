@@ -3204,7 +3204,11 @@ void Player::initVisibleUpdateBits()
         Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, visible_items) + 1 + offset);
     }
 
+#if VERSION_STRING >= Mop
+    uint16_t questIdOffset = 15;
+#else
     uint16_t questIdOffset = 5;
+#endif
     for (uint16_t i = getOffsetForStructuredField(WoWPlayer, quests); i < getOffsetForStructuredField(WoWPlayer, visible_items); i += questIdOffset)
         Player::m_visibleUpdateMask.SetBit(i);
 
@@ -3332,6 +3336,8 @@ void Player::initVisibleUpdateBits()
     uint16_t questIdOffset = 3;
 #elif VERSION_STRING == TBC
     uint16_t questIdOffset = 4;
+#elif VERSION_STRING >= Mop
+    uint16_t questIdOffset = 15;
 #else
     uint16_t questIdOffset = 5;
 #endif

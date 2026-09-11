@@ -9,6 +9,8 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgQuestgiverAcceptQuest.h"
 #include "Server/Packets/CmsgQuestQuery.h"
 #include "Server/Packets/CmsgQuestPoiQuery.h"
+#include "Server/Packets/CmsgQuestNpcQuery.h"
+#include "Server/Packets/SmsgQuestNpcQueryResponse.h"
 #include "Server/Packets/CmsgQuestgiverHello.h"
 #include "Server/Packets/CmsgQuestgiverStatusQuery.h"
 #include "Server/Packets/SmsgQuestgiverStatus.h"
@@ -38,6 +40,10 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Script/HookInterface.hpp"
 #include "Server/Script/QuestScript.hpp"
 #include "Server/Script/ScriptMgr.hpp"
+
+#include <string>
+#include <utility>
+#include <vector>
 
 using namespace AscEmu::Packets;
 
@@ -198,7 +204,7 @@ std::unique_ptr<WorldPacket> WorldSession::buildQuestQueryResponse(QuestProperti
 
     return data;
 }
-#else
+#elif VERSION_STRING == Cata
 std::unique_ptr<WorldPacket> WorldSession::buildQuestQueryResponse(QuestProperties const* qst)
 {
     auto data = std::make_unique<WorldPacket>(SMSG_QUEST_QUERY_RESPONSE, 100);
@@ -333,6 +339,229 @@ std::unique_ptr<WorldPacket> WorldSession::buildQuestQueryResponse(QuestProperti
 
     return data;
 }
+#else
+namespace
+{
+    struct QuestQueryObjective
+    {
+        uint32_t id = 0;
+        uint8_t index = 0;
+        uint8_t type = 0;
+        uint32_t objectId = 0;
+        int32_t amount = 0;
+        std::string description;
+    };
+
+    enum QuestQueryObjectiveType : uint8_t
+    {
+        QUEST_QUERY_OBJECTIVE_NPC = 0,
+        QUEST_QUERY_OBJECTIVE_ITEM = 1,
+        QUEST_QUERY_OBJECTIVE_GAMEOBJECT = 2,
+        QUEST_QUERY_OBJECTIVE_SPELL = 5
+    };
+
+    std::vector<QuestQueryObjective> buildQuestQueryObjectives(QuestProperties const* qst, MySQLStructure::LocalesQuest const* lci)
+    {
+        std::vector<QuestQueryObjective> objectives;
+
+        for (uint8_t i = 0; i < 4; ++i)
+        {
+            QuestQueryObjective objective;
+            objective.id = (qst->id << 4) | i;
+            objective.index = i;
+            objective.amount = static_cast<int32_t>(qst->required_mob_or_go_count[i]);
+            objective.description = lci != nullptr ? lci->objectiveText[i] : qst->objectivetexts[i];
+
+            if (qst->required_mob_or_go[i] > 0)
+            {
+                objective.type = QUEST_QUERY_OBJECTIVE_NPC;
+                objective.objectId = static_cast<uint32_t>(qst->required_mob_or_go[i]);
+            }
+            else if (qst->required_mob_or_go[i] < 0)
+            {
+                objective.type = QUEST_QUERY_OBJECTIVE_GAMEOBJECT;
+                objective.objectId = static_cast<uint32_t>(-qst->required_mob_or_go[i]);
+            }
+            else if (qst->required_spell[i] != 0)
+            {
+                objective.type = QUEST_QUERY_OBJECTIVE_SPELL;
+                objective.objectId = qst->required_spell[i];
+            }
+            else
+            {
+                continue;
+            }
+
+            objectives.push_back(objective);
+        }
+
+        uint8_t nextIndex = 4;
+        for (uint8_t i = 0; i < MAX_REQUIRED_QUEST_ITEM; ++i)
+        {
+            if (qst->required_item[i] == 0)
+                continue;
+
+            QuestQueryObjective objective;
+            objective.id = (qst->id << 4) | nextIndex;
+            objective.index = nextIndex++;
+            objective.type = QUEST_QUERY_OBJECTIVE_ITEM;
+            objective.objectId = qst->required_item[i];
+            objective.amount = static_cast<int32_t>(qst->required_itemcount[i]);
+            objectives.push_back(objective);
+        }
+
+        return objectives;
+    }
+}
+
+std::unique_ptr<WorldPacket> WorldSession::buildQuestQueryResponse(QuestProperties const* qst)
+{
+    auto data = std::make_unique<WorldPacket>(SMSG_QUEST_QUERY_RESPONSE, 400);
+    MySQLStructure::LocalesQuest const* lci = (language > 0) ? sMySQLStore.getLocalizedQuest(qst->id, language) : nullptr;
+
+    const std::string title = lci ? lci->title : qst->title;
+    const std::string details = lci ? lci->details : qst->details;
+    const std::string objectives = lci ? lci->objectives : qst->objectives;
+    const std::string endText = lci ? lci->endText : qst->endtext;
+    const std::string completedText;
+    const std::string questGiverTextWindow;
+    const std::string questGiverTargetName;
+    const std::string questTurnTextWindow;
+    const std::string questTurnTargetName;
+
+    const bool hiddenReward = qst->HasFlag(QUEST_FLAGS_HIDDEN_REWARDS);
+    const auto objectiveList = buildQuestQueryObjectives(qst, lci);
+
+    *data << uint32_t(qst->id);
+
+    data->writeBit(1); // has data
+    data->writeBits(questTurnTextWindow.size(), 10);
+    data->writeBits(title.size(), 9);
+    data->writeBits(completedText.size(), 11);
+    data->writeBits(details.size(), 12);
+    data->writeBits(questTurnTargetName.size(), 8);
+    data->writeBits(questGiverTargetName.size(), 8);
+    data->writeBits(questGiverTextWindow.size(), 10);
+    data->writeBits(endText.size(), 9);
+    data->writeBits(objectiveList.size(), 19);
+    data->writeBits(objectives.size(), 12);
+
+    ByteBuffer objectiveData;
+    for (const auto& objective : objectiveList)
+    {
+        data->writeBits(objective.description.size(), 8);
+        data->writeBits(0, 22); // visual effects
+
+        objectiveData << int32_t(objective.amount);
+        objectiveData << uint32_t(objective.id);
+        objectiveData.writeString(objective.description);
+        objectiveData << uint32_t(0); // flags
+        objectiveData << uint8_t(objective.index);
+        objectiveData << uint8_t(objective.type);
+        objectiveData << uint32_t(objective.objectId);
+    }
+
+    data->flushBits();
+
+    data->append(objectiveData);
+    *data << uint32_t(0);                                                       // required source item 0
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitem[4]);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_item[3]);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_itemcount[1]);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitemcount[2]);
+
+    for (uint8_t i = 0; i < 4; ++i)
+    {
+        *data << uint32_t(qst->reward_currency_id[i]);
+        *data << uint32_t(qst->reward_currency_count[i]);
+    }
+
+    *data << uint32_t(qst->rewardtalents);
+    *data << float(qst->point_y);
+    *data << uint32_t(0);                                                       // sound turn in
+
+    for (uint8_t i = 0; i < 5; ++i)
+    {
+        *data << uint32_t(0);                                                   // reward faction value id
+        *data << uint32_t(0);                                                   // reward faction value id override
+        *data << uint32_t(qst->reward_repfaction[i]);
+    }
+
+    *data << uint32_t(hiddenReward ? 0 : sQuestMgr.GenerateRewardMoney(_player, qst));
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitemcount[4]);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitemcount[1]);
+    *data << uint32_t(0);                                                       // flags 2
+    data->writeString(endText);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitem[1]);
+    *data << uint32_t(qst->rew_money_at_max_level);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_item[0]);
+    data->writeString(completedText);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitem[3]);
+    *data << uint32_t(qst->bonushonor);
+    data->writeString(questGiverTextWindow);
+    data->writeString(objectives);
+    *data << uint32_t(0);                                                       // reward skill points
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitem[5]);
+    *data << uint32_t(qst->suggestedplayers);
+    *data << uint32_t(qst->id);
+    *data << uint32_t(0);                                                       // required source item 1
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_item[1]);
+    *data << int32_t(qst->min_level);
+    *data << uint32_t(0);                                                       // reward reputation mask
+    *data << uint32_t(qst->point_opt);
+    *data << int32_t(qst->questlevel);
+    *data << uint32_t(2);                                                       // method: 2 = normal quest
+    *data << uint32_t(0);                                                       // required source item count 2
+    *data << uint32_t(qst->RewXPId);
+    data->writeString(details);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_itemcount[0]);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitemcount[5]);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_itemcount[2]);
+    *data << uint32_t(qst->effect_on_player);                                   // spell cast on the player
+    *data << uint32_t(0);
+    data->writeString(questTurnTargetName);
+    *data << uint32_t(0);
+    *data << uint32_t(0);                                                       // required source item count 1
+    *data << uint32_t(0);                                                       // required source item 2
+    *data << uint32_t(0);                                                       // quest turn in portrait
+    data->writeString(title);
+    *data << uint32_t(qst->type);
+    *data << uint32_t(qst->RewXPId);
+    *data << uint32_t(0);
+    *data << uint32_t(0);
+    *data << uint32_t(qst->point_mapid);
+    *data << uint32_t(qst->next_quest_id);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitem[0]);
+    data->writeString(questGiverTargetName);
+    *data << uint32_t(0);
+    *data << uint32_t(0);                                                       // required source item 3
+    *data << float(qst->point_x);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitem[2]);
+    *data << uint32_t(0);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_itemcount[3]);
+    *data << uint32_t(0);                                                       // sound accept
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_item[2]);
+    *data << float(0);                                                          // honor multiplier
+    *data << uint32_t(qst->rewardtitleid);
+    data->writeString(questTurnTextWindow);
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitemcount[3]);
+    *data << uint32_t(0);                                                       // required source item count 0
+    if (qst->quest_sort > 0)
+        *data << int32_t(-static_cast<int32_t>(qst->quest_sort));
+    else
+        *data << int32_t(qst->zone_id);
+    *data << uint32_t(0);                                                       // reward skill id
+    *data << uint32_t(hiddenReward ? 0 : qst->reward_choiceitemcount[0]);
+    *data << uint32_t(qst->reward_spell);
+    *data << uint32_t(0);                                                       // quest giver portrait
+    *data << uint32_t(0);
+    *data << uint32_t(0);                                                       // required source item count 3
+    *data << uint32_t(qst->quest_flags);
+    *data << uint32_t(0);                                                       // reward package item id
+    *data << uint32_t(qst->srcitem);
+
+    return data;
+}
 #endif
 
 void WorldSession::handleQuestPushResultOpcode(WorldPacket& recvPacket)
@@ -402,6 +631,38 @@ void WorldSession::handleQuestPOIQueryOpcode([[maybe_unused]] WorldPacket& recvP
 
     SmsgQuestPoiQueryResponse managedPacket(srlPacket.questCount, srlPacket.questIds);
     sendManagedPacket(managedPacket);
+#endif
+}
+
+void WorldSession::handleQuestNpcQueryOpcode([[maybe_unused]] WorldPacket& recvPacket)
+{
+#if VERSION_STRING >= Mop
+    CmsgQuestNpcQuery srlPacket;
+    if (!parsePacket(recvPacket, srlPacket))
+        return;
+
+    sLogger.debugOpcode("Received CMSG_QUEST_NPC_QUERY.");
+
+    std::vector<QuestNpcQueryEntry> quests;
+    for (const uint32_t questId : srlPacket.questIds)
+    {
+        if (questId == 0 || sMySQLStore.getQuestProperties(questId) == nullptr)
+            continue;
+
+        // the client only needs the finishers of the quests in its log
+        if (!_player->hasQuestInQuestLog(questId))
+            continue;
+
+        QuestNpcQueryEntry entry;
+        entry.questId = questId;
+        if (const auto finisherEntries = sQuestMgr.getQuestFinisherEntries(questId))
+            entry.finisherEntries = *finisherEntries;
+
+        quests.push_back(std::move(entry));
+    }
+
+    SmsgQuestNpcQueryResponse responsePacket(std::move(quests));
+    sendManagedPacket(responsePacket);
 #endif
 }
 

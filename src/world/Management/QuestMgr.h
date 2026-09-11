@@ -176,6 +176,9 @@ public:
         void addCreatureQuest(uint32_t _entry, const QuestProperties* _questProp, uint8_t _type);
         void addGameObjectQuest(uint32_t _entry, const QuestProperties* _questProp, uint8_t _type);
 
+        // creature and gameobject entries (gameobjects carry the 0x80000000 bit) that finish the quest
+        std::vector<uint32_t> const* getQuestFinisherEntries(uint32_t questId) const;
+
         QuestAssociationList* GetQuestAssociationListForItemId(uint32_t itemId);
         uint32_t GetGameObjectLootQuest(uint32_t GO_Entry);
         void SetGameObjectLootQuest(uint32_t GO_Entry, uint32_t Item_Entry);
@@ -233,6 +236,8 @@ public:
         std::unordered_map<uint32_t, std::unique_ptr<QuestAssociationList> > m_quest_associations;
 
         std::unordered_map<uint32_t, uint32_t> m_ObjectLootQuestList;
+
+        std::unordered_map<uint32_t, std::vector<uint32_t>> m_questFinisherEntries;
 
         /*template <class T>
         void _AddQuest(uint32_t entryid, QuestProperties const* qst, uint8_t type);*/

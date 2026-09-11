@@ -30,7 +30,19 @@ namespace AscEmu::Packets
     protected:
         bool internalDeserialise(WorldPacket& packet) override
         {
-            packet >> questCount;
+            if (m_protocol.expansion <= WoW::Expansion::_Cata)
+            {
+                packet >> questCount;
+            }
+            else if (m_protocol.isMop())
+            {
+                questCount = packet.readBits(22);
+            }
+            else
+            {
+                return false;
+            }
+
             for (uint32_t i = 0; i < questCount; ++i)
             {
                 uint32_t questId;
@@ -38,6 +50,7 @@ namespace AscEmu::Packets
 
                 questIds.push_back(questId);
             }
+
             return true;
         }
     };

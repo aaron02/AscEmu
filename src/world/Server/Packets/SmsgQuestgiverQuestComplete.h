@@ -45,18 +45,9 @@ namespace AscEmu::Packets
             {
                 packet << questId << xp << rewardMoney << bonusHonor << bonusTalent << bonusArenaPoints;
 
-                // seems to be ignored by client
-                // uint32_t reward item count
-                // for (uint8_t i = 0; i < 4; ++i)
-                // {
-                //     if (qst->reward_item[i])
-                //     {
-                //         data << uint32_t(qst->reward_item[i]);
-                //         data << uint32_t(qst->reward_itemcount[i]);
-                //     }
-                // }
+                return true;
             }
-            else
+            else if (m_protocol.isCata())
             {
                 packet << bonusTalent;
                 packet << uint32_t(0);  // skillpoints
@@ -66,9 +57,24 @@ namespace AscEmu::Packets
                 packet.writeBit(0);     // reward items?
                 packet.writeBit(1);
                 packet.flushBits();
+
+                return true;
+            }
+            else if (m_protocol.isMop())
+            {
+                packet.writeBit(1);
+                packet.writeBit(0);
+                packet.flushBits();
+
+                packet << bonusTalent << rewardMoney << questId;
+                packet << uint32_t(0);  // skillid
+                packet << xp;
+                packet << uint32_t(0);  // skillpoints
+
+                return true;
             }
 
-            return true;
+            return false;
         }
 
         bool internalDeserialise(WorldPacket& /*packet*/) override { return false; }

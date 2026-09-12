@@ -1004,7 +1004,7 @@ void WorldSession::registerOpcodeHandler()
     registry.registerOpcode(CMSG_LEARN_TALENTS_MULTIPLE, &WorldSession::handleLearnMultipleTalentsOpcode, false, false, true, false, false);
     registry.registerOpcode(CMSG_UNLEARN_TALENTS, &WorldSession::handleUnlearnTalents, true, false, true, true, true);
     registry.registerOpcode(CMSG_SET_PRIMARY_TALENT_TREE, &WorldSession::handleSetPrimaryTalentTreeOpcode, false, false, false, false, true);
-    registry.registerOpcode(MSG_TALENT_WIPE_CONFIRM, &WorldSession::handleUnlearnTalents, true, false, true, true, false);
+    registry.registerOpcode(MSG_TALENT_WIPE_CONFIRM, &WorldSession::handleUnlearnTalents, true, true, true, true, false);
     registry.registerOpcode(CMSG_REQUEST_CATEGORY_COOLDOWNS, &WorldSession::handleRequestCategoryCooldownsOpcode, false, false, false, true, true);
     registry.registerOpcode(CMSG_UPDATE_PROJECTILE_POSITION, &WorldSession::handleUpdateProjectilePosition, false, false, true, true, false);
     // Combat / Duel

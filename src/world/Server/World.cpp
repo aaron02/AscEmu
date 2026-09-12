@@ -781,6 +781,15 @@ bool World::setInitialWorldSettings()
 
     loadMySQLTablesByTask();
 
+    // transport templates are needed before the continents spawn their transports
+    sLogger.info("World : Starting Transport System...");
+    sTransportHandler.loadTransportTemplates();
+    // Loads TransportAnimation.dbc/TransportRotation.dbc into the per-entry animation
+    // cache used by legacy (GAMEOBJECT_TYPE_TRANSPORT) transports such as elevators -
+    // without this, GameObject::getTransportPeriod() always sees a null AnimationInfo
+    // and legacy transports never advance their path progress.
+    sTransportHandler.loadTransportAnimationAndRotation();
+
     sMapMgr.initialize();
 
     logEntitySize();
@@ -795,16 +804,6 @@ bool World::setInitialWorldSettings()
     sObjectMgr.loadAchievementCriteriaList();
 #endif
 
-#if VERSION_STRING <= Mop // support MOP
-    sLogger.info("World : Starting Transport System...");
-    sTransportHandler.loadTransportTemplates();
-    // Loads TransportAnimation.dbc/TransportRotation.dbc into the per-entry animation
-    // cache used by legacy (GAMEOBJECT_TYPE_TRANSPORT) transports such as elevators -
-    // without this, GameObject::getTransportPeriod() always sees a null AnimationInfo
-    // and legacy transports never advance their path progress.
-    sTransportHandler.loadTransportAnimationAndRotation();
-    sTransportHandler.spawnContinentTransports();
-
     sLogger.info("World : Starting Mail System...");
     sMailSystem.StartMailSystem();
 
@@ -815,7 +814,7 @@ bool World::setInitialWorldSettings()
     sLogger.info("World : Loading LFG rewards...");
     sLfgMgr.initialize();
     sLfgMgr.LoadRewards();
-#endif
+
 
 #if VERSION_STRING == TBC
     // TBC-only Meeting Stone "Looking For Group" matchmaking - unrelated to the WotLK+ LFG

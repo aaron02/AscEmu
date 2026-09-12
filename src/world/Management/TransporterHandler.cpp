@@ -61,27 +61,29 @@ void TransportHandler::loadTransportTemplates()
     sLogger.debugMap("TransportHandler : Loaded {} transport templates.", createCount);
 }
 
-void TransportHandler::spawnContinentTransports()
+void TransportHandler::spawnContinentTransports(WorldMap* map)
 {
-    if (_transportTemplates.empty())
+    if (map == nullptr || _transportTemplates.empty())
         return;
 
-    sLogger.debugMap("TransportHandler : Start Spawning Continent Transports...");
-
+    const uint32_t mapId = map->getBaseMap()->getMapId();
     uint32_t createCount = 0;
 
     for (uint32_t entry : sMySQLStore._transportDataStore | std::views::keys)
     {
-        if (TransportTemplate const* tInfo = getTransportTemplate(entry))
-        {
-            if (!tInfo->inInstance && createTransport(entry) != nullptr)
-            {
-                ++createCount;
-            }
-        }
+        TransportTemplate const* tInfo = getTransportTemplate(entry);
+        if (tInfo == nullptr || tInfo->inInstance || tInfo->keyFrames.empty())
+            continue;
+
+        // a transport belongs to the map its path starts on
+        if (tInfo->keyFrames.begin()->Node.mapid != mapId)
+            continue;
+
+        if (createTransport(entry, map) != nullptr)
+            ++createCount;
     }
 
-    sLogger.debugMap("TransportHandler : Spawned {} Continent Transports.", createCount);
+    sLogger.debugMap("TransportHandler : Spawned {} Continent Transports on map {}.", createCount, mapId);
 }
 
 Transporter* TransportHandler::createTransport(uint32_t entry, WorldMap* map /*= nullptr*/)

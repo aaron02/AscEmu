@@ -175,8 +175,18 @@ void Transporter::Update(unsigned long time_passed)
 
     //sLogger.debug("Transporter: current node {} and pathprogress {}.", _currentFrame->Index, GetTimer());
 
+    // one full pass over the path must reach the frame matching the timer, otherwise the keyframe
+    // times are inconsistent and the loop would spin forever on the map thread
+    size_t framesVisited = 0;
+
     for (;;)
     {
+        if (++framesVisited > GetKeyFrames().size() + 1)
+        {
+            sLogger.failure("Transporter::Update: transport {} found no keyframe for timer {} (period {}, {} frames) - stopping update", getEntry(), timer, getTransportPeriod(), GetKeyFrames().size());
+            return;
+        }
+
         if (timer >= _currentFrame->ArriveTime)
         {
             if (!_triggeredArrivalEvent)

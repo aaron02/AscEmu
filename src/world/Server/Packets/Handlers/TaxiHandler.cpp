@@ -30,7 +30,9 @@ void WorldSession::sendTaxiStatus(WoWGuid guid)
     Creature* unit = player->getWorldMapCreature(guid.getRawGuid());
     if (!unit || unit->isHostileTo(player) || !unit->isTaxi())
     {
-        sLogger.failure("WorldSession::sendTaxiStatus Creature with guid - {} not found.", std::to_string(unit->getGuid()));
+        // unit can be null here - never dereference it for the log
+        sLogger.failure("WorldSession::sendTaxiStatus Creature with guid {} (high type {}) {} for player {}.", guid.getRawGuid(), static_cast<uint32_t>(guid.getHighType()),
+            unit == nullptr ? "not found" : "is no usable flight master", player->getGuidLow());
         return;
     }
 

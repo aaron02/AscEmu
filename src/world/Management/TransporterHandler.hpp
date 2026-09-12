@@ -166,8 +166,8 @@ public:
     // Creates a transport using given GameObject template entry
     Transporter* createTransport(uint32_t entry, WorldMap* map = nullptr);
 
-    // Spawns all continent transports, used at startup
-    void spawnContinentTransports();
+    // spawns the continent transports starting on this map - called before the map thread runs
+    void spawnContinentTransports(WorldMap* map);
 
     void addTransport(Transporter* transport);
 

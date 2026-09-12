@@ -13,6 +13,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Logging/Logger.hpp"
 #include "Management/Group.h"
 #include "Management/ItemInterface.h"
+#include "Management/TransporterHandler.hpp"
 #include "Storage/MySQLDataStore.hpp"
 #include "Storage/WDB/WDBStores.hpp"
 #include "Objects/Units/Creatures/Pet.h"
@@ -195,6 +196,10 @@ std::unique_ptr<WorldMap> MapMgr::createWorldMap(uint32_t mapId, uint32_t unload
 
     // Initialize Map Script and Load Static Spawns
     map->initialize();
+
+    // Continent transports are created BEFORE the map thread runs - they activate grids, spawn
+    // their passengers and insert collision models, none of which is safe against a running update
+    sTransportHandler.spawnContinentTransports(map.get());
 
     // Scheduling the new map for running
     map->startMapThread();

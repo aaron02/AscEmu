@@ -47,21 +47,22 @@ namespace AscEmu::Packets
         {
             if (m_protocol.isMop())
             {
+                // bit and byte order verified against a captured 5.4.8 packet (creature guid 0xF1300099AC000830)
                 guid[0] = packet.readBit();
                 guid[1] = packet.readBit();
                 guid[6] = packet.readBit();
                 guid[4] = packet.readBit();
-                guid[5] = packet.readBit();
-                guid[2] = packet.readBit();
                 guid[3] = packet.readBit();
+                guid[2] = packet.readBit();
+                guid[5] = packet.readBit();
                 guid[7] = packet.readBit();
 
-                packet.readByteSeq(guid[4]);
+                packet.readByteSeq(guid[7]);
                 packet.readByteSeq(guid[1]);
-                packet.readByteSeq(guid[5]);
+                packet.readByteSeq(guid[4]);
                 packet.readByteSeq(guid[0]);
                 packet.readByteSeq(guid[2]);
-                packet.readByteSeq(guid[7]);
+                packet.readByteSeq(guid[5]);
                 packet.readByteSeq(guid[6]);
                 packet.readByteSeq(guid[3]);
 

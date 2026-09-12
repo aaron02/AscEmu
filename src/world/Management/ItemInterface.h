@@ -136,6 +136,8 @@ private:
     std::mutex m_soulboundTradeableMutex;
 #endif
 
+    void onItemRemoved(Item const* item);
+
     // MIT End
     // APGL Start
 

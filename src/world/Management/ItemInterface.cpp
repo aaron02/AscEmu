@@ -626,6 +626,21 @@ std::tuple<AddItemResult, std::unique_ptr<Item>> ItemInterface::m_AddItem(std::u
             sEventMgr.AddEvent(item, &Item::sendDurationUpdate, EVENT_SEND_PACKET_TO_PLAYER_AFTER_LOGIN, 0, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
     }
 
+    // item spells with the "on obtain" trigger are cast on the owner when the item lands in his bags
+    const bool inBackpack = ContainerSlot == INVENTORY_SLOT_NOT_SET && slot >= INVENTORY_SLOT_ITEM_START && slot < INVENTORY_SLOT_ITEM_END;
+    const bool inBag = ContainerSlot >= INVENTORY_SLOT_BAG_START && ContainerSlot < INVENTORY_SLOT_BAG_END;
+    if (m_pOwner->IsInWorld() && (inBackpack || inBag))
+    {
+        for (const auto& itemSpell : item->getItemProperties()->Spells)
+        {
+            if (itemSpell.Id == 0 || itemSpell.Trigger != APPLY_AURA_ON_PICKUP)
+                continue;
+
+            if (!m_pOwner->hasAurasWithId(itemSpell.Id))
+                m_pOwner->castSpell(m_pOwner, itemSpell.Id, true);
+        }
+    }
+
     return { ADD_ITEM_RESULT_OK, nullptr };
 }
 
@@ -637,6 +652,22 @@ bool ItemInterface::IsBagSlot(int16_t slot)
         return true;
     }
     return false;
+}
+
+/// Common bookkeeping when an item (or part of a stack) leaves the inventory
+void ItemInterface::onItemRemoved(Item const* item)
+{
+    // auras applied by "on obtain" item spells end with the last item of that kind
+    if (GetItemCount(item->getEntry(), true) == 0)
+    {
+        for (const auto& itemSpell : item->getItemProperties()->Spells)
+        {
+            if (itemSpell.Id != 0 && itemSpell.Trigger == APPLY_AURA_ON_PICKUP)
+                m_pOwner->removeAllAurasById(itemSpell.Id);
+        }
+    }
+
+    sQuestMgr.onPlayerItemRemove(m_pOwner, item);
 }
 
 /// Removes the item safely and returns it back for usage
@@ -692,7 +723,7 @@ std::unique_ptr<Item> ItemInterface::SafeRemoveAndRetreiveItemFromSlot(int16_t C
             else if (slot < INVENTORY_SLOT_BAG_END)
                 m_pOwner->applyItemMods(pItem.get(), slot, false);
 
-            sQuestMgr.onPlayerItemRemove(GetOwner(), pItem.get());
+            onItemRemoved(pItem.get());
 
             if (destroy)
             {
@@ -873,7 +904,7 @@ bool ItemInterface::SafeFullRemoveItemFromSlot(int16_t ContainerSlot, int16_t sl
 
             pItem->deleteFromDB();
 
-            sQuestMgr.onPlayerItemRemove(GetOwner(), pItem.get());
+            onItemRemoved(pItem.get());
 
             //delete pItem;
             // We make it a garbage item, so when it's used for a spell, it gets deleted in the next Player update
@@ -1252,7 +1283,7 @@ uint32_t ItemInterface::RemoveItemAmt(uint32_t id, uint32_t amt)
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)
@@ -1292,7 +1323,7 @@ uint32_t ItemInterface::RemoveItemAmt(uint32_t id, uint32_t amt)
                         {
                             item2->setStackCount(item2->getStackCount() - amt);
                             item2->m_isDirty = true;
-                            sQuestMgr.onPlayerItemRemove(GetOwner(), item2);
+                            onItemRemoved(item2);
                             return amt;
                         }
                         else if (item2->getStackCount() == amt)
@@ -1330,7 +1361,7 @@ uint32_t ItemInterface::RemoveItemAmt(uint32_t id, uint32_t amt)
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)
@@ -1365,7 +1396,7 @@ uint32_t ItemInterface::RemoveItemAmt(uint32_t id, uint32_t amt)
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)
@@ -1418,7 +1449,7 @@ uint32_t ItemInterface::RemoveItemAmt_ProtectPointer(uint32_t id, uint32_t amt, 
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)
@@ -1464,7 +1495,7 @@ uint32_t ItemInterface::RemoveItemAmt_ProtectPointer(uint32_t id, uint32_t amt, 
                         {
                             item2->setStackCount(item2->getStackCount() - amt);
                             item2->m_isDirty = true;
-                            sQuestMgr.onPlayerItemRemove(GetOwner(), item2);
+                            onItemRemoved(item2);
                             return amt;
                         }
                         else if (item2->getStackCount() == amt)
@@ -1507,7 +1538,7 @@ uint32_t ItemInterface::RemoveItemAmt_ProtectPointer(uint32_t id, uint32_t amt, 
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)
@@ -1548,7 +1579,7 @@ uint32_t ItemInterface::RemoveItemAmt_ProtectPointer(uint32_t id, uint32_t amt, 
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)
@@ -1603,7 +1634,7 @@ uint32_t ItemInterface::RemoveItemAmtByGuid(uint64_t guid, uint32_t amt)
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)
@@ -1644,7 +1675,7 @@ uint32_t ItemInterface::RemoveItemAmtByGuid(uint64_t guid, uint32_t amt)
                         {
                             item2->setStackCount(item2->getStackCount() - amt);
                             item2->m_isDirty = true;
-                            sQuestMgr.onPlayerItemRemove(GetOwner(), item2);
+                            onItemRemoved(item2);
                             return amt;
                         }
                         else if (item2->getStackCount() == amt)
@@ -1682,7 +1713,7 @@ uint32_t ItemInterface::RemoveItemAmtByGuid(uint64_t guid, uint32_t amt)
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)
@@ -1718,7 +1749,7 @@ uint32_t ItemInterface::RemoveItemAmtByGuid(uint64_t guid, uint32_t amt)
                 {
                     item->setStackCount(item->getStackCount() - amt);
                     item->m_isDirty = true;
-                    sQuestMgr.onPlayerItemRemove(GetOwner(), item);
+                    onItemRemoved(item);
                     return amt;
                 }
                 else if (item->getStackCount() == amt)

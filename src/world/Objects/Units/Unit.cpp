@@ -7100,7 +7100,7 @@ void Unit::smsg_AttackStart(Unit* pVictim)
     SmsgAttackStart sendPacket(getGuid(), pVictim->getGuid());
     PacketBroadcast::sendToSet(*this, sendPacket, false);
 
-    sLogger.debug("WORLD: Sent SMSG_ATTACK_START");
+    sLogger.debugOpcode("WORLD: Sent SMSG_ATTACK_START");
 
     if (isPlayer())
     {

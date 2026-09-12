@@ -1714,7 +1714,7 @@ void ObjectMgr::loadTrainers()
             const auto* trainerSpellSet = getTrainerSpellSetById(spellSetId);
             if (trainerSpellSet == nullptr)
             {
-                sLogger.debug("ObjectMgr::loadTrainers : trainer {} references spellset {} which doesn't exist for this build, skipping.", entry, spellSetId);
+                sLogger.warning("ObjectMgr::loadTrainers : trainer {} references spellset {} which doesn't exist for this build, skipping.", entry, spellSetId);
                 continue;
             }
 

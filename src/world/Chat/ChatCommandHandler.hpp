@@ -73,7 +73,7 @@ public:
         sendSystemMessagePacket(session, fmt::format("{}{}|r", colorCode, formattedMessage));
     }
 
-    // --- Plain text overloads ---
+    // Plain text overloads
     static void redSystemMessage(WorldSession* session, std::string_view message)
     {
         colorSystemMessage(session, MSG_COLOR_LIGHTRED, message);

@@ -5,12 +5,21 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "Logger.hpp"
 #include "LoggerDefines.hpp"
+#include "MessageType.hpp"
+#include "Severity.hpp"
 #include "Utilities/Util.hpp"
-#include "Config/Config.hpp"
 
+#include <cstdio>
 #include <string>
+#include <string_view>
 #include <algorithm>
-#include <fmt/format.h>
+
+#ifdef _WIN32
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <Windows.h>
+#endif
 
 namespace AscEmu::Logging
 {
@@ -24,37 +33,41 @@ namespace AscEmu::Logging
     {
         if (this->normalLogFile != nullptr)
         {
-            fflush(this->normalLogFile);
-            fclose(this->normalLogFile);
+            static_cast<void>(std::fclose(normalLogFile));
             this->normalLogFile = nullptr;
         }
 
         if (this->errorLogFile != nullptr)
         {
-            fflush(this->errorLogFile);
-            fclose(this->errorLogFile);
+            static_cast<void>(std::fclose(errorLogFile));
             this->errorLogFile = nullptr;
         }
     }
 
-    void Logger::initializeLogger(std::string file_prefix)
+    void Logger::initializeLogger(std::string_view filePrefix)
     {
 #ifdef _WIN32
-        handle_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-        SetConsoleOutputCP(65001);
+        handleStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+        SetConsoleOutputCP(CP_UTF8);
+
+        DWORD consoleMode = 0;
+        if (GetConsoleMode(handleStdout, &consoleMode))
+        {
+            SetConsoleMode(handleStdout, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
 #endif
-        std::string normal_filename = file_prefix + "-normal.log";
-        std::string error_filename = file_prefix + "-error.log";
+        const std::string normalFilename = fmt::format("{}-normal.log", filePrefix);
+        const std::string errorFilename = fmt::format("{}-error.log", filePrefix);
 
-        std::string current_date_time = Util::GetCurrentDateTimeString();
+        std::string currentDateTime = ::Util::GetCurrentDateTimeString();
 
-        auto logMessage = fmt::format("=================[{}]=================", current_date_time);
+        auto logMessage = fmt::format("=================[{}]=================", currentDateTime);
 
-        this->normalLogFile = fopen(normal_filename.c_str(), "a");
+        this->normalLogFile = fopen(normalFilename.c_str(), "a");
         if (this->normalLogFile == nullptr)
         {
             setConsoleColor(CONSOLE_COLOR_RED);
-            fmt::println("{} : Error opening file {}", __FUNCTION__, normal_filename);
+            fmt::println("{} : Error opening file {}", __FUNCTION__, normalFilename);
             setConsoleColor(CONSOLE_COLOR_NORMAL);
         }
         else
@@ -62,11 +75,11 @@ namespace AscEmu::Logging
             writeFile(this->normalLogFile, logMessage);
         }
 
-        this->errorLogFile = fopen(error_filename.c_str(), "a");
+        this->errorLogFile = fopen(errorFilename.c_str(), "a");
         if (this->errorLogFile == nullptr)
         {
             setConsoleColor(CONSOLE_COLOR_RED);
-            fmt::println("{} : Error opening file {}", __FUNCTION__, error_filename);
+            fmt::println("{} : Error opening file {}", __FUNCTION__, errorFilename);
             setConsoleColor(CONSOLE_COLOR_NORMAL);
         }
         else
@@ -75,25 +88,25 @@ namespace AscEmu::Logging
         }
     }
 
-    void Logger::setMinimumMessageType(MessageType _minimumMessageType)
+    void Logger::setMinimumMessageType(MessageType messageType)
     {
-        this->minimumMessageType = _minimumMessageType;
+        this->minimumMessageType = messageType;
     }
 
-    void Logger::setDebugFlags(DebugFlags debug_flags, bool enabled)
-{
-    if (enabled)
-        aelog_debug_flags |= debug_flags;
-    else
-        aelog_debug_flags &= ~debug_flags;
-}
+    void Logger::setDebugFlags(DebugFlags debugFlags, bool enabled)
+    {
+        if (enabled)
+            aelogDebugFlags |= debugFlags;
+        else
+            aelogDebugFlags &= ~debugFlags;
+    }
 
     void Logger::log(Severity severity, MessageType messageType, std::string_view message)
     {
         if (this->minimumMessageType > messageType)
             return;
 
-        auto logMessage = fmt::format("{} {}{}: {}", Util::GetCurrentTimeString(), getSeverityText(severity), getMessageTypeText(messageType), message);
+        auto logMessage = fmt::format("{} {}{}: {}", ::Util::GetCurrentTimeString(), getSeverityText(severity), getMessageTypeText(messageType), message);
 
         setSeverityConsoleColor(severity);
         fmt::println("{}", logMessage);
@@ -106,42 +119,51 @@ namespace AscEmu::Logging
 
     void Logger::file(Severity severity, MessageType messageType, std::string_view message)
     {
-        auto logMessage = fmt::format("{} {}{}: {}", Util::GetCurrentTimeString(), getSeverityText(severity), getMessageTypeText(messageType), message);
+        auto logMessage = fmt::format("{} {}{}: {}", ::Util::GetCurrentTimeString(), getSeverityText(severity), getMessageTypeText(messageType), message);
 
         writeFile(this->normalLogFile, logMessage);
         if (severity >= Severity::FAILURE)
             writeFile(this->errorLogFile, logMessage);
     }
 
-    std::string Logger::getMessageTypeText(MessageType messageType)
+    std::string_view Logger::getMessageTypeText(MessageType messageType)
     {
         switch (messageType)
         {
-        case TRACE:
-            return "[TRACE]";
-        case DEBUG:
-            return "[DEBUG]";
-        case MAJOR:
-            return "[MAJOR]";
-        default:
-            return "";
+            case MessageType::TRACE:
+                return "[TRACE]";
+            case MessageType::DEBUG:
+                return "[DEBUG]";
+            case MessageType::MINOR:
+                return "";
+            case MessageType::MAJOR:
+                return "[MAJOR]";
         }
+
+        return "";
     }
 
-    std::string Logger::getSeverityText(Severity severity)
+    std::string_view Logger::getSeverityText(Severity severity)
     {
         switch (severity)
         {
-        case WARNING:
-            return "[WARNING]";
-        case FAILURE:
-            return "[ERROR]";
-        case FATAL:
-            return "[FATAL]";
-        case INFO:
-        default:
-            return "[INFO]";
+            case Severity::WARNING:
+                return "[WARNING]";
+            case Severity::FAILURE:
+                return "[ERROR]";
+            case Severity::FATAL:
+                return "[FATAL]";
+            case Severity::INFO:
+                return "[INFO]";
+            case Severity::NONE:
+            case Severity::BLUE:
+            case Severity::PURPLE:
+            case Severity::YELLOW:
+            case Severity::CYAN:
+                return "";
         }
+
+        return "";
     }
 
     void Logger::writeFile(FILE* file, std::string_view msg)
@@ -150,83 +172,80 @@ namespace AscEmu::Logging
             return;
 
         fmt::println(file, "{}", msg);
-        fflush(file);
+        static_cast<void>(std::fflush(file));
     }
 
-#ifndef _WIN32
-    void Logger::setConsoleColor(const char* color)
+    void Logger::setConsoleColor(std::string_view color)
     {
-        fputs(color, stdout);
+        fmt::print("{}", color);
     }
-
-#else
-    void Logger::setConsoleColor(int color)
-    {
-        SetConsoleTextAttribute(handle_stdout, (WORD)color);
-    }
-#endif
 
     void Logger::setSeverityConsoleColor(Severity severity)
     {
         switch (severity)
         {
-            case FAILURE:
-            case FATAL:
+            case Severity::FAILURE:
+            case Severity::FATAL:
                 setConsoleColor(CONSOLE_COLOR_RED);
                 break;
-            case BLUE:
+            case Severity::BLUE:
                 setConsoleColor(CONSOLE_COLOR_BLUE);
                 break;
-            case YELLOW:
-            case WARNING:
+            case Severity::YELLOW:
+            case Severity::WARNING:
                 setConsoleColor(CONSOLE_COLOR_YELLOW);
                 break;
-            case PURPLE:
+            case Severity::PURPLE:
                 setConsoleColor(CONSOLE_COLOR_PURPLE);
                 break;
-            case CYAN:
+            case Severity::CYAN:
                 setConsoleColor(CONSOLE_COLOR_CYAN);
                 break;
-            case INFO:
-            default:
+            case Severity::INFO:
+            case Severity::NONE:
                 setConsoleColor(CONSOLE_COLOR_NORMAL);
                 break;
         }
     }
 
-    Severity Logger::getSeverityConsoleColorByDebugFlag(DebugFlags log_flags)
+    Severity Logger::getSeverityConsoleColorByDebugFlag(DebugFlags logFlags)
     {
-        switch (log_flags)
+        switch (logFlags)
         {
             case LF_MAP:
             case LF_MAP_CELL:
             case LF_VMAP:
             case LF_MMAP:
-                return BLUE;
+                return Severity::BLUE;
             case LF_OPCODE:
-                return CYAN;
+                return Severity::CYAN;
             case LF_SPELL:
             case LF_AURA:
             case LF_SPELL_EFF:
             case LF_AURA_EFF:
-                return PURPLE;
-            default:
-                return YELLOW;
+                return Severity::PURPLE;
+            case LF_NONE:
+            case LF_SCRIPT_MGR:
+            case LF_DB_TABLES:
+            case LF_MOVE:
+            case LF_ALL:
+                return Severity::YELLOW;
         }
+        return Severity::YELLOW;
     }
 
-    std::string getFormattedFileName(const std::string& path_prefix, const std::string& file_prefix, bool use_date_time)
+    std::string getFormattedFileName(std::string_view pathPrefix, std::string_view filePrefix, bool useDateTime)
     {
-        if (use_date_time)
+        if (useDateTime)
         {
-            std::string current_date_time = Util::GetCurrentDateTimeString();
-            // replace time seperator with valid character for file name
-            std::replace(current_date_time.begin(), current_date_time.end(), ':', '-');
-            std::replace(current_date_time.begin(), current_date_time.end(), ' ', '_');
+            std::string currentDateTime = ::Util::GetCurrentDateTimeString();
+            // replace time separator with valid character for file name
+            std::ranges::replace(currentDateTime, ':', '-');
+            std::ranges::replace(currentDateTime, ' ', '_');
 
-            return fmt::format("{}{}_{}.log", path_prefix, current_date_time, file_prefix);
+            return fmt::format("{}{}_{}.log", pathPrefix, currentDateTime, filePrefix);
         }
 
-        return fmt::format("{}{}.log", path_prefix, file_prefix);
+        return fmt::format("{}{}.log", pathPrefix, filePrefix);
     }
 }

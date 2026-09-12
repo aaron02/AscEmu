@@ -328,7 +328,7 @@ namespace VMAP
                 sLogger.failure("could not load '{}{}.vmo'", basepath, filename);
                 return nullptr;
             }
-            sLogger.debug("VMapManager2 loading file '{}{}'", basepath, filename);
+            sLogger.debugMap("VMapManager2 loading file '{}{}'", basepath, filename);
             model = iLoadedModelFiles.insert(std::pair<std::string, ManagedModel>(filename, ManagedModel())).first;
             model->second.setModel(std::move(worldmodel));
         }
@@ -349,7 +349,7 @@ namespace VMAP
         }
         if (model->second.decRefCount() == 0)
         {
-            sLogger.debug("VMapManager2 unloading file '{}'", filename);
+            sLogger.debugMap("VMapManager2 unloading file '{}'", filename);
             iLoadedModelFiles.erase(model);
         }
     }

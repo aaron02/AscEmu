@@ -556,9 +556,9 @@ void SessionLog::writefromsession(WorldSession* session, std::string_view messag
     fflush(mSessionLogFile);
 }
 
-void WorldSession::sendSystemMessagePacket(std::string& _message)
+void WorldSession::sendSystemMessagePacket(std::string_view message)
 {
-    SmsgMessageChat messagePacket(SystemMessagePacket{_message});
+    SmsgMessageChat messagePacket(SystemMessagePacket{std::string(message)});
     sendManagedPacket(messagePacket);
 }
 

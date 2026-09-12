@@ -6,10 +6,11 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "Platform/SymbolVisibility.hpp"
+
 #include <mutex>
 #include <string_view>
 #include <utility>
-#include <fmt/format.h>
+#include <fmt/core.h>
 
 class WorldPacket;
 
@@ -46,6 +47,7 @@ public:
     // WorldSocket.cpp
     void logPacket(uint32_t len, uint16_t opcode, const uint8_t* data, uint8_t direction, uint32_t accountid = 0);
 };
+
 #define sWorldPacketLog WorldPacketLog::getInstance()
 
 //////////////////////////////////////////////////////////////////////////////////////////

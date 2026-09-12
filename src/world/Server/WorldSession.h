@@ -33,7 +33,6 @@
 #include <memory>
 #include <atomic>
 #include <string>
-#include "Logging/StringFormat.hpp"
 #include "Server/ClientProtocol.hpp"
 #include "Server/Packets/SmsgMessageChat.h"
 #include "Server/WorldSocket.hpp"
@@ -1051,17 +1050,19 @@ public:
     uint32_t floodLines;
     time_t floodTime;
 
-    void sendSystemMessagePacket(std::string& _message);
+    void sendSystemMessagePacket(std::string_view message);
+
+    void systemMessage(std::string_view message)
+    {
+        sendSystemMessagePacket(message);
+    }
 
     // Variadic template version of systemMessage
-    template<typename... Args>
-    void systemMessage(const std::string& format, Args&&... args)
+    template <typename... Args>
+    void systemMessage(fmt::format_string<Args...> format, Args&&... args)
     {
-        // Use the custom StringFormat function to format the string
-        std::string formattedMessage = AscEmu::StringFormat(format, std::forward<Args>(args)...);
-
-        // Send the formatted message via packet
-        sendSystemMessagePacket(formattedMessage);
+        // Format the string and send the message via packet
+        sendSystemMessagePacket(fmt::format(format, std::forward<Args>(args)...));
     }
 
     uint32_t language;

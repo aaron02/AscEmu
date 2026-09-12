@@ -8,10 +8,15 @@ This file is released under the MIT license. See README-MIT for more information
 #include "ChatDefines.hpp"
 #include "Platform/SymbolVisibility.hpp"
 #include "AEVersion.hpp"
-#include "Logging/StringFormat.hpp"
+#include "fmt/core.h"
 
-#include <string>
+#include <cstdint>
+#include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+
 
 class SkillNameMgr;
 class Creature;
@@ -24,7 +29,6 @@ class SERVER_DECL ChatCommandHandler
 {
     friend class CommandTableStorage;
 
-private:
     ChatCommandHandler();
     ~ChatCommandHandler();
 
@@ -40,50 +44,70 @@ public:
 
     int ParseCommands(const char* text, WorldSession* session);
 
-    void sendSystemMessagePacket(WorldSession* _session, std::string& _message);
+    static void sendSystemMessagePacket(WorldSession* session, std::string_view message);
+
+    static void systemMessage(WorldSession* session, std::string_view message)
+    {
+        sendSystemMessagePacket(session, message);
+    }
 
     // Variadic template version of systemMessage
-    template<typename... Args>
-    void systemMessage(WorldSession* _session, const std::string& _format, Args&&... _args)
+    template <typename... Args>
+    void systemMessage(WorldSession* session, fmt::format_string<Args...> format, Args&&... args)
     {
-        // Use the custom StringFormat function to format the string
-        std::string formattedMessage = AscEmu::StringFormat(_format, std::forward<Args>(_args)...);
-
         // Send the formatted message via packet
-        sendSystemMessagePacket(_session, formattedMessage);
+        sendSystemMessagePacket(session, fmt::format(format, std::forward<Args>(args)...));
+    }
+
+    static void colorSystemMessage(WorldSession* session, std::string_view colorCode, std::string_view message)
+    {
+        sendSystemMessagePacket(session, fmt::format("{}{}|r", colorCode, message));
+    }
+
+    // Variadic template version of colorSystemMessage
+    template <typename... Args>
+    void colorSystemMessage(WorldSession* session, std::string_view colorCode, fmt::format_string<Args...> fmt, Args&&... args)
+    {
+        // Send the formatted message via packet
+        std::string formattedMessage = fmt::format(fmt, std::forward<Args>(args)...);
+        sendSystemMessagePacket(session, fmt::format("{}{}|r", colorCode, formattedMessage));
+    }
+
+    // --- Plain text overloads ---
+    static void redSystemMessage(WorldSession* session, std::string_view message)
+    {
+        colorSystemMessage(session, MSG_COLOR_LIGHTRED, message);
+    }
+
+    static void greenSystemMessage(WorldSession* session, std::string_view message)
+    {
+        colorSystemMessage(session, MSG_COLOR_GREEN, message);
+    }
+
+    static void blueSystemMessage(WorldSession* session, std::string_view message)
+    {
+        colorSystemMessage(session, MSG_COLOR_LIGHTBLUE, message);
     }
 
     // Variadic template version of redSystemMessage
-    template<typename... Args>
-    void colorSystemMessage(WorldSession* _session, const std::string _colorCode, const std::string& _format, Args&&... _args)
+    template <typename... Args>
+    void redSystemMessage(WorldSession* session, fmt::format_string<Args...> fmt, Args&&... args)
     {
-        // Use the custom StringFormat function to format the string
-        const std::string formattedMessage = AscEmu::StringFormat(_format, std::forward<Args>(_args)...);
-        std::string coloredMessage = _colorCode + formattedMessage + "|r";
-
-        // Send the formatted message via packet
-        sendSystemMessagePacket(_session, coloredMessage);
-    }
-
-    // Variadic template version of redSystemMessage
-    template<typename... Args>
-    void redSystemMessage(WorldSession* _session, const std::string& _format, Args&&... _args)
-    {
-        colorSystemMessage(_session, MSG_COLOR_LIGHTRED, _format, std::forward<Args>(_args)...);
+        colorSystemMessage(session, MSG_COLOR_LIGHTRED, fmt, std::forward<Args>(args)...);
     }
 
     // Variadic template version of greenSystemMessage
-    template<typename... Args>
-    void greenSystemMessage(WorldSession* _session, const std::string& _format, Args&&... _args)
+    template <typename... Args>
+    void greenSystemMessage(WorldSession* session, fmt::format_string<Args...> fmt, Args&&... args)
     {
-        colorSystemMessage(_session, MSG_COLOR_GREEN, _format, std::forward<Args>(_args)...);
+        colorSystemMessage(session, MSG_COLOR_GREEN, fmt, std::forward<Args>(args)...);
     }
 
     // Variadic template version of blueSystemMessage
-    template<typename... Args>
-    void blueSystemMessage(WorldSession* _session, const std::string& _format, Args&&... _args)
+    template <typename... Args>
+    void blueSystemMessage(WorldSession* session, fmt::format_string<Args...> fmt, Args&&... args)
     {
-        colorSystemMessage(_session, MSG_COLOR_LIGHTBLUE, _format, std::forward<Args>(_args)...);
+        colorSystemMessage(session, MSG_COLOR_LIGHTBLUE, fmt, std::forward<Args>(args)...);
     }
 
     void SendMultilineMessage(WorldSession* m_session, const char* str);
@@ -93,7 +117,7 @@ public:
     bool executeCommandFlat(std::string_view text, WorldSession* m_session);
     bool executeCommand(std::string_view text, WorldSession* m_session);
 
-    void SendHighlightedName(WorldSession* m_session, const char* prefix, const char* full_name, std::string & lowercase_name, std::string & highlight, uint32_t id);
+    void SendHighlightedName(WorldSession* m_session, const char* prefix, const char* full_name, std::string& lowercase_name, std::string& highlight, uint32_t id);
 
     // Helper
     static Player* GetSelectedPlayer(WorldSession* m_session, bool showerror = true, bool auto_self = false);
@@ -326,7 +350,7 @@ public:
     // GameObjectCommands
     bool HandleGODamageCommand(const char* args, WorldSession* session);
     bool HandleGODeleteCommand(const char* /*args*/, WorldSession* m_session);
-    bool HandleGOEnableCommand(const char*  /*args*/, WorldSession* m_session);
+    bool HandleGOEnableCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleGOExportCommand(const char* args, WorldSession* m_session);
     bool HandleGOInfoCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleGORotateCommand(const char* args, WorldSession* m_session);
@@ -436,7 +460,7 @@ public:
     std::string getNpcFlagString(Creature* creature);
 
     bool HandleNpcAddAgentCommand(const char* args, WorldSession* m_session);
-    bool HandleNpcAppearCommand(const char * _, WorldSession * __);
+    bool HandleNpcAppearCommand(const char* _, WorldSession* __);
     bool HandleNpcAddTrainerSpellCommand(const char* args, WorldSession* m_session);
     bool HandleNpcCastCommand(const char* args, WorldSession* m_session);
     bool HandleNpcComeCommand(const char* /*args*/, WorldSession* m_session);

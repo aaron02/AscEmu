@@ -635,16 +635,16 @@ const char* ChatCommandHandler::GetRaidDifficultyString(uint8_t diff)
     }
 }
 
-void ChatCommandHandler::sendSystemMessagePacket(WorldSession* _session, std::string& _message)
+void ChatCommandHandler::sendSystemMessagePacket(WorldSession* session, std::string_view message)
 {
-    if (_session == nullptr)
+    if (!session)
         return;
 
-    SmsgMessageChat sendPacket(SystemMessagePacket{_message});
-    _session->sendManagedPacket(sendPacket);
+    SmsgMessageChat sendPacket(SystemMessagePacket{std::string(message)});
+    session->sendManagedPacket(sendPacket);
 }
 
-void ChatCommandHandler::SendHighlightedName(WorldSession* m_session, const char* prefix, const char* full_name, std::string & lowercase_name, std::string & highlight, uint32_t id)
+void ChatCommandHandler::SendHighlightedName(WorldSession* m_session, const char* prefix, const char* full_name, std::string& lowercase_name, std::string& highlight, uint32_t id)
 {
     char message[1024];
     char start[50];

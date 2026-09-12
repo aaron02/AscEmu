@@ -7,7 +7,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 namespace AscEmu::Logging
 {
-    enum MessageType
+    enum class MessageType : uint8_t
     {
         TRACE,
         DEBUG,

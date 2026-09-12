@@ -7,7 +7,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 namespace AscEmu::Logging
 {
-    enum Severity
+    enum class Severity : uint8_t
     {
         NONE,
         INFO,
@@ -20,7 +20,7 @@ namespace AscEmu::Logging
         FATAL
     };
 
-    enum DebugFlags
+    enum DebugFlags : uint32_t
     {
         LF_NONE         = 0x000,
         LF_OPCODE       = 0x001,

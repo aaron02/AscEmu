@@ -6,16 +6,14 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "Platform/SymbolVisibility.hpp"
-#include "WorldRunnable.h"
-#include <fmt/format.h>
-#include "Logging/Log.hpp"
-#include "Database/Database.hpp"
 
-#include <cstdint>
-#include <string>
 #include <atomic>
+#include <cstdint>
 #include <memory>
+#include <utility>
 
+#include "WorldRunnable.h"
+#include "Database/Database.hpp"
 #include "Threading/ThreadPool.hpp"
 
 class SessionLog;

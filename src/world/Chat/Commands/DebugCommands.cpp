@@ -1817,7 +1817,7 @@ bool ChatCommandHandler::HandleSimpleDistanceCommand(const char* args, WorldSess
         m_session->GetPlayer()->GetPositionZ(),
         toX, toY, toZ);
 
-    m_session->systemMessage("Your distance to location (%f, %f, %f) is %0.2f meters.", toX, toY, toZ, distance);
+    m_session->systemMessage("Your distance to location ({}, {}, {}) is {:.2f} meters.", toX, toY, toZ, distance);
 
     return true;
 }

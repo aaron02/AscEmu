@@ -473,7 +473,6 @@ private:
 // Sparring creatures: npcs that fight each other endlessly (guards vs. invaders, mock battles).
 // Damage dealt by other creatures never takes them below their health limit, players (and their pets)
 // are not limited and can kill them. Once a sparring partner dies the survivor loses its target and evades.
-#if VERSION_STRING >= Cata
 // sorted by entry
 constexpr uint32_t sparringCreatureIds[] =
 {
@@ -537,7 +536,6 @@ public:
         *damage = health > minHealth ? std::min(*damage, health - minHealth) : 0;
     }
 };
-#endif
 
 void SetupMiscCreatures(ScriptMgr* mgr)
 {
@@ -629,7 +627,5 @@ void SetupMiscCreatures(ScriptMgr* mgr)
 
     mgr->register_creature_script(27894, &SotaAntiPersonnalCannon::Create);
 
-#if VERSION_STRING >= Cata
     mgr->registerCreatureScript(sparringCreatureIds, &SparringCreature::Create);
-#endif
 }

@@ -82,6 +82,28 @@ bool SpellArea::fitsToRequirements(Player* player, uint32_t newZone, uint32_t ne
 #endif
             break;
         }
+#if VERSION_STRING >= Mop
+        // The Wandering Isle phase auras which are only applied after a quest has been finished
+        // (not expressible with quest_start/quest_end)
+        case 102395: // Shang Xi Academy
+        {
+            if (player == nullptr || !player->hasQuestFinished(29419))
+                return false;
+            break;
+        }
+        case 102398: // Singing Pools
+        {
+            if (player == nullptr || !player->hasQuestFinished(29523))
+                return false;
+            break;
+        }
+        case 60922: // Wind Temple
+        {
+            if (player == nullptr || !player->hasQuestFinished(29786))
+                return false;
+            break;
+        }
+#endif
     }
 
     return true;

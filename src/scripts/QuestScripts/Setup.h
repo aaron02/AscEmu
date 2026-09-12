@@ -5,6 +5,8 @@ This file is released under the MIT license. See README-MIT for more information
 
 #pragma once
 
+#include "AEVersion.hpp"
+
 class ScriptMgr;
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +67,9 @@ void SetupZangarmarsh(ScriptMgr* mgr);
 void SetupBarrens(ScriptMgr* mgr);
 void SetupBoreanTundra(ScriptMgr* mgr);
 void SetupSholazarBasin(ScriptMgr* mgr);
+#if VERSION_STRING >= Mop
+void SetupWanderingIsle(ScriptMgr* mgr);
+#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Misc

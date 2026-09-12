@@ -10,6 +10,10 @@ set(LIBRARY_NAME QuestScripts)
 
 file(GLOB SRC_LOCAL_DIR *.cpp *.h *.hpp)
 
+if ("${ASCEMU_NUMBER}" GREATER_EQUAL 4) # Mop
+file(GLOB SRC_MOP_DIR Mop/*.cpp Mop/*.hpp)
+endif ()
+
 # required for linker.
 set(SRC_QUESTSCRIPTS
     ../../world/Server/ServerState.cpp
@@ -18,6 +22,7 @@ set(SRC_QUESTSCRIPTS
 set(QUESTSCRIPTS_SRCS
     ${SRC_QUESTSCRIPTS}
     ${SRC_LOCAL_DIR}
+    ${SRC_MOP_DIR}
 )
 
 # source group.

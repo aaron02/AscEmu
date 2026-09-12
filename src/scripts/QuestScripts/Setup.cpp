@@ -79,6 +79,9 @@ extern "C" SCRIPT_DECL void _exp_script_register(ScriptMgr* mgr)
     SetupBarrens(mgr);
     SetupBoreanTundra(mgr);
     SetupSholazarBasin(mgr);
+#if VERSION_STRING >= Mop
+    SetupWanderingIsle(mgr);
+#endif
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Misc

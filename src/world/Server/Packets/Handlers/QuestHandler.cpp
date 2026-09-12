@@ -709,7 +709,7 @@ void WorldSession::handleQuestgiverStatusQueryOpcode(WorldPacket& recvPacket)
 
     Object* qst_giver = nullptr;
 
-    if (srlPacket.questGiverGuid.isUnit())
+    if (srlPacket.questGiverGuid.isUnit() || srlPacket.questGiverGuid.isVehicle())
     {
         Creature* quest_giver = _player->getWorldMapCreature(srlPacket.questGiverGuid.getRawGuid());
         if (quest_giver)
@@ -775,7 +775,7 @@ void WorldSession::handleQuestGiverQueryQuestOpcode(WorldPacket& recvPacket)
 
     uint32_t status = QuestStatus::NotAvailable;
 
-    if (srlPacket.guid.isUnit())
+    if (srlPacket.guid.isUnit() || srlPacket.guid.isVehicle())
     {
         Creature* quest_giver = _player->getWorldMapCreature(srlPacket.guid.getRawGuid());
         if (quest_giver)
@@ -916,7 +916,7 @@ void WorldSession::handleQuestgiverRequestRewardOpcode(WorldPacket& recvPacket)
     Object* qst_giver = nullptr;
     uint32_t status = 0;
 
-    if (srlPacket.questgiverGuid.isUnit())
+    if (srlPacket.questgiverGuid.isUnit() || srlPacket.questgiverGuid.isVehicle())
     {
         Creature* quest_giver = _player->getWorldMapCreature(srlPacket.questgiverGuid.getRawGuid());
         if (quest_giver)
@@ -993,7 +993,7 @@ void WorldSession::handleQuestgiverCompleteQuestOpcode(WorldPacket& recvPacket)
     Object* qst_giver = nullptr;
     uint32_t status = 0;
 
-    if (srlPacket.questgiverGuid.isUnit())
+    if (srlPacket.questgiverGuid.isUnit() || srlPacket.questgiverGuid.isVehicle())
     {
         Creature* quest_giver = _player->getWorldMapCreature(srlPacket.questgiverGuid.getRawGuid());
         if (quest_giver)
@@ -1077,7 +1077,7 @@ void WorldSession::handleQuestgiverChooseRewardOpcode(WorldPacket& recvPacket)
     QuestProperties const* qst = nullptr;
     Object* qst_giver = nullptr;
 
-    if (srlPacket.questgiverGuid.isUnit())
+    if (srlPacket.questgiverGuid.isUnit() || srlPacket.questgiverGuid.isVehicle())
     {
         Creature* quest_giver = _player->getWorldMapCreature(srlPacket.questgiverGuid.getRawGuid());
         if (quest_giver)

@@ -92,9 +92,14 @@ void Vehicle::initSeats()
     // Set correct Flags to make the Vehicle clickable dependant on if its a Player or a Creature
     // to prevent any mistakes overwrited Database Data
     if (usableSeatNum)
-        getBase()->setNpcFlags((getBase()->isPlayer() ? UNIT_NPC_FLAG_PLAYER_VEHICLE : UNIT_NPC_FLAG_SPELLCLICK));
+    {
+        // questgivers and gossip npcs can carry a vehicle id - add the vehicle flag instead of replacing their npc flags
+        getBase()->addNpcFlags((getBase()->isPlayer() ? UNIT_NPC_FLAG_PLAYER_VEHICLE : UNIT_NPC_FLAG_SPELLCLICK));
+    }
     else
+    {
         getBase()->removeNpcFlags((getBase()->isPlayer() ? UNIT_NPC_FLAG_PLAYER_VEHICLE : UNIT_NPC_FLAG_SPELLCLICK));
+    }
 }
 
 void Vehicle::initMovementFlags()
@@ -385,7 +390,9 @@ Vehicle* Vehicle::removePassenger(Unit* unit)
     ASSERT(seat != Seats.end());
 
     if (seat->second._seatInfo->canEnterOrExit() && ++usableSeatNum)
-        getBase()->setNpcFlags((getBase()->isPlayer() ? UNIT_NPC_FLAG_PLAYER_VEHICLE : UNIT_NPC_FLAG_SPELLCLICK));
+    {
+        getBase()->addNpcFlags((getBase()->isPlayer() ? UNIT_NPC_FLAG_PLAYER_VEHICLE : UNIT_NPC_FLAG_SPELLCLICK));
+    }
 
     if (seat->second._seatInfo->flags & WDB::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_PASSENGER_NOT_SELECTABLE && !seat->second._passenger.isUnselectable)
         unit->removeUnitFlags(UNIT_FLAG_NOT_SELECTABLE);

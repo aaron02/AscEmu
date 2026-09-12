@@ -854,6 +854,9 @@ void QuestMgr::OnQuestFinished(Player* plr, QuestProperties const* qst, Object* 
                 }
                 else
                 {
+                    if (ownsUniqueRewardItem(plr, proto))
+                        continue;
+
                     auto item_add = plr->getItemInterface()->FindItemLessMax(qst->reward_item[i], qst->reward_itemcount[i], false);
                     if (!item_add)
                     {
@@ -963,6 +966,9 @@ void QuestMgr::OnQuestFinished(Player* plr, QuestProperties const* qst, Object* 
                 }
                 else
                 {
+                    if (ownsUniqueRewardItem(plr, proto))
+                        continue;
+
                     auto item_add = plr->getItemInterface()->FindItemLessMax(qst->reward_item[i], qst->reward_itemcount[i], false);
                     if (!item_add)
                     {
@@ -1864,6 +1870,11 @@ void QuestMgr::finalize()
     m_quest_associations.clear();
 }
 
+bool QuestMgr::ownsUniqueRewardItem(Player* plr, ItemProperties const* proto)
+{
+    return proto->Unique != 0 && plr->getItemInterface()->GetItemCount(proto->ItemId, true) >= proto->Unique;
+}
+
 bool QuestMgr::CanStoreReward(Player* plyr, QuestProperties const* qst, uint32_t reward_slot)
 {
     uint32_t available_slots = 0;
@@ -1874,12 +1885,22 @@ bool QuestMgr::CanStoreReward(Player* plyr, QuestProperties const* qst, uint32_t
     {
         if (qst->reward_item[i])
         {
-            slotsrequired++;
             ItemProperties const* proto = sMySQLStore.getItemProperties(qst->reward_item[i]);
             if (!proto)
+            {
                 sLogger.failure("Invalid item prototype in quest reward! ID {}, quest {}", qst->reward_item[i], qst->id);
-            else if (plyr->getItemInterface()->CanReceiveItem(proto, qst->reward_itemcount[i]))
-                return false;
+                slotsrequired++;
+            }
+            else if (ownsUniqueRewardItem(plyr, proto))
+            {
+                continue;
+            }
+            else
+            {
+                slotsrequired++;
+                if (plyr->getItemInterface()->CanReceiveItem(proto, qst->reward_itemcount[i]))
+                    return false;
+            }
         }
     }
 

@@ -11296,7 +11296,8 @@ Item* Player::storeItem(LootItem const* lootItem)
     auto add = getItemInterface()->FindItemLessMax(lootItem->itemId, lootItem->count, false);
 
     // Can we Store our New item?
-    if (const uint8_t error = getItemInterface()->CanReceiveItem(lootItem->itemproto, lootItem->count) && !add)
+    const uint8_t error = getItemInterface()->CanReceiveItem(lootItem->itemproto, lootItem->count);
+    if (error != INV_ERR_OK && !add)
     {
         getItemInterface()->buildInventoryChangeError(nullptr, nullptr, error, lootItem->itemId);
         return nullptr;

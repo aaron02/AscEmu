@@ -191,7 +191,7 @@ pSpellEffect SpellEffectsHandler[TOTAL_SPELL_EFFECTS] =
     &Spell::SpellEffectBuildingDamage,          //  87 SPELL_EFFECT_BUILDING_DAMAGE
     &Spell::spellEffectNotImplemented,          //  88 SPELL_EFFECT_NULL_88
     &Spell::spellEffectNotImplemented,          //  89 SPELL_EFFECT_NULL_89
-    &Spell::spellEffectNotImplemented,          //  90 SPELL_EFFECT_NULL_90
+    &Spell::SpellEffectKillCredit,              //  90 SPELL_EFFECT_KILL_CREDIT_PERSONAL (credit for the caster only)
     &Spell::spellEffectNotImplemented,          //  91 SPELL_EFFECT_NULL_91
     &Spell::SpellEffectEnchantHeldItem,         //  92 SPELL_EFFECT_ENCHANT_HELD_ITEM
     &Spell::SpellEffectForceDeselect,           //  93 SPELL_EFFECT_SET_MIRROR_NAME
@@ -275,7 +275,7 @@ pSpellEffect SpellEffectsHandler[TOTAL_SPELL_EFFECTS] =
     &Spell::spellEffectNotImplemented,          // 166 SPELL_EFFECT_NULL_166
     &Spell::spellEffectNotImplemented,          // 167 SPELL_EFFECT_NULL_167
     &Spell::spellEffectNotImplemented,          // 168 SPELL_EFFECT_NULL_168
-    &Spell::spellEffectNotImplemented,          // 169 SPELL_EFFECT_NULL_169
+    &Spell::spellEffectDestroyItem,             // 169 SPELL_EFFECT_DESTROY_ITEM
     &Spell::spellEffectNotImplemented,          // 170 SPELL_EFFECT_NULL_170
     &Spell::spellEffectNotImplemented,          // 171 SPELL_EFFECT_NULL_171
     &Spell::spellEffectNotImplemented,          // 172 SPELL_EFFECT_NULL_172
@@ -387,7 +387,7 @@ const char* SpellEffectNames[TOTAL_SPELL_EFFECTS] =
     "SPELL_EFFECT_BUILDING_DAMAGE",             //    87
     "SPELL_EFFECT_NULL_88",                     //    88
     "SPELL_EFFECT_NULL_89",                     //    89
-    "SPELL_EFFECT_NULL_90",                     //    90
+    "SPELL_EFFECT_KILL_CREDIT_PERSONAL",        //    90 Quest credit for the caster only (creature entry in MiscValue)
     "SPELL_EFFECT_NULL_91",                     //    91
     "SPELL_EFFECT_ENCHANT_HELD_ITEM",           //    92
     "SPELL_EFFECT_FORCE_DESELECT",              //    93
@@ -471,7 +471,7 @@ const char* SpellEffectNames[TOTAL_SPELL_EFFECTS] =
     "SPELL_EFFECT_NULL_166"                     //    166
     "SPELL_EFFECT_NULL_167"                     //    167
     "SPELL_EFFECT_NULL_168"                     //    168
-    "SPELL_EFFECT_NULL_169"                     //    169
+    "SPELL_EFFECT_DESTROY_ITEM"                 //    169 Destroys the item given by EffectItemType in the inventory of the target
     "SPELL_EFFECT_NULL_170"                     //    170
     "SPELL_EFFECT_NULL_171"                     //    171
     "SPELL_EFFECT_NULL_172"                     //    172
@@ -6066,6 +6066,23 @@ void Spell::SpellEffectForgetSpecialization(uint8_t effectIndex)
     m_playerTarget->removeSpell(spellid, false);
 
     sLogger.debugSpellEffect("Player {} have forgot spell {} from spell {} (caster: {}).", m_playerTarget->getGuidLow(), spellid, getSpellInfo()->getId(), m_caster->getGuidLow());
+}
+
+void Spell::spellEffectDestroyItem([[maybe_unused]] uint8_t effectIndex)
+{
+#if VERSION_STRING >= Cata
+    // effects targeting the caster run without a target pointer
+    Player* player = m_playerTarget != nullptr ? m_playerTarget : p_caster;
+    if (player == nullptr)
+        return;
+
+    const uint32_t itemId = getSpellInfo()->getEffectItemType(effectIndex);
+    if (itemId == 0)
+        return;
+
+    if (const uint32_t count = player->getItemInterface()->GetItemCount(itemId, true))
+        player->getItemInterface()->RemoveItemAmt(itemId, count);
+#endif
 }
 
 void Spell::SpellEffectKillCredit(uint8_t effectIndex)

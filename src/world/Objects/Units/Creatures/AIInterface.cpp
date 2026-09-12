@@ -1351,6 +1351,17 @@ bool AIInterface::_canEvade() const
 
     if (m_currentTarget == nullptr)
     {
+        // passive units never pick a target - they stay in combat as long as one of their attackers is still fighting
+        if (m_reactState == REACT_PASSIVE)
+        {
+            for (ThreatReference const* ref : m_Unit->getThreatManager().getModifiableThreatList())
+            {
+                Unit const* attacker = ref->getVictim();
+                if (ref->isAvailable() && attacker != nullptr && attacker->isAlive() && attacker->getCombatHandler().isInCombat())
+                    return false;
+            }
+        }
+
         // If current target does not exist wait 3 seconds before evading
         m_noTargetTimer->updateTimer(AI_MAINTENANCE_INTERVAL);
         if (m_noTargetTimer->isTimePassed())

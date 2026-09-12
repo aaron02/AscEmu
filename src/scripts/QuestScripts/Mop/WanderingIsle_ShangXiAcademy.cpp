@@ -9,6 +9,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "WanderingIsle.hpp"
 
+#include "Management/ItemInterface.h"
 #include "Movement/MovementManager.h"
 #include "Objects/Units/Creatures/AIInterface.h"
 #include "Objects/Units/Creatures/Creature.h"
@@ -23,6 +24,13 @@ This file is released under the MIT license. See README-MIT for more information
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Shang Xi Academy - quests 29404..29409 and 29524.
+
+// Jaomin Ro's spar faction template is friendly to players, challengers need him attackable
+enum AcademyFactions
+{
+    FACTION_JAOMIN_SPAR = 2104,
+    FACTION_NEUTRAL_CREATURE = 7
+};
 
 enum AcademyEntries
 {
@@ -44,6 +52,11 @@ enum AcademyEntries
     NPC_JAOMIN_HAWK = 57750
 };
 
+enum AcademyDisplays
+{
+    JAOMIN_HAWK_DISPLAY = 39796
+};
+
 enum AcademySpells
 {
     SPELL_JAB = 108967,
@@ -60,6 +73,27 @@ enum AcademyActions
     ACTION_TRAINEE_TALK = 2,            // trainees stop sparring and comment
     ACTION_TRAINEE_EMOTE_BASE = 30,     // + move index 1..5 shown by Instructor Qun
     ACTION_TUSHUI_EMOTE_BASE = 0        // + move index 1..3 shown by Instructor Zhi
+};
+
+// The Lesson of the Iron Bough (one quest per class): the client start outfit already contains the class weapons
+// of the weapon racks. They are taken away on accept so the player loots them from the racks and equips them,
+// the equip spells of the weapons give the credits (54139 main hand, 57849 off hand).
+struct AcademyClassWeapon
+{
+    uint32_t quest;
+    uint32_t mainHandItem;
+    uint32_t offHandItem;   // 0 = single weapon
+};
+
+const AcademyClassWeapon academyClassWeapons[7] =
+{
+    { 30038, 73210, 0 },        // warrior: Trainee's Sword
+    { 30033, 76390, 76392 },    // mage: Trainee's Spellblade, Trainee's Hand Fan
+    { 30034, 73211, 0 },        // hunter: Trainee's Crossbow
+    { 30035, 73207, 76393 },    // priest: Trainee's Mace, Trainee's Book of Prayers
+    { 30036, 73208, 73212 },    // rogue: two Trainee's Daggers
+    { 30037, 76391, 73213 },    // shaman: Trainee's Axe, Trainee's Shield
+    { 30027, 73209, 0 }         // monk: Trainee's Staff
 };
 
 const uint32_t TRAINEE_RESPAWN_TIME = 120000;
@@ -518,10 +552,23 @@ public:
     }
 
     // quest 29408 The Lesson of the Burning Scroll: the master holds out his flame, the player snatches it
-    void onQuestAccept(Player* /*player*/, QuestProperties const* qst) override
+    void onQuestAccept(Player* player, QuestProperties const* qst) override
     {
         if (qst->id == QUEST_THE_LESSON_OF_THE_BURNING_SCROLL)
+        {
             summonFlame();
+            return;
+        }
+
+        for (const auto& classWeapon : academyClassWeapons)
+        {
+            if (classWeapon.quest != qst->id)
+                continue;
+
+            removeClassWeapon(player, classWeapon.mainHandItem);
+            removeClassWeapon(player, classWeapon.offHandItem);
+            return;
+        }
     }
 
     // players who still have to snatch the flame (relog, despawned flame) get a new one
@@ -542,6 +589,15 @@ public:
     }
 
 private:
+    static void removeClassWeapon(Player* player, uint32_t itemId)
+    {
+        if (itemId == 0)
+            return;
+
+        if (const uint32_t count = player->getItemInterface()->GetItemCount(itemId, true))
+            player->getItemInterface()->RemoveItemAmt(itemId, count);
+    }
+
     void summonFlame()
     {
         if (findNearestCreatureInPhase(NPC_THE_MASTERS_FLAME, 5.0f) != nullptr)
@@ -604,7 +660,7 @@ public:
         EVENT_JAOMIN_JUMP = 1,
         EVENT_JAOMIN_JUMP_DAMAGE,
         EVENT_FALCON,
-        EVENT_FALCON_VEHICLE,
+        EVENT_JAOMIN_JUMP_LANDED,
         EVENT_FALCON_VEHICLE_EXIT,
         EVENT_FALCON_STUN,
         EVENT_FALCON_STOP,
@@ -673,8 +729,7 @@ public:
         switch (scriptEvents.getFinishedEvent())
         {
             case EVENT_JAOMIN_JUMP:
-                if (victim != nullptr)
-                    castSpell(victim, SPELL_JAOMIN_JUMP);
+                // the jump spell of the client data (effect 42) would place him behind the target, the leap is scripted below
                 scriptEvents.addEvent(EVENT_JAOMIN_JUMP_DAMAGE, 2500);
                 break;
             case EVENT_JAOMIN_JUMP_DAMAGE:
@@ -685,30 +740,25 @@ public:
                     for (Player* player : getPlayersInPhase(5.0f))
                         player->handleKnockback(getCreature(), 10.0f, 8.0f);
                 }
+                scriptEvents.addEvent(EVENT_JAOMIN_JUMP_LANDED, 1500);
                 scriptEvents.addEvent(EVENT_FALCON, 10000);
                 break;
+            case EVENT_JAOMIN_JUMP_LANDED:
+                faceVictim(victim);
+                break;
             case EVENT_FALCON:
-                castSpellOnSelf(SPELL_JAOMIN_FALCON);
-                if (Creature* hawk = summonCreature(NPC_JAOMIN_HAWK, getCreature()->GetPosition(), TIMED_OR_DEAD_DESPAWN, 3000))
-                {
-                    hawk->setDisplayId(39796);
-                    getCreature()->callEnterVehicle(hawk, 0);
-                }
-                scriptEvents.addEvent(EVENT_FALCON_VEHICLE, 1000);
-                break;
-            case EVENT_FALCON_VEHICLE:
-                if (Creature* hawk = findNearestCreatureInPhase(NPC_JAOMIN_HAWK, 25.0f))
-                {
-                    // 20 yards straight ahead
-                    const float orientation = getCreature()->GetOrientation();
-                    const LocationVector chargePos(getCreature()->GetPositionX() + 20.0f * std::cos(orientation),
-                        getCreature()->GetPositionY() + 20.0f * std::sin(orientation), getCreature()->GetPositionZ());
-                    hawk->getMovementManager()->moveCharge(chargePos);
-                }
-                scriptEvents.addEvent(EVENT_FALCON_VEHICLE_EXIT, 1000);
-                break;
+            {
+                // he takes the shape of a hawk and dives 20 yards straight ahead
+                getCreature()->setDisplayId(JAOMIN_HAWK_DISPLAY);
+                const float orientation = getCreature()->GetOrientation();
+                const LocationVector chargePos(getCreature()->GetPositionX() + 20.0f * std::cos(orientation),
+                    getCreature()->GetPositionY() + 20.0f * std::sin(orientation), getCreature()->GetPositionZ());
+                getCreature()->getMovementManager()->moveCharge(chargePos);
+                scriptEvents.addEvent(EVENT_FALCON_VEHICLE_EXIT, 2000);
+            } break;
             case EVENT_FALCON_VEHICLE_EXIT:
-                getCreature()->callExitVehicle();
+                getCreature()->resetDisplayId();
+                faceVictim(victim);
                 scriptEvents.addEvent(EVENT_FALCON_STUN, 1000);
                 break;
             case EVENT_FALCON_STUN:
@@ -730,13 +780,28 @@ public:
     }
 
 private:
+    // scripted movement leaves him where it ends, turn back to the challenger and chase him again
+    void faceVictim(Unit* victim)
+    {
+        if (victim == nullptr)
+            return;
+
+        getCreature()->setInFront(victim);
+        getCreature()->getMovementManager()->moveChase(victim);
+    }
+
     // he stands up and calls out when a challenger with the quest approaches
     void greetChallengers()
     {
-        if (getCreature()->getStandState() == STANDSTATE_STAND)
-            return;
+        const bool challengerNearby = !getPlayersInPhase(15.0f, QUEST_THE_DISCIPLES_CHALLENGE, ISLE_QUEST_INCOMPLETE).empty();
 
-        if (getPlayersInPhase(15.0f, QUEST_THE_DISCIPLES_CHALLENGE, ISLE_QUEST_INCOMPLETE).empty())
+        // attackable while a challenger is around, back to the friendly spar faction afterwards
+        if (challengerNearby && getCreature()->getFactionTemplate() != FACTION_NEUTRAL_CREATURE)
+            getCreature()->setFaction(FACTION_NEUTRAL_CREATURE);
+        else if (!challengerNearby && getCreature()->getFactionTemplate() != FACTION_JAOMIN_SPAR)
+            getCreature()->setFaction(FACTION_JAOMIN_SPAR);
+
+        if (!challengerNearby || getCreature()->getStandState() == STANDSTATE_STAND)
             return;
 
         sendDBChatMessage(TEXT_JAOMIN_RO_CHALLENGER);

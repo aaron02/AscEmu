@@ -34,6 +34,7 @@ class Creature;
 class GameObject;
 class Object;
 class Player;
+struct ItemProperties;
 struct QuestProperties;
 class WorldPacket;
 class GossipMenu;
@@ -238,6 +239,9 @@ public:
         std::unordered_map<uint32_t, uint32_t> m_ObjectLootQuestList;
 
         std::unordered_map<uint32_t, std::vector<uint32_t>> m_questFinisherEntries;
+
+        // a unique reward item the player already carries in its maximum count neither needs a free slot nor is handed out again
+        static bool ownsUniqueRewardItem(Player* plr, ItemProperties const* proto);
 
         /*template <class T>
         void _AddQuest(uint32_t entryid, QuestProperties const* qst, uint8_t type);*/

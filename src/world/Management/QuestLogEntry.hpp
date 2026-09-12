@@ -19,6 +19,7 @@ struct QuestProperties;
 enum QuestLogState : uint32_t
 {
     QLS_None = 0x00,
+    QLS_Completed = 0x01,           // quest slot state flag used by the 5.4.8 client
     QLS_Failed = 0x02,
     QLS_Accepted = 0x04,
     QLS_ObjectiveCompleted = 0x01000000

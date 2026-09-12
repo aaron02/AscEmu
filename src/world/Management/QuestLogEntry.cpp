@@ -385,6 +385,9 @@ void QuestLogEntry::updatePlayerFields()
     if (m_state == QUEST_FAILED)
         state |= QLS_Failed;
 
+    if (m_state != QUEST_FAILED && canBeFinished())
+        state = QLS_Completed;
+
     m_player->setQuestLogStateBySlot(m_slot, state);
     m_player->setQuestLogRequiredMobOrGoBySlot(m_slot, mobOrGoCount);
 

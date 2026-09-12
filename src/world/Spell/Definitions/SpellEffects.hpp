@@ -186,7 +186,7 @@ enum SpellEffect
     SPELL_EFFECT_UNKNOWN_166,               //    166
     SPELL_EFFECT_UNKNOWN_167,               //    167
     SPELL_EFFECT_UNKNOWN_168,               //    168
-    SPELL_EFFECT_UNKNOWN_169,               //    169
+    SPELL_EFFECT_DESTROY_ITEM,              //    169
     SPELL_EFFECT_UNKNOWN_170,               //    170
     SPELL_EFFECT_UNKNOWN_171,               //    171
     SPELL_EFFECT_UNKNOWN_172,               //    172

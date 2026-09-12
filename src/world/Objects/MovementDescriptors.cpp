@@ -9713,6 +9713,83 @@ namespace
         MovementStep{ MovementOp::End }
     };
 
+    static constexpr std::array MopCMSG_MOVE_SET_FLYDescriptor
+    {
+        MovementStep{ MovementOp::PosY },
+        MovementStep{ MovementOp::PosZ },
+        MovementStep{ MovementOp::PosX },
+        MovementStep{ MovementOp::GuidBit5 },
+        MovementStep{ MovementOp::HasTransport },
+        MovementStep{ MovementOp::GuidBit3 },
+        MovementStep{ MovementOp::ForcesCount },
+        MovementStep{ MovementOp::HasMovementFlags2 },
+        MovementStep{ MovementOp::SkipBit },
+        MovementStep{ MovementOp::HasFallData },
+        MovementStep{ MovementOp::GuidBit6 },
+        MovementStep{ MovementOp::SkipBit },
+        MovementStep{ MovementOp::GuidBit7 },
+        MovementStep{ MovementOp::HasTimestamp },
+        MovementStep{ MovementOp::GuidBit0 },
+        MovementStep{ MovementOp::GuidBit2 },
+        MovementStep{ MovementOp::HasPitch },
+        MovementStep{ MovementOp::HasOrientation },
+        MovementStep{ MovementOp::GuidBit1 },
+        MovementStep{ MovementOp::SkipBit },
+        MovementStep{ MovementOp::HasSplineElevation },
+        MovementStep{ MovementOp::HasCount },
+        MovementStep{ MovementOp::GuidBit4 },
+        MovementStep{ MovementOp::HasMovementFlags },
+        MovementStep{ MovementOp::TGuidBit1, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidBit3, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidBit5, Cond::HasTransport },
+        MovementStep{ MovementOp::HasTransportTime3, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidBit6, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidBit7, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidBit2, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidBit4, Cond::HasTransport },
+        MovementStep{ MovementOp::HasTransportTime2, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidBit0, Cond::HasTransport },
+        MovementStep{ MovementOp::Flags2, Cond::HasMovementFlags2 },
+        MovementStep{ MovementOp::HasFallDirection, Cond::HasFallData },
+        MovementStep{ MovementOp::Flags, Cond::HasMovementFlags },
+        MovementStep{ MovementOp::GuidByte1 },
+        MovementStep{ MovementOp::GuidByte6 },
+        MovementStep{ MovementOp::GuidByte5 },
+        MovementStep{ MovementOp::GuidByte2 },
+        MovementStep{ MovementOp::GuidByte4 },
+        MovementStep{ MovementOp::GuidByte0 },
+        MovementStep{ MovementOp::GuidByte7 },
+        MovementStep{ MovementOp::GuidByte3 },
+        MovementStep{ MovementOp::SkipForcesCountUInt32 },
+        MovementStep{ MovementOp::TGuidByte7, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidByte5, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidByte1, Cond::HasTransport },
+        MovementStep{ MovementOp::TTime, Cond::HasTransport },
+        MovementStep{ MovementOp::TSeat, Cond::HasTransport },
+        MovementStep{ MovementOp::TTime2, Cond::HasTransportTime2 },
+        MovementStep{ MovementOp::TGuidByte0, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidByte4, Cond::HasTransport },
+        MovementStep{ MovementOp::TPosY, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidByte3, Cond::HasTransport },
+        MovementStep{ MovementOp::TPosZ, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidByte2, Cond::HasTransport },
+        MovementStep{ MovementOp::TGuidByte6, Cond::HasTransport },
+        MovementStep{ MovementOp::TPosX, Cond::HasTransport },
+        MovementStep{ MovementOp::TOrientation, Cond::HasTransport },
+        MovementStep{ MovementOp::TTime3, Cond::HasTransportTime3 },
+        MovementStep{ MovementOp::JumpSin, Cond::HasFallDirection },
+        MovementStep{ MovementOp::JumpCos, Cond::HasFallDirection },
+        MovementStep{ MovementOp::JumpXYSpeed, Cond::HasFallDirection },
+        MovementStep{ MovementOp::JumpVelocity, Cond::HasFallData },
+        MovementStep{ MovementOp::FallTime, Cond::HasFallData },
+        MovementStep{ MovementOp::Timestamp, Cond::HasTimestamp },
+        MovementStep{ MovementOp::SkipUInt32, Cond::HasCount },
+        MovementStep{ MovementOp::SplineElevation, Cond::HasSplineElevation },
+        MovementStep{ MovementOp::Pitch, Cond::HasPitch },
+        MovementStep{ MovementOp::Orientation, Cond::HasOrientation },
+        MovementStep{ MovementOp::End }
+    };
+
     static constexpr std::array MopCMSG_MOVE_SET_CAN_FLYDescriptor
     {
         MovementStep{ MovementOp::PosZ },
@@ -10844,6 +10921,8 @@ std::span<MovementStep const> getMopMovementDescriptor(uint16_t opcode, bool rea
             return MopCMSG_MOVE_NOT_ACTIVE_MOVERDescriptor;
         case CMSG_DISMISS_CONTROLLED_VEHICLE:
             return MopCMSG_DISMISS_CONTROLLED_VEHICLEDescriptor;
+        case CMSG_MOVE_SET_FLY:
+            return MopCMSG_MOVE_SET_FLYDescriptor;
         case CMSG_MOVE_SET_CAN_FLY:
             return MopCMSG_MOVE_SET_CAN_FLYDescriptor;
         case SMSG_PLAYER_MOVE:

@@ -32,6 +32,12 @@ This file is released under the MIT license. See README-MIT for more information
     #define DBC_NUM_RACES 24
 #elif VERSION_STRING == Mop
     #define DBC_NUM_RACES 27
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    #define DBC_NUM_RACES 27
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    #define DBC_NUM_RACES 27
 #endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -59,6 +65,12 @@ This file is released under the MIT license. See README-MIT for more information
     #define DBC_TAXI_MASK_SIZE 114
 #elif VERSION_STRING == Mop
     #define DBC_TAXI_MASK_SIZE 255
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    #define DBC_TAXI_MASK_SIZE 255
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    #define DBC_TAXI_MASK_SIZE 255
 #endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -85,6 +97,12 @@ This file is released under the MIT license. See README-MIT for more information
 #elif VERSION_STRING == Cata
     #define DBC_PLAYER_LEVEL_CAP 85
 #elif VERSION_STRING == Mop
+    #define DBC_PLAYER_LEVEL_CAP 90
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    #define DBC_PLAYER_LEVEL_CAP 90
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     #define DBC_PLAYER_LEVEL_CAP 90
 #endif
 
@@ -130,6 +148,12 @@ This file is released under the MIT license. See README-MIT for more information
     #define DBC_PLAYER_SKILL_MAX 525
 #elif VERSION_STRING == Mop
     #define DBC_PLAYER_SKILL_MAX 600
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    #define DBC_PLAYER_SKILL_MAX 600
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    #define DBC_PLAYER_SKILL_MAX 600
 #endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -156,6 +180,12 @@ This file is released under the MIT license. See README-MIT for more information
 #elif VERSION_STRING == Cata
     #define PLAYER_ACTION_BUTTON_COUNT 144
 #elif VERSION_STRING == Mop
+    #define PLAYER_ACTION_BUTTON_COUNT 132
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    #define PLAYER_ACTION_BUTTON_COUNT 132
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     #define PLAYER_ACTION_BUTTON_COUNT 132
 #endif
 
@@ -186,6 +216,12 @@ This file is released under the MIT license. See README-MIT for more information
 #elif VERSION_STRING == Cata
     #define GLYPHS_COUNT 9
 #elif VERSION_STRING == Mop
+    #define GLYPHS_COUNT 6
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    #define GLYPHS_COUNT 6
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     #define GLYPHS_COUNT 6
 #endif
 

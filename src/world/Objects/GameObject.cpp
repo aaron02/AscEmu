@@ -108,6 +108,12 @@ GameObject::GameObject(uint64_t guid)
 #endif
 #if VERSION_STRING == Mop
     m_updateFlag = (UPDATEFLAG_HAS_POSITION | UPDATEFLAG_ROTATION);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    m_updateFlag = (UPDATEFLAG_HAS_POSITION | UPDATEFLAG_ROTATION);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    m_updateFlag = (UPDATEFLAG_HAS_POSITION | UPDATEFLAG_ROTATION);
 #endif
 
     //\todo Why is there a pointer to the same thing in a derived class? ToDo: sort this out..
@@ -697,6 +703,12 @@ bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationV
                     m_updateFlag = (m_updateFlag | UPDATEFLAG_TRANSPORT) & ~UPDATEFLAG_POSITION;
             #endif
             #if VERSION_STRING == Mop
+                    m_updateFlag = (m_updateFlag | UPDATEFLAG_TRANSPORT) & ~UPDATEFLAG_POSITION;
+            #elif defined(AE_MIDNIGHT)
+            // Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+                    m_updateFlag = (m_updateFlag | UPDATEFLAG_TRANSPORT) & ~UPDATEFLAG_POSITION;
+            #elif defined(AE_FOREVER)
+            // Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
                     m_updateFlag = (m_updateFlag | UPDATEFLAG_TRANSPORT) & ~UPDATEFLAG_POSITION;
             #endif
 
@@ -2036,6 +2048,58 @@ void GameObject_Transport::_internalUpdateOnState(unsigned long timeDiff)
     {
         case GO_NOT_READY:
 #if VERSION_STRING == Mop
+        {
+            (void)timeDiff;
+            // Minimal fix: continuously wrap elapsed time into the animation's period so
+            // the transport actually advances along its path. The previous getState() ==
+            // GO_STATE_CLOSED gate checked the wrong state values entirely - the real Mop
+            // client drives legacy transports off dedicated GO_STATE_TRANSPORT_ACTIVE(24)/
+            // GO_STATE_TRANSPORT_STOPPED(25) states that don't exist,
+            // so PathProgress effectively never advanced before this.
+            // This does not yet replicate the real client's pause-time/waypoint-hold
+            // interpolation - transports with scripted stops will just loop continuously
+            // instead of pausing at them.
+            const uint32_t period = getTransportPeriod();
+            if (period == 0)
+                break;
+
+            m_goValue.PathProgress = Util::getMSTime() % period;
+
+            // m_goValue.PathProgress is a plain struct member - changing it alone does not
+            // mark anything dirty, so nearby clients never receive the update after the
+            // initial spawn. Sync it out through the dynamic path-progress field (the real
+            // client's ongoing sync mechanism, per reference so periodic broadcasts
+            // actually go out as this advances.
+            setDynamicPathProgress(static_cast<int16_t>((static_cast<uint64_t>(m_goValue.PathProgress) * 32767) / period));
+        }
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+        {
+            (void)timeDiff;
+            // Minimal fix: continuously wrap elapsed time into the animation's period so
+            // the transport actually advances along its path. The previous getState() ==
+            // GO_STATE_CLOSED gate checked the wrong state values entirely - the real Mop
+            // client drives legacy transports off dedicated GO_STATE_TRANSPORT_ACTIVE(24)/
+            // GO_STATE_TRANSPORT_STOPPED(25) states that don't exist,
+            // so PathProgress effectively never advanced before this.
+            // This does not yet replicate the real client's pause-time/waypoint-hold
+            // interpolation - transports with scripted stops will just loop continuously
+            // instead of pausing at them.
+            const uint32_t period = getTransportPeriod();
+            if (period == 0)
+                break;
+
+            m_goValue.PathProgress = Util::getMSTime() % period;
+
+            // m_goValue.PathProgress is a plain struct member - changing it alone does not
+            // mark anything dirty, so nearby clients never receive the update after the
+            // initial spawn. Sync it out through the dynamic path-progress field (the real
+            // client's ongoing sync mechanism, per reference so periodic broadcasts
+            // actually go out as this advances.
+            setDynamicPathProgress(static_cast<int16_t>((static_cast<uint64_t>(m_goValue.PathProgress) * 32767) / period));
+        }
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
         {
             (void)timeDiff;
             // Minimal fix: continuously wrap elapsed time into the animation's period so

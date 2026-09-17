@@ -68,7 +68,13 @@ SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellShapeshiftFormEntry> sSpellS
 SERVER_DECL WDB::WDBContainer<WDB::Structures::TalentEntry> sTalentStore;
 SERVER_DECL WDB::WDBContainer<WDB::Structures::TalentTabEntry> sTalentTabStore;
 static uint32_t InspectTalentTabPages[12][3];
-#ifdef AE_MOP
+#if VERSION_STRING == Mop
+static uint32_t ClassSpecializationTabs[12][4];
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+static uint32_t ClassSpecializationTabs[12][4];
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 static uint32_t ClassSpecializationTabs[12][4];
 #endif
 SERVER_DECL WDB::WDBContainer<WDB::Structures::TaxiNodesEntry> sTaxiNodesStore;
@@ -177,7 +183,17 @@ SERVER_DECL WDB::WDBContainer<WDB::Structures::TalentTreePrimarySpells> sTalentT
 SERVER_DECL WDB::WDBContainer<WDB::Structures::ItemReforgeEntry> sItemReforgeStore;
 #endif
 
-#ifdef AE_MOP
+#if VERSION_STRING == Mop
+SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellMiscEntry> sSpellMiscStore;
+SERVER_DECL WDB::WDBContainer<WDB::Structures::ChrSpecializationEntry> sChrSpecializationStore;
+WDB::Structures::SpellPowerMap sSpellPowerMap;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellMiscEntry> sSpellMiscStore;
+SERVER_DECL WDB::WDBContainer<WDB::Structures::ChrSpecializationEntry> sChrSpecializationStore;
+WDB::Structures::SpellPowerMap sSpellPowerMap;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellMiscEntry> sSpellMiscStore;
 SERVER_DECL WDB::WDBContainer<WDB::Structures::ChrSpecializationEntry> sChrSpecializationStore;
 WDB::Structures::SpellPowerMap sSpellPowerMap;
@@ -917,7 +933,43 @@ bool loadDBCs()
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sItemReforgeStore, dbc_path, "ItemReforge.dbc");
 #endif
 
-#ifdef AE_MOP
+#if VERSION_STRING == Mop
+    WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellMiscStore, dbc_path, "SpellMisc.dbc");
+
+    WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sChrSpecializationStore, dbc_path, "ChrSpecialization.dbc");
+    {
+        for (uint32_t i = 0; i < sChrSpecializationStore.getNumRows(); ++i)
+        {
+            auto const specialization_info = sChrSpecializationStore.lookupEntry(i);
+            if (specialization_info == nullptr)
+                continue;
+
+            if (specialization_info->classId >= 12 || specialization_info->tabPage >= 4)
+                continue;
+
+            ClassSpecializationTabs[specialization_info->classId][specialization_info->tabPage] = specialization_info->Id;
+        }
+    }
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellMiscStore, dbc_path, "SpellMisc.dbc");
+
+    WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sChrSpecializationStore, dbc_path, "ChrSpecialization.dbc");
+    {
+        for (uint32_t i = 0; i < sChrSpecializationStore.getNumRows(); ++i)
+        {
+            auto const specialization_info = sChrSpecializationStore.lookupEntry(i);
+            if (specialization_info == nullptr)
+                continue;
+
+            if (specialization_info->classId >= 12 || specialization_info->tabPage >= 4)
+                continue;
+
+            ClassSpecializationTabs[specialization_info->classId][specialization_info->tabPage] = specialization_info->Id;
+        }
+    }
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellMiscStore, dbc_path, "SpellMisc.dbc");
 
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sChrSpecializationStore, dbc_path, "ChrSpecialization.dbc");
@@ -1170,6 +1222,46 @@ bool loadDBCs()
                 itr->second = spellPower;
         }
     }
+    #elif defined(AE_MIDNIGHT)
+    // Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    // note: SpellPower.dbc rows are not keyed by spell id on Mop, map them by their spellId column
+    {
+        for (uint32_t i = 0; i < sSpellPowerStore.getNumRows(); ++i)
+        {
+            WDB::Structures::SpellPowerEntry const* spellPower = sSpellPowerStore.lookupEntry(i);
+            if (spellPower == nullptr || spellPower->spellId == 0)
+                continue;
+
+            // A spell can own several rows (one per shapeshift form). Without a caster there is
+            // no form to match against, so keep the first row that does not require one - this
+            // is the row the reference picks for a caster without that shapeshift aura.
+            auto itr = sSpellPowerMap.find(spellPower->spellId);
+            if (itr == sSpellPowerMap.end())
+                sSpellPowerMap[spellPower->spellId] = spellPower;
+            else if (itr->second->ShapeShiftSpellId != 0 && spellPower->ShapeShiftSpellId == 0)
+                itr->second = spellPower;
+        }
+    }
+    #elif defined(AE_FOREVER)
+    // Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    // note: SpellPower.dbc rows are not keyed by spell id on Mop, map them by their spellId column
+    {
+        for (uint32_t i = 0; i < sSpellPowerStore.getNumRows(); ++i)
+        {
+            WDB::Structures::SpellPowerEntry const* spellPower = sSpellPowerStore.lookupEntry(i);
+            if (spellPower == nullptr || spellPower->spellId == 0)
+                continue;
+
+            // A spell can own several rows (one per shapeshift form). Without a caster there is
+            // no form to match against, so keep the first row that does not require one - this
+            // is the row the reference picks for a caster without that shapeshift aura.
+            auto itr = sSpellPowerMap.find(spellPower->spellId);
+            if (itr == sSpellPowerMap.end())
+                sSpellPowerMap[spellPower->spellId] = spellPower;
+            else if (itr->second->ShapeShiftSpellId != 0 && spellPower->ShapeShiftSpellId == 0)
+                itr->second = spellPower;
+        }
+    }
     #endif
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellScalingStore, dbc_path, "SpellScaling.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSpellShapeshiftStore, dbc_path, "SpellShapeshift.dbc");
@@ -1209,6 +1301,26 @@ uint8_t getPowerIndexByClass(uint8_t playerClass, uint8_t powerType)
 #endif
 
 #if VERSION_STRING == Mop
+WDB::Structures::SpellPowerEntry const* getSpellPowerEntry(uint32_t spellId)
+{
+    WDB::Structures::SpellPowerMap::const_iterator itr = sSpellPowerMap.find(spellId);
+    if (itr == sSpellPowerMap.end())
+        return nullptr;
+
+    return itr->second;
+}
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+WDB::Structures::SpellPowerEntry const* getSpellPowerEntry(uint32_t spellId)
+{
+    WDB::Structures::SpellPowerMap::const_iterator itr = sSpellPowerMap.find(spellId);
+    if (itr == sSpellPowerMap.end())
+        return nullptr;
+
+    return itr->second;
+}
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 WDB::Structures::SpellPowerEntry const* getSpellPowerEntry(uint32_t spellId)
 {
     WDB::Structures::SpellPowerMap::const_iterator itr = sSpellPowerMap.find(spellId);
@@ -1282,7 +1394,19 @@ uint32_t const* getTalentTabPages(uint8_t playerClass)
     return InspectTalentTabPages[playerClass];
 }
 
-#ifdef AE_MOP
+#if VERSION_STRING == Mop
+uint32_t const* getClassSpecializations(uint8_t playerClass)
+{
+    return ClassSpecializationTabs[playerClass];
+}
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+uint32_t const* getClassSpecializations(uint8_t playerClass)
+{
+    return ClassSpecializationTabs[playerClass];
+}
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 uint32_t const* getClassSpecializations(uint8_t playerClass)
 {
     return ClassSpecializationTabs[playerClass];

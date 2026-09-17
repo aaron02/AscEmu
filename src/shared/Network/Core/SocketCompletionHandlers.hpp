@@ -26,6 +26,13 @@ namespace AscEmu::Network::IocpCompletion
         }
         else
         {
+            // A successful IOCP read completion with zero transferred bytes means
+            // the peer performed an orderly shutdown (TCP FIN). Previously this
+            // fell through deleteSocket() -> disconnect(), producing the same
+            // generic "Socket::disconnect" line as a server-side close and
+            // making Battle.net World V2 failures ambiguous.
+            sLogger.info("Socket::IOCP: remote peer closed connection (FIN) on socket {} from {}:{}",
+                socket->getFd(), socket->getRemoteIp(), socket->getRemotePort());
             socket->deleteSocket();
         }
     }
@@ -45,6 +52,7 @@ namespace AscEmu::Network::IocpCompletion
             socket->decrementSendLock();
 
         socket->burstEnd();
+        socket->completeDelayedDisconnectIfReady();
     }
 
     inline void handleShutdown(Socket* /*socket*/, uint32_t /*len*/)

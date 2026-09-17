@@ -2520,11 +2520,20 @@ InstanceScript* WorldMap::getScript()
 
 void WorldMap::loadInstanceScript()
 {
+#if defined(AE_MODERN_CLIENT)
+    // Midnight/Forever: do not attach legacy instance scripts. Dedicated modern
+    // scripts can be enabled here once their map data and hooks are verified.
+    mInstanceScript = nullptr;
+#else
     mInstanceScript = sScriptMgr.CreateScriptClassForInstance(getBaseMap()->getMapId(), this);
+#endif
 };
 
 void WorldMap::callScriptUpdate()
 {
+#if defined(AE_MODERN_CLIENT)
+    return;
+#else
     if (mInstanceScript != nullptr)
     {
         mInstanceScript->UpdateEvent();
@@ -2534,6 +2543,7 @@ void WorldMap::callScriptUpdate()
     {
         sLogger.failure("WorldMap::callScriptUpdate tries to call without valid instance script (nullptr)");
     }
+#endif
 };
 
 void WorldMap::updateObjects()

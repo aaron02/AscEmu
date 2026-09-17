@@ -367,6 +367,40 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
         else
             srlPacket.targets.setDestination(_player->GetPosition());
     }
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    if (!srlPacket.hasSrcLocation)
+    {
+        if (_player->getTransGuid())
+            srlPacket.targets.setSource({ _player->GetTransOffsetX(), _player->GetTransOffsetY(), _player->GetTransOffsetZ() });
+        else
+            srlPacket.targets.setSource(_player->GetPosition());
+    }
+
+    if (!srlPacket.hasDestLocation)
+    {
+        if (_player->getTransGuid())
+            srlPacket.targets.setDestination({ _player->GetTransOffsetX(), _player->GetTransOffsetY(), _player->GetTransOffsetZ() });
+        else
+            srlPacket.targets.setDestination(_player->GetPosition());
+    }
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    if (!srlPacket.hasSrcLocation)
+    {
+        if (_player->getTransGuid())
+            srlPacket.targets.setSource({ _player->GetTransOffsetX(), _player->GetTransOffsetY(), _player->GetTransOffsetZ() });
+        else
+            srlPacket.targets.setSource(_player->GetPosition());
+    }
+
+    if (!srlPacket.hasDestLocation)
+    {
+        if (_player->getTransGuid())
+            srlPacket.targets.setDestination({ _player->GetTransOffsetX(), _player->GetTransOffsetY(), _player->GetTransOffsetZ() });
+        else
+            srlPacket.targets.setDestination(_player->GetPosition());
+    }
 #endif
 
     // Some spell cast packets include more data

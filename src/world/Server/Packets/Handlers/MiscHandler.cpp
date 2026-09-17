@@ -334,6 +334,74 @@ void WorldSession::handleLogoutRequestOpcode(WorldPacket& /*recvPacket*/)
     _player->addUnitFlags(UNIT_FLAG_LOCK_PLAYER);
     _player->setStandState(STANDSTATE_SIT);
     SetLogoutTimer(PLAYER_LOGOUT_DELAY);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    sLogger.debug("handleLogoutRequestOpcode called (MoP)");
+    bool instantLogout = _player->m_isResting || _player->isOnTaxi() ||
+        (hasPermissions() && worldConfig.player.enableInstantLogoutForAccessType > 0);
+
+    uint32_t reason = 0;
+    if (_player->getCombatHandler().isInCombat() && !_player->m_isResting)
+        reason = 1; // combat
+    else if (_player->IsFalling())
+        reason = 3; // falling
+    else if (_player->m_duelPlayer != nullptr)
+        reason = 2; // duel
+
+    if (!sHookInterface.OnLogoutRequest(_player))
+        reason = 1;
+
+    SmsgLogoutResponse managedPacket(reason, instantLogout);
+    sendManagedPacket(managedPacket);
+
+    if (reason)
+        return;
+
+    if (instantLogout)
+    {
+        LogoutPlayer(true);
+        return;
+    }
+
+    _player->setMoveRoot(true);
+    LoggingOut = true;
+    _player->addUnitFlags(UNIT_FLAG_LOCK_PLAYER);
+    _player->setStandState(STANDSTATE_SIT);
+    SetLogoutTimer(PLAYER_LOGOUT_DELAY);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    sLogger.debug("handleLogoutRequestOpcode called (MoP)");
+    bool instantLogout = _player->m_isResting || _player->isOnTaxi() ||
+        (hasPermissions() && worldConfig.player.enableInstantLogoutForAccessType > 0);
+
+    uint32_t reason = 0;
+    if (_player->getCombatHandler().isInCombat() && !_player->m_isResting)
+        reason = 1; // combat
+    else if (_player->IsFalling())
+        reason = 3; // falling
+    else if (_player->m_duelPlayer != nullptr)
+        reason = 2; // duel
+
+    if (!sHookInterface.OnLogoutRequest(_player))
+        reason = 1;
+
+    SmsgLogoutResponse managedPacket(reason, instantLogout);
+    sendManagedPacket(managedPacket);
+
+    if (reason)
+        return;
+
+    if (instantLogout)
+    {
+        LogoutPlayer(true);
+        return;
+    }
+
+    _player->setMoveRoot(true);
+    LoggingOut = true;
+    _player->addUnitFlags(UNIT_FLAG_LOCK_PLAYER);
+    _player->setStandState(STANDSTATE_SIT);
+    SetLogoutTimer(PLAYER_LOGOUT_DELAY);
 #else
     if (!sHookInterface.OnLogoutRequest(_player))
     {
@@ -1199,6 +1267,18 @@ void WorldSession::handleLogoutCancelOpcode(WorldPacket& /*recvPacket*/)
 void WorldSession::handlePlayerLogoutOpcode([[maybe_unused]] WorldPacket& recvPacket)
 {
 #if VERSION_STRING == Mop
+    // MoP client sends 0x1349 (CMSG_LOGOUT_REQUEST); if it is mapped as CMSG_PLAYER_LOGOUT (internal 75), handle as logout request
+    sLogger.debug("handlePlayerLogoutOpcode called (MoP) - delegating to handleLogoutRequestOpcode");
+    handleLogoutRequestOpcode(recvPacket);
+    return;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    // MoP client sends 0x1349 (CMSG_LOGOUT_REQUEST); if it is mapped as CMSG_PLAYER_LOGOUT (internal 75), handle as logout request
+    sLogger.debug("handlePlayerLogoutOpcode called (MoP) - delegating to handleLogoutRequestOpcode");
+    handleLogoutRequestOpcode(recvPacket);
+    return;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     // MoP client sends 0x1349 (CMSG_LOGOUT_REQUEST); if it is mapped as CMSG_PLAYER_LOGOUT (internal 75), handle as logout request
     sLogger.debug("handlePlayerLogoutOpcode called (MoP) - delegating to handleLogoutRequestOpcode");
     handleLogoutRequestOpcode(recvPacket);

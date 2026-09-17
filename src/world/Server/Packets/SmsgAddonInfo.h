@@ -204,6 +204,106 @@ namespace AscEmu::Packets
                 }
 
                 return true;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+                packet.writeBits(bannedAddons ? static_cast<uint32_t>(bannedAddons->size()) : 0, 18);
+                packet.writeBits(static_cast<uint32_t>(addonList->size()), 23);
+
+                for (auto& itr : *addonList)
+                {
+                    packet.writeBit(0); // Has URL
+                    packet.writeBit(itr.enabled);
+                    packet.writeBit(!itr.usePublicKeyOrCRC);
+                }
+
+                packet.flushBits();
+
+                for (auto& itr : *addonList)
+                {
+                    if (!itr.usePublicKeyOrCRC)
+                    {
+                        const size_t pos = packet.wpos();
+                        for (int i = 0; i < 256; i++)
+                            packet << uint8_t(0);
+
+                        for (int i = 0; i < 256; i++)
+                            packet.put<uint8_t>(pos + publicKeyOrder[i], PublicKey[i]);
+                    }
+
+                    if (itr.enabled)
+                    {
+                        packet << itr.enabled;
+                        packet << static_cast<uint32_t>(0);
+                    }
+
+                    packet << itr.state;
+                }
+
+                if (bannedAddons)
+                {
+                    for (auto itr = bannedAddons->begin(); itr != bannedAddons->end(); ++itr)
+                    {
+                        packet << uint32_t(itr->id);
+                        packet << uint32_t(1); // banned?
+
+                        for (int32_t i = 0; i < 8; i++)
+                            packet << uint32_t(0);
+
+                        packet << uint32_t(itr->timestamp);
+                    }
+                }
+
+                return true;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+                packet.writeBits(bannedAddons ? static_cast<uint32_t>(bannedAddons->size()) : 0, 18);
+                packet.writeBits(static_cast<uint32_t>(addonList->size()), 23);
+
+                for (auto& itr : *addonList)
+                {
+                    packet.writeBit(0); // Has URL
+                    packet.writeBit(itr.enabled);
+                    packet.writeBit(!itr.usePublicKeyOrCRC);
+                }
+
+                packet.flushBits();
+
+                for (auto& itr : *addonList)
+                {
+                    if (!itr.usePublicKeyOrCRC)
+                    {
+                        const size_t pos = packet.wpos();
+                        for (int i = 0; i < 256; i++)
+                            packet << uint8_t(0);
+
+                        for (int i = 0; i < 256; i++)
+                            packet.put<uint8_t>(pos + publicKeyOrder[i], PublicKey[i]);
+                    }
+
+                    if (itr.enabled)
+                    {
+                        packet << itr.enabled;
+                        packet << static_cast<uint32_t>(0);
+                    }
+
+                    packet << itr.state;
+                }
+
+                if (bannedAddons)
+                {
+                    for (auto itr = bannedAddons->begin(); itr != bannedAddons->end(); ++itr)
+                    {
+                        packet << uint32_t(itr->id);
+                        packet << uint32_t(1); // banned?
+
+                        for (int32_t i = 0; i < 8; i++)
+                            packet << uint32_t(0);
+
+                        packet << uint32_t(itr->timestamp);
+                    }
+                }
+
+                return true;
 #endif
             }
 

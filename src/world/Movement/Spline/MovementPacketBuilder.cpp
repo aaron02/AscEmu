@@ -386,6 +386,144 @@ void PacketBuilder::WriteCreateBits(MoveSpline const& moveSpline, ByteBuffer& da
     data.writeBits(uint8_t(moveSpline.spline.mode()), 2);
     data.writeBits(moveSpline.splineflags.raw(), 25);
 }
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+void PacketBuilder::WriteCreateData(MoveSpline const& moveSpline, ByteBuffer& data)
+{
+    if (!moveSpline.Finalized())
+    {
+        MoveSplineFlag splineFlags = moveSpline.splineflags;
+        MonsterMoveType type;
+        switch (moveSpline.splineflags & MoveSplineFlag::Mask_Final_Facing)
+        {
+            case MoveSplineFlag::Final_Target:
+                type = MonsterMoveFacingTarget;
+            case MoveSplineFlag::Final_Angle:
+                type = MonsterMoveFacingAngle;
+            case MoveSplineFlag::Final_Point:
+                type = MonsterMoveFacingSpot;
+            default:
+                type = MonsterMoveNormal;
+        }
+
+        data << moveSpline.timePassed();
+        data << float(1.f);                             // splineInfo.duration_mod_next; added in 3.1
+        data << float(1.f);                             // splineInfo.duration_mod; added in 3.1
+
+        uint32_t nodes = static_cast<uint32_t>(moveSpline.getPath().size());
+        for (uint32_t i = 0; i < nodes; ++i)
+        {
+            data << float(moveSpline.getPath()[i].x);
+            data << float(moveSpline.getPath()[i].z);
+            data << float(moveSpline.getPath()[i].y);
+        }
+
+        if ((splineFlags & MoveSplineFlag::Parabolic) && moveSpline.effect_start_time < moveSpline.Duration())
+            data << moveSpline.vertical_acceleration;   // added in 3.1
+
+        data << uint8_t(type);
+
+        if (type == MonsterMoveFacingAngle)
+            data << float(moveSpline.facing.angle);
+
+        if (type == MonsterMoveFacingSpot)
+            data << moveSpline.facing.f.x << moveSpline.facing.f.z << moveSpline.facing.f.y;
+
+        if ((splineFlags & MoveSplineFlag::Parabolic) && moveSpline.effect_start_time < moveSpline.Duration())
+            data << float(moveSpline.vertical_acceleration);   // added in 3.1
+
+        data << moveSpline.Duration();
+    }
+
+    Vector3 destination = moveSpline.isCyclic() ? Vector3::zero() : moveSpline.FinalDestination();
+
+    data << float(destination.x);
+    data << float(destination.z);
+    data << moveSpline.GetId();
+    data << float(destination.y);
+}
+
+void PacketBuilder::WriteCreateBits(MoveSpline const& moveSpline, ByteBuffer& data)
+{
+    if (!data.writeBit(!moveSpline.Finalized()))
+        return;
+
+    data.writeBit(moveSpline.splineflags & (MoveSplineFlag::Parabolic | MoveSplineFlag::Animation));
+    data.writeBit((moveSpline.splineflags & MoveSplineFlag::Parabolic) && moveSpline.effect_start_time < moveSpline.Duration());
+    data.writeBit(0);
+    data.writeBits(moveSpline.getPath().size(), 20);
+    data.writeBits(uint8_t(moveSpline.spline.mode()), 2);
+    data.writeBits(moveSpline.splineflags.raw(), 25);
+}
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+void PacketBuilder::WriteCreateData(MoveSpline const& moveSpline, ByteBuffer& data)
+{
+    if (!moveSpline.Finalized())
+    {
+        MoveSplineFlag splineFlags = moveSpline.splineflags;
+        MonsterMoveType type;
+        switch (moveSpline.splineflags & MoveSplineFlag::Mask_Final_Facing)
+        {
+            case MoveSplineFlag::Final_Target:
+                type = MonsterMoveFacingTarget;
+            case MoveSplineFlag::Final_Angle:
+                type = MonsterMoveFacingAngle;
+            case MoveSplineFlag::Final_Point:
+                type = MonsterMoveFacingSpot;
+            default:
+                type = MonsterMoveNormal;
+        }
+
+        data << moveSpline.timePassed();
+        data << float(1.f);                             // splineInfo.duration_mod_next; added in 3.1
+        data << float(1.f);                             // splineInfo.duration_mod; added in 3.1
+
+        uint32_t nodes = static_cast<uint32_t>(moveSpline.getPath().size());
+        for (uint32_t i = 0; i < nodes; ++i)
+        {
+            data << float(moveSpline.getPath()[i].x);
+            data << float(moveSpline.getPath()[i].z);
+            data << float(moveSpline.getPath()[i].y);
+        }
+
+        if ((splineFlags & MoveSplineFlag::Parabolic) && moveSpline.effect_start_time < moveSpline.Duration())
+            data << moveSpline.vertical_acceleration;   // added in 3.1
+
+        data << uint8_t(type);
+
+        if (type == MonsterMoveFacingAngle)
+            data << float(moveSpline.facing.angle);
+
+        if (type == MonsterMoveFacingSpot)
+            data << moveSpline.facing.f.x << moveSpline.facing.f.z << moveSpline.facing.f.y;
+
+        if ((splineFlags & MoveSplineFlag::Parabolic) && moveSpline.effect_start_time < moveSpline.Duration())
+            data << float(moveSpline.vertical_acceleration);   // added in 3.1
+
+        data << moveSpline.Duration();
+    }
+
+    Vector3 destination = moveSpline.isCyclic() ? Vector3::zero() : moveSpline.FinalDestination();
+
+    data << float(destination.x);
+    data << float(destination.z);
+    data << moveSpline.GetId();
+    data << float(destination.y);
+}
+
+void PacketBuilder::WriteCreateBits(MoveSpline const& moveSpline, ByteBuffer& data)
+{
+    if (!data.writeBit(!moveSpline.Finalized()))
+        return;
+
+    data.writeBit(moveSpline.splineflags & (MoveSplineFlag::Parabolic | MoveSplineFlag::Animation));
+    data.writeBit((moveSpline.splineflags & MoveSplineFlag::Parabolic) && moveSpline.effect_start_time < moveSpline.Duration());
+    data.writeBit(0);
+    data.writeBits(moveSpline.getPath().size(), 20);
+    data.writeBits(uint8_t(moveSpline.spline.mode()), 2);
+    data.writeBits(moveSpline.splineflags.raw(), 25);
+}
 #endif
 
 
@@ -500,12 +638,466 @@ void PacketBuilder::WriteStopMovement([[maybe_unused]] G3D::Vector3 const& pos, 
     data.writeByteSeq(guid[7]);
     data.writeByteSeq(guid[2]);
     data.writeByteSeq(guid[4]);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    bool const hasVehicle = unit->getVehicle() != nullptr;
+    WoWGuid guid = unit->getGuid();
+    WoWGuid transport = unit->getTransGuid();
+
+    data << float(pos.z);
+    data << float(pos.x);
+    data << uint32_t(splineId);
+    data << float(pos.y);
+    data << float(unit->GetTransOffsetY());
+    data << float(unit->GetTransOffsetZ());
+    data << float(unit->GetTransOffsetX());
+
+    data.writeBit(1); // Parabolic speed
+    data.writeBit(guid[0]);
+    data.writeBits(uint32_t(MonsterMoveStop), 3);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(!hasVehicle);
+    data.writeBits(0, 20);
+    data.writeBit(1);
+    data.writeBit(guid[3]);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(guid[7]);
+    data.writeBit(guid[4]);
+    data.writeBit(1);
+    data.writeBit(guid[5]);
+    data.writeBits(0, 22); // WP count
+    data.writeBit(guid[6]);
+    data.writeBit(0); // Fake bit
+    data.writeBit(transport[7]);
+    data.writeBit(transport[1]);
+    data.writeBit(transport[3]);
+    data.writeBit(transport[0]);
+    data.writeBit(transport[6]);
+    data.writeBit(transport[4]);
+    data.writeBit(transport[5]);
+    data.writeBit(transport[2]);
+    data.writeBit(0); // Send no block
+    data.writeBit(0);
+    data.writeBit(guid[2]);
+    data.writeBit(guid[1]);
+
+    data.flushBits();
+
+    data.writeByteSeq(guid[1]);
+    data.writeByteSeq(transport[6]);
+    data.writeByteSeq(transport[4]);
+    data.writeByteSeq(transport[1]);
+    data.writeByteSeq(transport[7]);
+    data.writeByteSeq(transport[0]);
+    data.writeByteSeq(transport[3]);
+    data.writeByteSeq(transport[5]);
+    data.writeByteSeq(transport[2]);
+    data.writeByteSeq(guid[5]);
+    data.writeByteSeq(guid[3]);
+    data.writeByteSeq(guid[6]);
+    data.writeByteSeq(guid[0]);
+    if (hasVehicle)
+        data << uint8_t(unit->GetTransSeat());
+    data.writeByteSeq(guid[7]);
+    data.writeByteSeq(guid[2]);
+    data.writeByteSeq(guid[4]);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    bool const hasVehicle = unit->getVehicle() != nullptr;
+    WoWGuid guid = unit->getGuid();
+    WoWGuid transport = unit->getTransGuid();
+
+    data << float(pos.z);
+    data << float(pos.x);
+    data << uint32_t(splineId);
+    data << float(pos.y);
+    data << float(unit->GetTransOffsetY());
+    data << float(unit->GetTransOffsetZ());
+    data << float(unit->GetTransOffsetX());
+
+    data.writeBit(1); // Parabolic speed
+    data.writeBit(guid[0]);
+    data.writeBits(uint32_t(MonsterMoveStop), 3);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(!hasVehicle);
+    data.writeBits(0, 20);
+    data.writeBit(1);
+    data.writeBit(guid[3]);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(guid[7]);
+    data.writeBit(guid[4]);
+    data.writeBit(1);
+    data.writeBit(guid[5]);
+    data.writeBits(0, 22); // WP count
+    data.writeBit(guid[6]);
+    data.writeBit(0); // Fake bit
+    data.writeBit(transport[7]);
+    data.writeBit(transport[1]);
+    data.writeBit(transport[3]);
+    data.writeBit(transport[0]);
+    data.writeBit(transport[6]);
+    data.writeBit(transport[4]);
+    data.writeBit(transport[5]);
+    data.writeBit(transport[2]);
+    data.writeBit(0); // Send no block
+    data.writeBit(0);
+    data.writeBit(guid[2]);
+    data.writeBit(guid[1]);
+
+    data.flushBits();
+
+    data.writeByteSeq(guid[1]);
+    data.writeByteSeq(transport[6]);
+    data.writeByteSeq(transport[4]);
+    data.writeByteSeq(transport[1]);
+    data.writeByteSeq(transport[7]);
+    data.writeByteSeq(transport[0]);
+    data.writeByteSeq(transport[3]);
+    data.writeByteSeq(transport[5]);
+    data.writeByteSeq(transport[2]);
+    data.writeByteSeq(guid[5]);
+    data.writeByteSeq(guid[3]);
+    data.writeByteSeq(guid[6]);
+    data.writeByteSeq(guid[0]);
+    if (hasVehicle)
+        data << uint8_t(unit->GetTransSeat());
+    data.writeByteSeq(guid[7]);
+    data.writeByteSeq(guid[2]);
+    data.writeByteSeq(guid[4]);
 #endif
 }
 
 void PacketBuilder::WriteMonsterMove([[maybe_unused]] MoveSpline const& moveSpline, [[maybe_unused]] ByteBuffer& data, [[maybe_unused]] Unit* unit)
 {
 #if VERSION_STRING == Mop
+    bool const hasVehicle = unit->getVehicle() != nullptr;
+    WoWGuid guid = unit->getGuid();
+    WoWGuid transport = unit->getTransGuid();
+
+    MonsterMoveType type;
+    switch (moveSpline.splineflags & MoveSplineFlag::Mask_Final_Facing)
+    {
+        case MoveSplineFlag::Final_Target: type = MonsterMoveFacingTarget; break;
+        case MoveSplineFlag::Final_Angle:  type = MonsterMoveFacingAngle;  break;
+        case MoveSplineFlag::Final_Point:  type = MonsterMoveFacingSpot;   break;
+        default:                           type = MonsterMoveNormal;      break;
+    }
+
+    bool const hasParabolicSpeed = (moveSpline.splineflags & MoveSplineFlag::Parabolic) != 0 &&
+        moveSpline.effect_start_time < moveSpline.Duration();
+    bool const hasParabolicTime = (moveSpline.splineflags & (MoveSplineFlag::Parabolic | MoveSplineFlag::Animation)) != 0;
+
+    G3D::Vector3 const& firstPoint = moveSpline.spline.getPoint(moveSpline.spline.first());
+    data << float(firstPoint.z);
+    data << float(firstPoint.x);
+    data << uint32_t(moveSpline.GetId());
+    data << float(firstPoint.y);
+    data << float(unit->GetTransOffsetY());
+    data << float(unit->GetTransOffsetZ());
+    data << float(unit->GetTransOffsetX());
+
+    data.writeBit(!hasParabolicSpeed);
+    data.writeBit(guid[0]);
+    data.writeBits(uint32_t(type), 3);
+
+    if (type == MonsterMoveFacingTarget)
+    {
+        WoWGuid targetGuid = moveSpline.facing.target;
+        data.writeBit(targetGuid[6]);
+        data.writeBit(targetGuid[4]);
+        data.writeBit(targetGuid[3]);
+        data.writeBit(targetGuid[0]);
+        data.writeBit(targetGuid[5]);
+        data.writeBit(targetGuid[7]);
+        data.writeBit(targetGuid[1]);
+        data.writeBit(targetGuid[2]);
+    }
+
+    data.writeBit(!hasParabolicTime);
+    data.writeBit(1);
+    data.writeBit(!hasVehicle);
+
+    uint32_t const uncompressedSplineCount = moveSpline.splineflags & MoveSplineFlag::UncompressedPath
+        ? (moveSpline.splineflags.cyclic
+            ? static_cast<uint32_t>(moveSpline.spline.getPointCount() - 3)
+            : static_cast<uint32_t>(moveSpline.spline.getPointCount() - 2))
+        : 1;
+    data.writeBits(uncompressedSplineCount, 20);
+
+    data.writeBit(!moveSpline.splineflags.raw());
+    data.writeBit(guid[3]);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(!moveSpline.Duration());
+    data.writeBit(guid[7]);
+    data.writeBit(guid[4]);
+    data.writeBit(1);
+    data.writeBit(guid[5]);
+
+    int32_t const compressedSplineCount = moveSpline.splineflags & MoveSplineFlag::UncompressedPath
+        ? 0
+        : static_cast<int32_t>(moveSpline.spline.getPointCount() - 3);
+    data.writeBits(compressedSplineCount, 22);
+
+    data.writeBit(guid[6]);
+    data.writeBit(0); // Fake bit
+
+    data.writeBit(transport[7]);
+    data.writeBit(transport[1]);
+    data.writeBit(transport[3]);
+    data.writeBit(transport[0]);
+    data.writeBit(transport[6]);
+    data.writeBit(transport[4]);
+    data.writeBit(transport[5]);
+    data.writeBit(transport[2]);
+
+    data.writeBit(0);
+    data.writeBit(0);
+    data.writeBit(guid[2]);
+    data.writeBit(guid[1]);
+
+    data.flushBits();
+
+    if (compressedSplineCount)
+        WriteLinearPathMop(moveSpline.spline, data);
+
+    data.writeByteSeq(guid[1]);
+    data.writeByteSeq(transport[6]);
+    data.writeByteSeq(transport[4]);
+    data.writeByteSeq(transport[1]);
+    data.writeByteSeq(transport[7]);
+    data.writeByteSeq(transport[0]);
+    data.writeByteSeq(transport[3]);
+    data.writeByteSeq(transport[5]);
+    data.writeByteSeq(transport[2]);
+
+    if (moveSpline.splineflags & MoveSplineFlag::UncompressedPath)
+    {
+        if (moveSpline.splineflags.cyclic)
+            WriteUncompressedCyclicPathMop(moveSpline.spline, data);
+        else
+            WriteUncompressedPathMop(moveSpline.spline, data);
+    }
+    else
+    {
+        G3D::Vector3 const& point = moveSpline.spline.getPoint(static_cast<int>(moveSpline.spline.getPointCount()) - 2);
+        data << point.y << point.x << point.z;
+    }
+
+    if (type == MonsterMoveFacingTarget)
+    {
+        WoWGuid targetGuid = moveSpline.facing.target;
+        data.writeByteSeq(targetGuid[5]);
+        data.writeByteSeq(targetGuid[7]);
+        data.writeByteSeq(targetGuid[0]);
+        data.writeByteSeq(targetGuid[4]);
+        data.writeByteSeq(targetGuid[3]);
+        data.writeByteSeq(targetGuid[2]);
+        data.writeByteSeq(targetGuid[6]);
+        data.writeByteSeq(targetGuid[1]);
+    }
+
+    data.writeByteSeq(guid[5]);
+
+    if (hasParabolicSpeed)
+        data << float(moveSpline.vertical_acceleration);
+
+    if (hasParabolicTime)
+        data << uint32_t(moveSpline.effect_start_time);
+
+    if (type == MonsterMoveFacingAngle)
+        data << float(moveSpline.facing.angle);
+
+    data.writeByteSeq(guid[3]);
+
+    if (moveSpline.splineflags.raw())
+        data << uint32_t(moveSpline.splineflags.raw());
+
+    data.writeByteSeq(guid[6]);
+
+    if (type == MonsterMoveFacingSpot)
+        data << moveSpline.facing.f.x << moveSpline.facing.f.y << moveSpline.facing.f.z;
+
+    data.writeByteSeq(guid[0]);
+    if (hasVehicle)
+        data << uint8_t(unit->GetTransSeat());
+    data.writeByteSeq(guid[7]);
+    data.writeByteSeq(guid[2]);
+    data.writeByteSeq(guid[4]);
+
+    if (moveSpline.Duration())
+        data << uint32_t(moveSpline.Duration());
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    bool const hasVehicle = unit->getVehicle() != nullptr;
+    WoWGuid guid = unit->getGuid();
+    WoWGuid transport = unit->getTransGuid();
+
+    MonsterMoveType type;
+    switch (moveSpline.splineflags & MoveSplineFlag::Mask_Final_Facing)
+    {
+        case MoveSplineFlag::Final_Target: type = MonsterMoveFacingTarget; break;
+        case MoveSplineFlag::Final_Angle:  type = MonsterMoveFacingAngle;  break;
+        case MoveSplineFlag::Final_Point:  type = MonsterMoveFacingSpot;   break;
+        default:                           type = MonsterMoveNormal;      break;
+    }
+
+    bool const hasParabolicSpeed = (moveSpline.splineflags & MoveSplineFlag::Parabolic) != 0 &&
+        moveSpline.effect_start_time < moveSpline.Duration();
+    bool const hasParabolicTime = (moveSpline.splineflags & (MoveSplineFlag::Parabolic | MoveSplineFlag::Animation)) != 0;
+
+    G3D::Vector3 const& firstPoint = moveSpline.spline.getPoint(moveSpline.spline.first());
+    data << float(firstPoint.z);
+    data << float(firstPoint.x);
+    data << uint32_t(moveSpline.GetId());
+    data << float(firstPoint.y);
+    data << float(unit->GetTransOffsetY());
+    data << float(unit->GetTransOffsetZ());
+    data << float(unit->GetTransOffsetX());
+
+    data.writeBit(!hasParabolicSpeed);
+    data.writeBit(guid[0]);
+    data.writeBits(uint32_t(type), 3);
+
+    if (type == MonsterMoveFacingTarget)
+    {
+        WoWGuid targetGuid = moveSpline.facing.target;
+        data.writeBit(targetGuid[6]);
+        data.writeBit(targetGuid[4]);
+        data.writeBit(targetGuid[3]);
+        data.writeBit(targetGuid[0]);
+        data.writeBit(targetGuid[5]);
+        data.writeBit(targetGuid[7]);
+        data.writeBit(targetGuid[1]);
+        data.writeBit(targetGuid[2]);
+    }
+
+    data.writeBit(!hasParabolicTime);
+    data.writeBit(1);
+    data.writeBit(!hasVehicle);
+
+    uint32_t const uncompressedSplineCount = moveSpline.splineflags & MoveSplineFlag::UncompressedPath
+        ? (moveSpline.splineflags.cyclic
+            ? static_cast<uint32_t>(moveSpline.spline.getPointCount() - 3)
+            : static_cast<uint32_t>(moveSpline.spline.getPointCount() - 2))
+        : 1;
+    data.writeBits(uncompressedSplineCount, 20);
+
+    data.writeBit(!moveSpline.splineflags.raw());
+    data.writeBit(guid[3]);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(1);
+    data.writeBit(!moveSpline.Duration());
+    data.writeBit(guid[7]);
+    data.writeBit(guid[4]);
+    data.writeBit(1);
+    data.writeBit(guid[5]);
+
+    int32_t const compressedSplineCount = moveSpline.splineflags & MoveSplineFlag::UncompressedPath
+        ? 0
+        : static_cast<int32_t>(moveSpline.spline.getPointCount() - 3);
+    data.writeBits(compressedSplineCount, 22);
+
+    data.writeBit(guid[6]);
+    data.writeBit(0); // Fake bit
+
+    data.writeBit(transport[7]);
+    data.writeBit(transport[1]);
+    data.writeBit(transport[3]);
+    data.writeBit(transport[0]);
+    data.writeBit(transport[6]);
+    data.writeBit(transport[4]);
+    data.writeBit(transport[5]);
+    data.writeBit(transport[2]);
+
+    data.writeBit(0);
+    data.writeBit(0);
+    data.writeBit(guid[2]);
+    data.writeBit(guid[1]);
+
+    data.flushBits();
+
+    if (compressedSplineCount)
+        WriteLinearPathMop(moveSpline.spline, data);
+
+    data.writeByteSeq(guid[1]);
+    data.writeByteSeq(transport[6]);
+    data.writeByteSeq(transport[4]);
+    data.writeByteSeq(transport[1]);
+    data.writeByteSeq(transport[7]);
+    data.writeByteSeq(transport[0]);
+    data.writeByteSeq(transport[3]);
+    data.writeByteSeq(transport[5]);
+    data.writeByteSeq(transport[2]);
+
+    if (moveSpline.splineflags & MoveSplineFlag::UncompressedPath)
+    {
+        if (moveSpline.splineflags.cyclic)
+            WriteUncompressedCyclicPathMop(moveSpline.spline, data);
+        else
+            WriteUncompressedPathMop(moveSpline.spline, data);
+    }
+    else
+    {
+        G3D::Vector3 const& point = moveSpline.spline.getPoint(static_cast<int>(moveSpline.spline.getPointCount()) - 2);
+        data << point.y << point.x << point.z;
+    }
+
+    if (type == MonsterMoveFacingTarget)
+    {
+        WoWGuid targetGuid = moveSpline.facing.target;
+        data.writeByteSeq(targetGuid[5]);
+        data.writeByteSeq(targetGuid[7]);
+        data.writeByteSeq(targetGuid[0]);
+        data.writeByteSeq(targetGuid[4]);
+        data.writeByteSeq(targetGuid[3]);
+        data.writeByteSeq(targetGuid[2]);
+        data.writeByteSeq(targetGuid[6]);
+        data.writeByteSeq(targetGuid[1]);
+    }
+
+    data.writeByteSeq(guid[5]);
+
+    if (hasParabolicSpeed)
+        data << float(moveSpline.vertical_acceleration);
+
+    if (hasParabolicTime)
+        data << uint32_t(moveSpline.effect_start_time);
+
+    if (type == MonsterMoveFacingAngle)
+        data << float(moveSpline.facing.angle);
+
+    data.writeByteSeq(guid[3]);
+
+    if (moveSpline.splineflags.raw())
+        data << uint32_t(moveSpline.splineflags.raw());
+
+    data.writeByteSeq(guid[6]);
+
+    if (type == MonsterMoveFacingSpot)
+        data << moveSpline.facing.f.x << moveSpline.facing.f.y << moveSpline.facing.f.z;
+
+    data.writeByteSeq(guid[0]);
+    if (hasVehicle)
+        data << uint8_t(unit->GetTransSeat());
+    data.writeByteSeq(guid[7]);
+    data.writeByteSeq(guid[2]);
+    data.writeByteSeq(guid[4]);
+
+    if (moveSpline.Duration())
+        data << uint32_t(moveSpline.Duration());
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     bool const hasVehicle = unit->getVehicle() != nullptr;
     WoWGuid guid = unit->getGuid();
     WoWGuid transport = unit->getTransGuid();

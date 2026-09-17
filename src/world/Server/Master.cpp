@@ -55,6 +55,7 @@
 #include "Server/Console/ConsoleListener.h"
 #include "Server/Console/ConsoleThread.h"
 #include "Server/LogonCommClient/LogonCommHandler.h"
+#include "Server/VersionAdapter.hpp"
 #include "Spell/SpellMgr.hpp"
 #include "Storage/DayWatcherThread.h"
 #include "Storage/MySQLDataStore.hpp"
@@ -525,12 +526,19 @@ bool Master::run(int /*argc*/, char** /*argv*/)
     sSocketMgr.SetThreadPool(threadPool);
 
     sSocketMgr.SpawnWorkerThreads();
+    AscEmu::VersionAdapter::startWorldServices(threadPool);
+#if !defined(AE_MODERN_CLIENT)
     sScriptMgr.LoadScripts();
     sMapMgr.loadContinentScripts();
     sSpellMgr.loadSpellScripts();
 
     if (worldConfig.startup.enableSpellIdDump)
         sScriptMgr.DumpUnimplementedSpells();
+#else
+    // Midnight/Forever use no Classic-MoP external, instance, quest or spell
+    // scripts until dedicated implementations are added for the modern data.
+    sLogger.info("Server : Legacy scripts and spell handlers are disabled for this client profile.");
+#endif
 
     sLogger.info("Server : Ready for connections. Startup time: {} ms", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
 
@@ -566,10 +574,26 @@ bool Master::run(int /*argc*/, char** /*argv*/)
 
     //ThreadPool.Gobble();
 
-    /* Connect to realmlist servers / logon servers */
+    /* Initialize legacy LogonComm state.
+     *
+     * Battle.net worlds keep the local realm/account-permission compatibility
+     * data for code paths that still query LogonCommHandler, but must not start
+     * the legacy LogonComm connection/retry thread. Authentication and pending
+     * world sessions are provided by BattleNetComm in this mode.
+     */
     sLogonCommHandler.initialize();
 
-    sLogonCommHandler.startLogonCommHandler(threadPool);
+    const bool useBattleNetAuth = worldConfig.battleNetWorld.enabled && worldConfig.battleNetComm.enabled;
+    if (useBattleNetAuth)
+    {
+        sLogonCommHandler.loadRealmsConfiguration();
+        sLogonCommHandler.loadAccountPermissions();
+        sLogger.info("LogonCommClient : Legacy logon-server connection disabled; BattleNetComm is active.");
+    }
+    else
+    {
+        sLogonCommHandler.startLogonCommHandler(threadPool);
+    }
 
     // Create listener
     auto listenSocket = std::make_unique<ListenSocket<WorldSocket>>(worldConfig.listen.listenHost.c_str(), worldConfig.listen.listenPort);
@@ -626,6 +650,7 @@ bool Master::run(int /*argc*/, char** /*argv*/)
     threadPool.join();
 
     sWorld.logoutAllPlayers();
+    AscEmu::VersionAdapter::stopWorldServices();
     sLogonCommHandler.finalize();
 
     sLogger.info("AddonMgr : ~AddonMgr()");

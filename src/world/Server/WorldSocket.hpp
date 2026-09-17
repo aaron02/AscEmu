@@ -11,10 +11,21 @@ This file is released under the MIT license. See README-MIT for more information
 #include "ClientProtocol.hpp"
 #include "Threading/ThreadSafeQueue.hpp"
 
+#include <array>
 #include <string>
+#include <vector>
+#include <cstdint>
 
 class SocketHandler;
 class WorldSession;
+
+#if AE_HAS_WORLD_V2_PROFILE
+namespace AscEmu::Version::Midnight
+{
+    class OpcodeHandlerRegistry;
+    namespace Packets { class Packet; }
+}
+#endif
 
 class SERVER_DECL WorldSocket : public Socket
 {
@@ -65,6 +76,15 @@ public:
 protected:
     void sendAuthChallengePacket();
     void sendVerifyConnectPacket();
+
+    // Version-specific socket adapters. Legacy WorldSocket only knows these
+    // neutral hooks; concrete implementations live under src/version.
+    bool initializeVersionedConnection();
+    bool processVersionedRead();
+    bool sendVersionedPacket(WorldPacket* packet);
+    bool setVersionedClientProtocolByBuild(uint32_t build);
+
+
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // packet receiving CLIENT->SERVER (after onRead from Socket class)
@@ -118,6 +138,8 @@ private:
     uint32_t m_requestId{0};
     bool m_handshakeReceived{false};
 
+
+
     ThreadSafeQueue<std::unique_ptr<WorldPacket>> m_queue;
     bool m_queued{false};
 
@@ -125,4 +147,8 @@ private:
     bool m_nagleEanbled{false};
 
     WorldSession* m_session{nullptr};
+
+#if AE_HAS_WORLD_V2_PROFILE
+#include "version/Midnight/World/WorldSocketMidnight.inc"
+#endif
 };

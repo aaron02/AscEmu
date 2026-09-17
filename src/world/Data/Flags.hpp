@@ -141,4 +141,52 @@ enum ObjectUpdateFlags : uint16_t
     UPDATEFLAG_ANIM_KITS                = 0x0100,
 };
 
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+enum TrainerSpellState : uint8_t
+{
+    TRAINER_SPELL_GRAY                  = 0,
+    TRAINER_SPELL_GREEN                 = 1,
+    TRAINER_SPELL_RED                   = 2,
+    TRAINER_SPELL_GREEN_DISABLED        = 10
+};
+
+enum ObjectUpdateFlags : uint16_t
+{
+    UPDATEFLAG_NONE                     = 0x0000,
+    UPDATEFLAG_SELF                     = 0x0001,
+    UPDATEFLAG_TRANSPORT                = 0x0002,
+    UPDATEFLAG_HAS_TARGET               = 0x0004,
+    UPDATEFLAG_LIVING                   = 0x0008,
+    UPDATEFLAG_HAS_POSITION             = 0x0010, //stationary
+    UPDATEFLAG_VEHICLE                  = 0x0020,
+    UPDATEFLAG_POSITION                 = 0x0040, //transport position
+    UPDATEFLAG_ROTATION                 = 0x0080,
+    UPDATEFLAG_ANIM_KITS                = 0x0100,
+};
+
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+enum TrainerSpellState : uint8_t
+{
+    TRAINER_SPELL_GRAY                  = 0,
+    TRAINER_SPELL_GREEN                 = 1,
+    TRAINER_SPELL_RED                   = 2,
+    TRAINER_SPELL_GREEN_DISABLED        = 10
+};
+
+enum ObjectUpdateFlags : uint16_t
+{
+    UPDATEFLAG_NONE                     = 0x0000,
+    UPDATEFLAG_SELF                     = 0x0001,
+    UPDATEFLAG_TRANSPORT                = 0x0002,
+    UPDATEFLAG_HAS_TARGET               = 0x0004,
+    UPDATEFLAG_LIVING                   = 0x0008,
+    UPDATEFLAG_HAS_POSITION             = 0x0010, //stationary
+    UPDATEFLAG_VEHICLE                  = 0x0020,
+    UPDATEFLAG_POSITION                 = 0x0040, //transport position
+    UPDATEFLAG_ROTATION                 = 0x0080,
+    UPDATEFLAG_ANIM_KITS                = 0x0100,
+};
+
 #endif

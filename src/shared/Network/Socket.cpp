@@ -123,6 +123,33 @@ void Socket::disconnect()
         deleteSocket();
 }
 
+void Socket::delayedDisconnect()
+{
+    if (!m_isConnected)
+        return;
+
+    m_delayedDisconnectRequested = true;
+    completeDelayedDisconnectIfReady();
+}
+
+void Socket::completeDelayedDisconnectIfReady()
+{
+    if (!m_delayedDisconnectRequested.load() || !m_isConnected.load())
+        return;
+
+    bool writeQueueEmpty = false;
+    {
+        std::lock_guard lock{ m_writeMutex };
+        writeQueueEmpty = writeBuffer.GetSize() == 0;
+    }
+
+    if (!writeQueueEmpty)
+        return;
+
+    m_delayedDisconnectRequested = false;
+    disconnect();
+}
+
 void Socket::deleteSocket()
 {
     if (m_isDeleted)
@@ -132,9 +159,24 @@ void Socket::deleteSocket()
 
     sLogger.debug("Socket::deleteSocket() on socket {}", m_socket);
 
+    // Diagnostic distinction: backend/peer-close paths call deleteSocket()
+    // while the socket is still marked connected. Explicit server-side
+    // disconnect() marks it disconnected before reaching deleteSocket().
+    // Without this marker both cases end up producing the same generic
+    // "Socket::disconnect on socket ..." line, which makes modern world
+    // authentication failures impossible to attribute correctly.
     if (isConnected())
+    {
+        sLogger.info("Socket::deleteSocket(): backend/peer-close path detected on socket {}; socket was still connected before deleteSocket().", m_socket);
         disconnect();
+    }
 
     AscEmu::Network::SocketPlatformOps::closeSocket(m_socket);
     sSocketGarbageCollector.QueueSocket(this);
+}
+
+void Socket::logFirstRead(const void* /*data*/, uint64_t /*length*/)
+{
+    // Intentionally empty. The platform read path calls this hook, but the
+    // Stage30 Socket.cpp replacement must not remove its out-of-line symbol.
 }

@@ -119,7 +119,15 @@ namespace WDB::Structures
     struct ItemReforgeEntry;
 #endif
 
-#ifdef AE_MOP
+#if VERSION_STRING == Mop
+    struct SpellMiscEntry;
+    struct ChrSpecializationEntry;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    struct SpellMiscEntry;
+    struct ChrSpecializationEntry;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     struct SpellMiscEntry;
     struct ChrSpecializationEntry;
 #endif
@@ -287,7 +295,19 @@ inline SERVER_DECL WDB::WDBStore<WDB::Structures::StableSlotPricesEntry> sStable
     extern SERVER_DECL WDB::WDBContainer<WDB::Structures::ItemReforgeEntry> sItemReforgeStore;
 #endif
 
-#ifdef AE_MOP
+#if VERSION_STRING == Mop
+    extern SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellMiscEntry> sSpellMiscStore;
+    extern SERVER_DECL WDB::WDBContainer<WDB::Structures::ChrSpecializationEntry> sChrSpecializationStore;
+
+    WDB::Structures::SpellPowerEntry const* getSpellPowerEntry(uint32_t spellId);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    extern SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellMiscEntry> sSpellMiscStore;
+    extern SERVER_DECL WDB::WDBContainer<WDB::Structures::ChrSpecializationEntry> sChrSpecializationStore;
+
+    WDB::Structures::SpellPowerEntry const* getSpellPowerEntry(uint32_t spellId);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     extern SERVER_DECL WDB::WDBContainer<WDB::Structures::SpellMiscEntry> sSpellMiscStore;
     extern SERVER_DECL WDB::WDBContainer<WDB::Structures::ChrSpecializationEntry> sChrSpecializationStore;
 
@@ -311,7 +331,13 @@ std::string generateName(uint32_t type = 0);
 
 uint32_t const* getTalentTabPages(uint8_t playerClass);
 
-#ifdef AE_MOP
+#if VERSION_STRING == Mop
+uint32_t const* getClassSpecializations(uint8_t playerClass);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+uint32_t const* getClassSpecializations(uint8_t playerClass);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 uint32_t const* getClassSpecializations(uint8_t playerClass);
 #endif
 

@@ -759,7 +759,13 @@ enum PlayerCombatRating : uint8_t
 #if VERSION_STRING >= Cata
     CR_MASTERY                          = 25,
 #endif
-#if VERSION_STRING >= Mop
+#if VERSION_STRING == Mop
+    CR_PVP_POWER                        = 26,
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    CR_PVP_POWER                        = 26,
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     CR_PVP_POWER                        = 26,
 #endif
 
@@ -1044,6 +1050,20 @@ struct ActionButton
     uint32_t Action = 0;
     uint32_t Type = 0;
 };
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+struct ActionButton
+{
+    uint32_t Action = 0;
+    uint32_t Type = 0;
+};
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+struct ActionButton
+{
+    uint32_t Action = 0;
+    uint32_t Type = 0;
+};
 #else
 struct ActionButton
 {
@@ -1216,7 +1236,13 @@ struct FactionReputation
 };
 
 // TODO: use posssibly more describe naming
-#if VERSION_STRING >= Mop
+#if VERSION_STRING == Mop
+static inline constexpr uint16_t PLAYER_REPUTATION_COUNT = 256;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+static inline constexpr uint16_t PLAYER_REPUTATION_COUNT = 256;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 static inline constexpr uint16_t PLAYER_REPUTATION_COUNT = 256;
 #else
 static inline constexpr uint8_t PLAYER_REPUTATION_COUNT = 128;

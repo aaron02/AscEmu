@@ -53,6 +53,12 @@ Item::Item() : m_loot(nullptr)
 #endif
 #if VERSION_STRING == Mop
     m_updateFlag = UPDATEFLAG_NONE;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    m_updateFlag = UPDATEFLAG_NONE;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    m_updateFlag = UPDATEFLAG_NONE;
 #endif
 
     //\todo Why is there a pointer to the same thing in a derived class? ToDo: sort this out..

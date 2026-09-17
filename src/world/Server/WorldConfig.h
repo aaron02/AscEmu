@@ -94,6 +94,23 @@ public:
         std::string remotePassword;
     } logonServer;
 
+    // world.conf - Battle.net World protocol settings
+    struct BattleNetWorldSettings
+    {
+        bool enabled;
+    } battleNetWorld;
+
+    // world.conf - internal Battle.net <-> world control channel
+    struct BattleNetCommSettings
+    {
+        bool enabled;
+        std::string host;
+        int port;
+        uint32_t realmId;
+        std::string realmName;
+        std::string sharedSecret;
+    } battleNetComm;
+
     // world.conf - Listen Config
     struct ListenSettings
     {

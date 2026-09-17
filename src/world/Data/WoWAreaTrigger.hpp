@@ -36,6 +36,26 @@ struct WoWAreaTrigger : WoWObject
     uint32_t spell_visual_id;
     float scale;
 };
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+struct WoWAreaTrigger : WoWObject
+{
+    guid_union caster_guid;
+    uint32_t duration;
+    uint32_t spell_id;
+    uint32_t spell_visual_id;
+    float scale;
+};
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+struct WoWAreaTrigger : WoWObject
+{
+    guid_union caster_guid;
+    uint32_t duration;
+    uint32_t spell_id;
+    uint32_t spell_visual_id;
+    float scale;
+};
 #endif
 
 #pragma pack(pop)

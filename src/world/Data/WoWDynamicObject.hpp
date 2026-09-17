@@ -136,6 +136,48 @@ struct WoWDynamicObject : WoWObject
     float radius;
     uint32_t cast_time;
 };
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+union dynamic_bytes_union
+{
+    // todo: verify bits
+    struct parts
+    {
+        uint32_t spell_visual_id : 28; // not used
+        uint32_t type : 4;
+    } s;
+    uint32_t raw;
+};
+
+struct WoWDynamicObject : WoWObject
+{
+    uint64_t caster_guid;
+    dynamic_bytes_union dynamicobject_bytes;
+    uint32_t spell_id;
+    float radius;
+    uint32_t cast_time;
+};
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+union dynamic_bytes_union
+{
+    // todo: verify bits
+    struct parts
+    {
+        uint32_t spell_visual_id : 28; // not used
+        uint32_t type : 4;
+    } s;
+    uint32_t raw;
+};
+
+struct WoWDynamicObject : WoWObject
+{
+    uint64_t caster_guid;
+    dynamic_bytes_union dynamicobject_bytes;
+    uint32_t spell_id;
+    float radius;
+    uint32_t cast_time;
+};
 #endif
 
 #pragma pack(pop)

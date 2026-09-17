@@ -110,7 +110,11 @@ namespace WoW {
     inline constexpr Expansion buildExpansion = Expansion::_WotLK;
 #elif defined(AE_CATA)
     inline constexpr Expansion buildExpansion = Expansion::_Cata;
-#elif defined(AE_MOP)
+#elif defined(AE_MIDNIGHT)
+    inline constexpr Expansion buildExpansion = Expansion::MN;
+#elif defined(AE_FOREVER)
+    inline constexpr Expansion buildExpansion = Expansion::Unknown;
+#elif VERSION_STRING == Mop
     inline constexpr Expansion buildExpansion = Expansion::_Mop;
 #else
     inline constexpr Expansion buildExpansion = Expansion::_WotLK; // Fallback

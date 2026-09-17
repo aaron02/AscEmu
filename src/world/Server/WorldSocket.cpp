@@ -14,8 +14,17 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Packets/SmsgAuthResponse.h"
 #include "OpcodeTable.hpp"
 #include "WorldSession.h"
+#include "Objects/Units/Players/PlayerDefines.hpp"
 #include "Utilities/Random.hpp"
 #include "Packets/CmsgAuthSession.h"
+
+
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <string>
+#include <string_view>
+#include <vector>
 
 using namespace AscEmu::Packets;
 
@@ -152,6 +161,12 @@ WorldSocket::~WorldSocket()
 // virtual functions (Socket)
 void WorldSocket::onRead()
 {
+    // Give a selected version-specific transport first chance to consume the
+    // socket. Legacy framing below stays version-agnostic.
+    if (processVersionedRead())
+        return;
+
+#if !defined(AE_MODERN_CLIENT)
     for (;;)
     {
         if (m_remaining == 0 && !processHeader())
@@ -172,12 +187,16 @@ void WorldSocket::onRead()
 
         dispatchPacket(std::move(packet));
     }
+#endif
 }
 
 void WorldSocket::onConnect()
 {
     sWorld.increaseAcceptedConnections();
     m_latency = Util::getMSTime();
+
+    if (initializeVersionedConnection())
+        return;
 
     if (m_protocolSetByLogonComm)
     {
@@ -218,6 +237,12 @@ void WorldSocket::onConnect()
         sendClientConnectionPacket();
     }
 }
+
+
+
+
+
+
 
 void WorldSocket::onDisconnect()
 {
@@ -279,6 +304,9 @@ void WorldSocket::setCurrentVersionAsProtocol()
 
 void WorldSocket::setClientProtocolByBuild(uint32_t build)
 {
+    if (setVersionedClientProtocolByBuild(build))
+        return;
+
     WoW::ClientProtocol protocol;
 
     switch (build)
@@ -288,6 +316,7 @@ void WorldSocket::setClientProtocolByBuild(uint32_t build)
         case 12340: protocol.expansion = WoW::Expansion::_WotLK; break;
         case 15595: protocol.expansion = WoW::Expansion::_Cata; break;
         case 18414: protocol.expansion = WoW::Expansion::_Mop; break;
+
 
         default: protocol.expansion = WoW::Expansion::Unknown; break;
     }
@@ -430,6 +459,9 @@ void WorldSocket::updateQueuedPackets()
 void WorldSocket::sendPacket(WorldPacket* packet)
 {
     if (!packet)
+        return;
+
+    if (sendVersionedPacket(packet))
         return;
 
     outPacket(packet->getOpcode(), packet->size(), (packet->size() ? (const void*)packet->contents() : nullptr));

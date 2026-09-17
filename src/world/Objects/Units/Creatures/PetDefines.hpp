@@ -106,7 +106,15 @@ enum PetSlots : uint8_t
 #elif VERSION_STRING == Cata
     PET_SLOT_MAX_ACTIVE_SLOT            = 5,
     PET_SLOT_MAX_STABLE_SLOT            = 20,
-#elif VERSION_STRING >= Mop
+#elif VERSION_STRING == Mop
+    PET_SLOT_MAX_ACTIVE_SLOT            = 5,
+    PET_SLOT_MAX_STABLE_SLOT            = 50,
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    PET_SLOT_MAX_ACTIVE_SLOT            = 5,
+    PET_SLOT_MAX_STABLE_SLOT            = 50,
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     PET_SLOT_MAX_ACTIVE_SLOT            = 5,
     PET_SLOT_MAX_STABLE_SLOT            = 50,
 #endif

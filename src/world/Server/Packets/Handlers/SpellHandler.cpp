@@ -203,6 +203,106 @@ void WorldSession::handleCastSpellOpcode(WorldPacket& recvPacket)
             spell->m_missileTravelTime = static_cast<uint32_t>((dist / spellInfo->getSpeed()) * 1000);
         }
     }
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    if (!srlPacket.hasSrcLocation)
+    {
+        if (_player->getTransGuid())
+            srlPacket.targets.setSource({ _player->GetTransOffsetX(), _player->GetTransOffsetY(), _player->GetTransOffsetZ() });
+        else
+            srlPacket.targets.setSource(_player->GetPosition());
+    }
+
+    if (!srlPacket.hasDestLocation)
+    {
+        if (_player->getTransGuid())
+            srlPacket.targets.setDestination({ _player->GetTransOffsetX(), _player->GetTransOffsetY(), _player->GetTransOffsetZ() });
+        else
+            srlPacket.targets.setDestination(_player->GetPosition());
+    }
+
+    if (srlPacket.hasDestLocation)
+    {
+        LocationVector const spellDestination = srlPacket.targets.getDestination();
+        LocationVector const spellSource = srlPacket.targets.getSource();
+        float const deltaX = spellDestination.x - spellSource.x; // Calculate change of x position
+        float const deltaY = spellDestination.y - spellSource.y; // Calculate change of y position
+
+        uint32_t travelTime = 0;
+        if ((srlPacket.projectilePitch != AscEmu::Math::QuarterPiF) && (srlPacket.projectilePitch != -AscEmu::Math::QuarterPiF)) // No division by zero
+        {
+            // Calculate projectile's travel time by using Pythagorean theorem to get distance from delta X and delta Y, and divide that with the projectile's velocity
+            travelTime = static_cast<uint32_t>((sqrtf(deltaX * deltaX + deltaY * deltaY) / (cosf(srlPacket.projectilePitch) * srlPacket.projectileSpeed)) * 1000);
+        }
+
+        spell->m_missilePitch = srlPacket.projectilePitch;
+        spell->m_missileTravelTime = travelTime;
+    }
+    else if (spellInfo->getSpeed() > 0.0f)
+    {
+        // Client didn't send explicit ground-target coordinates (plain "cast on selected unit").
+        // Real Mop protocol still computes the missile travel time server-side from caster-to-target
+        // distance in this case - without it the client never animates the missile flying to the target.
+        const auto unitTarget = _player->getWorldMapUnit(srlPacket.targets.getUnitTargetGuid());
+        if (unitTarget != nullptr && unitTarget != _player)
+        {
+            float dist = sqrtf(_player->getDistanceSq(unitTarget));
+            if (dist < 5.0f)
+                dist = 5.0f;
+
+            spell->m_missileTravelTime = static_cast<uint32_t>((dist / spellInfo->getSpeed()) * 1000);
+        }
+    }
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    if (!srlPacket.hasSrcLocation)
+    {
+        if (_player->getTransGuid())
+            srlPacket.targets.setSource({ _player->GetTransOffsetX(), _player->GetTransOffsetY(), _player->GetTransOffsetZ() });
+        else
+            srlPacket.targets.setSource(_player->GetPosition());
+    }
+
+    if (!srlPacket.hasDestLocation)
+    {
+        if (_player->getTransGuid())
+            srlPacket.targets.setDestination({ _player->GetTransOffsetX(), _player->GetTransOffsetY(), _player->GetTransOffsetZ() });
+        else
+            srlPacket.targets.setDestination(_player->GetPosition());
+    }
+
+    if (srlPacket.hasDestLocation)
+    {
+        LocationVector const spellDestination = srlPacket.targets.getDestination();
+        LocationVector const spellSource = srlPacket.targets.getSource();
+        float const deltaX = spellDestination.x - spellSource.x; // Calculate change of x position
+        float const deltaY = spellDestination.y - spellSource.y; // Calculate change of y position
+
+        uint32_t travelTime = 0;
+        if ((srlPacket.projectilePitch != AscEmu::Math::QuarterPiF) && (srlPacket.projectilePitch != -AscEmu::Math::QuarterPiF)) // No division by zero
+        {
+            // Calculate projectile's travel time by using Pythagorean theorem to get distance from delta X and delta Y, and divide that with the projectile's velocity
+            travelTime = static_cast<uint32_t>((sqrtf(deltaX * deltaX + deltaY * deltaY) / (cosf(srlPacket.projectilePitch) * srlPacket.projectileSpeed)) * 1000);
+        }
+
+        spell->m_missilePitch = srlPacket.projectilePitch;
+        spell->m_missileTravelTime = travelTime;
+    }
+    else if (spellInfo->getSpeed() > 0.0f)
+    {
+        // Client didn't send explicit ground-target coordinates (plain "cast on selected unit").
+        // Real Mop protocol still computes the missile travel time server-side from caster-to-target
+        // distance in this case - without it the client never animates the missile flying to the target.
+        const auto unitTarget = _player->getWorldMapUnit(srlPacket.targets.getUnitTargetGuid());
+        if (unitTarget != nullptr && unitTarget != _player)
+        {
+            float dist = sqrtf(_player->getDistanceSq(unitTarget));
+            if (dist < 5.0f)
+                dist = 5.0f;
+
+            spell->m_missileTravelTime = static_cast<uint32_t>((dist / spellInfo->getSpeed()) * 1000);
+        }
+    }
 #else   // < Mop
     if (srlPacket.hasAdditionalData)
     {
@@ -237,6 +337,36 @@ void WorldSession::handleCancelCastOpcode(WorldPacket& recvPacket)
 {
     uint32_t spellId = 0;
 #if VERSION_STRING == Mop
+    uint8_t counter = 0;
+
+    bool hasCounter = !recvPacket.readBit();
+    bool hasSpellId = !recvPacket.readBit();
+
+    recvPacket.flushBits();
+
+    if (hasSpellId)
+        recvPacket >> spellId;
+
+    if (hasCounter)
+        recvPacket >> counter;
+
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    uint8_t counter = 0;
+
+    bool hasCounter = !recvPacket.readBit();
+    bool hasSpellId = !recvPacket.readBit();
+
+    recvPacket.flushBits();
+
+    if (hasSpellId)
+        recvPacket >> spellId;
+
+    if (hasCounter)
+        recvPacket >> counter;
+
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     uint8_t counter = 0;
 
     bool hasCounter = !recvPacket.readBit();

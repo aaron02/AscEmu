@@ -36,6 +36,12 @@ DynamicObject::DynamicObject(uint64_t guid)
 #endif
 #if VERSION_STRING == Mop
     m_updateFlag = UPDATEFLAG_HAS_POSITION;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    m_updateFlag = UPDATEFLAG_HAS_POSITION;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    m_updateFlag = UPDATEFLAG_HAS_POSITION;
 #endif
 
     m_valuesCount = getSizeOfStructure(WoWDynamicObject);

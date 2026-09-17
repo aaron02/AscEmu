@@ -44,6 +44,7 @@ void Socket::writeCallback()
     else
     {
         decrementSendLock();
+        completeDelayedDisconnectIfReady();
     }
 }
 
@@ -64,9 +65,16 @@ void Socket::setupReadEvent()
     m_readEvent.Reset(SOCKET_IO_EVENT_READ_COMPLETE);
     if (WSARecv(m_socket, &buffer, 1, &readLength, &flags, &m_readEvent.m_overlap, 0) == SOCKET_ERROR)
     {
-        if (WSAGetLastError() != WSA_IO_PENDING)
+        const int error = WSAGetLastError();
+
+        if (error != WSA_IO_PENDING)
         {
             m_readEvent.Unmark();
+
+            sLogger.failure(
+                "Socket::setupReadEvent(): WSARecv failed on socket {} with error {}.",
+                static_cast<uint64_t>(m_socket),
+                error);
 
             lock.unlock();
 
@@ -79,6 +87,9 @@ void Socket::setupReadEvent()
 
 void Socket::readCallback(uint32_t length)
 {
+    if (length != 0)
+        logFirstRead(readBuffer.GetBuffer(), length);
+
     readBuffer.IncrementWritten(length);
     onRead();
     setupReadEvent();

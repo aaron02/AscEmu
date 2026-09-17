@@ -99,6 +99,13 @@ class LogonConsole
         void AccountSetPassword(char* str);
         void AccountChangePassword(char* str);
 
+        // Battle.net account handling. Battle.net credentials are stored
+        // separately from WoW game accounts and game accounts are linked
+        // explicitly through battlenet_game_accounts.
+        void BNetAccountCreate(char* str);
+        void BNetAccountSetPassword(char* str);
+        void BNetAccountLink(char* str);
+
         void checkAccountName(std::string name, uint8_t type);
 };
 

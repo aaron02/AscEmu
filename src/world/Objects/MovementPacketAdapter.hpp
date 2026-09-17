@@ -18,4 +18,10 @@ This file is released under the MIT license. See README-MIT for more information
     using ActiveMovementCodec = MovementCodec<WoW::Expansion::_Cata>;
 #elif VERSION_STRING == Mop
     using ActiveMovementCodec = MovementCodec<WoW::Expansion::_Mop>;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    using ActiveMovementCodec = MovementCodec<WoW::Expansion::_Mop>;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    using ActiveMovementCodec = MovementCodec<WoW::Expansion::_Mop>;
 #endif

@@ -153,7 +153,25 @@ public:
     void setEntry(uint32_t entry);
     uint32_t getEntry() const;
 
-#if VERSION_STRING >= Mop
+#if VERSION_STRING == Mop
+    uint16_t getDynamicFlags() const;
+    int16_t getDynamicPathProgress() const;
+    void setDynamicFlags(uint16_t dynamicFlags);
+    void addDynamicFlags(uint16_t dynamicFlags);
+    void removeDynamicFlags(uint16_t dynamicFlags);
+    bool hasDynamicFlags(uint16_t dynamicFlags) const;
+    void setDynamicPathProgress(int16_t pathProgress);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    uint16_t getDynamicFlags() const;
+    int16_t getDynamicPathProgress() const;
+    void setDynamicFlags(uint16_t dynamicFlags);
+    void addDynamicFlags(uint16_t dynamicFlags);
+    void removeDynamicFlags(uint16_t dynamicFlags);
+    bool hasDynamicFlags(uint16_t dynamicFlags) const;
+    void setDynamicPathProgress(int16_t pathProgress);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     uint16_t getDynamicFlags() const;
     int16_t getDynamicPathProgress() const;
     void setDynamicFlags(uint16_t dynamicFlags);

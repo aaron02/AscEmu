@@ -107,5 +107,83 @@ struct WoWObject
         *(reinterpret_cast<uint32_t*>(&guid) + 1) = val;
     }
 };
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+struct WoWObject
+{
+    guid_union guid;
+    uint64_t data;
+
+    union field_type_union
+    {
+        struct parts
+        {
+            uint16_t type;
+            uint16_t guild_id;
+        } parts;
+        uint32_t raw;
+    } field_type;
+
+    uint32_t entry;
+    union field_dynamic_union
+    {
+        struct parts
+        {
+            uint16_t dynamic_flags;
+            int16_t path_progress;
+        } dynamic_field_parts;
+        uint32_t raw;
+    } dynamic_field;
+    float scale_x;
+
+    void setLowGuid(uint32_t val)
+    {
+        *reinterpret_cast<uint32_t*>(&guid) = val;
+    }
+
+    void setHighGuid(uint32_t val)
+    {
+        *(reinterpret_cast<uint32_t*>(&guid) + 1) = val;
+    }
+};
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+struct WoWObject
+{
+    guid_union guid;
+    uint64_t data;
+
+    union field_type_union
+    {
+        struct parts
+        {
+            uint16_t type;
+            uint16_t guild_id;
+        } parts;
+        uint32_t raw;
+    } field_type;
+
+    uint32_t entry;
+    union field_dynamic_union
+    {
+        struct parts
+        {
+            uint16_t dynamic_flags;
+            int16_t path_progress;
+        } dynamic_field_parts;
+        uint32_t raw;
+    } dynamic_field;
+    float scale_x;
+
+    void setLowGuid(uint32_t val)
+    {
+        *reinterpret_cast<uint32_t*>(&guid) = val;
+    }
+
+    void setHighGuid(uint32_t val)
+    {
+        *(reinterpret_cast<uint32_t*>(&guid) + 1) = val;
+    }
+};
 #endif
 #pragma pack(pop)

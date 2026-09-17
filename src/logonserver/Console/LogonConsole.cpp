@@ -27,9 +27,11 @@
 #include <LogonConf.hpp>
 #include <sstream>
 #include <Utilities/Strings.hpp>
+#include <Cryptography/BNetSrpV1.hpp>
 #include "Database/Database.hpp"
 #include <algorithm>
 #include "Threading/ThreadPool.hpp"
+
 
 LogonConsole& LogonConsole::getInstance()
 {
@@ -166,6 +168,9 @@ void LogonConsole::ProcessCmd(char* cmd)
         { "account delete", &LogonConsole::AccountDelete },
         { "account set password", &LogonConsole::AccountSetPassword },
         { "account change password", &LogonConsole::AccountChangePassword },
+        { "bnet account create", &LogonConsole::BNetAccountCreate },
+        { "bnet account set password", &LogonConsole::BNetAccountSetPassword },
+        { "bnet account link", &LogonConsole::BNetAccountLink },
         { "reload", &LogonConsole::ReloadAccts },
         { "rehash", &LogonConsole::TranslateRehash },
         { "netstatus", &LogonConsole::NetworkStatus },
@@ -235,7 +240,10 @@ void LogonConsole::ProcessHelp(char* /*command*/)
     fmt::println("Account create            : Creates a new account.");
     fmt::println("Account delete            : Deletes an account.");
     fmt::println("Account set password      : Sets a new password for an account.");
-    fmt::println("Account change password   : Change the current password for an account.");
+    fmt::println("Account change password   : Change the current password for a WoW game account.");
+    fmt::println("BNet account create       : Creates a Battle.net login account.");
+    fmt::println("BNet account set password : Changes a Battle.net login password.");
+    fmt::println("BNet account link         : Links a WoW game account to a Battle.net account.");
     fmt::println("Info                      : Shows some information about the server.");
     fmt::println("Netstatus                 : Shows network status.");
     fmt::println("Rehash                    : Rehashing config file.");
@@ -273,11 +281,11 @@ void LogonConsole::AccountCreate(char* str)
     pass.append(password);
 
     std::stringstream query;
-    query << "INSERT INTO `accounts`( `acc_name`,`encrypted_password`,`banned`,`email`,`flags`,`banreason`) VALUES ( '";
+    query << "INSERT INTO `accounts`(`acc_name`,`encrypted_password`,`banned`,`email`,`flags`,`banreason`) VALUES ('";
     query << name << "',";
-    query << "SHA( UPPER( '" << pass << "' ) ),'0','";
+    query << "SHA(UPPER('" << pass << "')),'0','";
     query << email << "','";
-    query << AE_EXPANSION_VERSION << "','' );";
+    query << AE_EXPANSION_VERSION << "','');";
 
     if (!sLogonSQL->waitExecuteNA(query.str().c_str()))
     {
@@ -285,9 +293,29 @@ void LogonConsole::AccountCreate(char* str)
         return;
     }
 
+    // If the supplied e-mail already belongs to a Battle.net account, link
+    // the newly created WoW game account automatically.
+    if (email[0] != '\0')
+    {
+        const std::string escapedEmail = sLogonSQL->escapeString(email);
+        const std::string escapedName = sLogonSQL->escapeString(name);
+        auto linkData = sLogonSQL->query(
+            "SELECT ba.id, a.id FROM battlenet_accounts ba, accounts a "
+            "WHERE UPPER(ba.email)=UPPER('%s') AND UPPER(a.acc_name)=UPPER('%s') LIMIT 1",
+            escapedEmail.c_str(), escapedName.c_str());
+        if (linkData && linkData->fetch())
+        {
+            Field* fields = linkData->fetch();
+            sLogonSQL->waitExecute(
+                "INSERT INTO battlenet_game_accounts(battlenet_account_id, game_account_id) VALUES(%u, %u) "
+                "ON DUPLICATE KEY UPDATE battlenet_account_id=VALUES(battlenet_account_id)",
+                fields[0].asUint32(), fields[1].asUint32());
+        }
+    }
+
     sAccountMgr.reloadAccounts(true);
 
-    fmt::println("Account created.");
+    fmt::println("WoW game account created.");
 }
 
 void LogonConsole::AccountDelete(char* str)
@@ -303,6 +331,18 @@ void LogonConsole::AccountDelete(char* str)
     }
 
     checkAccountName(name, ACC_NAME_DO_EXIST);
+
+    const std::string escapedName = sLogonSQL->escapeString(name);
+    auto accountResult = sLogonSQL->query(
+        "SELECT id FROM accounts WHERE UPPER(acc_name) = UPPER('%s') LIMIT 1",
+        escapedName.c_str());
+    if (accountResult && accountResult->fetch())
+    {
+        const uint32_t gameAccountId = accountResult->fetch()[0].asUint32();
+        sLogonSQL->waitExecute(
+            "DELETE FROM battlenet_game_accounts WHERE game_account_id = %u",
+            gameAccountId);
+    }
 
     std::stringstream query;
     query << "DELETE FROM `accounts` WHERE `acc_name` = '";
@@ -341,8 +381,8 @@ void LogonConsole::AccountSetPassword(char* str)
 
     std::stringstream query;
     query << "UPDATE `accounts` SET `encrypted_password` = ";
-    query << "SHA( UPPER( '" << pass << "' ) ) WHERE `acc_name` = '";
-    query << name << "'";
+    query << "SHA(UPPER('" << pass << "')) ";
+    query << "WHERE `acc_name` = '" << name << "'";
 
     if (!sLogonSQL->waitExecuteNA(query.str().c_str()))
     {
@@ -397,17 +437,187 @@ void LogonConsole::AccountChangePassword(char* str)
         new_pass.push_back(':');
         new_pass.append(new_password_1);
 
-        auto new_pass_query = sLogonSQL->query("UPDATE accounts SET encrypted_password = SHA(UPPER('%s')) WHERE acc_name = '%s'", new_pass.c_str(), std::string(account_name).c_str());
+        const bool updated = sLogonSQL->waitExecute(
+            "UPDATE accounts SET encrypted_password = SHA(UPPER('%s')) WHERE acc_name = '%s'",
+            new_pass.c_str(),
+            std::string(account_name).c_str());
 
-        if (!new_pass_query)
-        {
+        if (!updated)
             return;
-        }
     }
 
     sAccountMgr.reloadAccounts(true);
 
     fmt::println("Account password changed.");
+}
+
+void LogonConsole::BNetAccountCreate(char* str)
+{
+    char email[512];
+    char password[512];
+
+    if (sscanf(str, "%511s %511s", email, password) != 2)
+    {
+        fmt::println("usage: bnet account create <email> <password>");
+        return;
+    }
+
+    if (!sLogonSQL)
+        return;
+
+    const std::string escapedEmail = sLogonSQL->escapeString(email);
+    if (sLogonSQL->query(
+            "SELECT id FROM battlenet_accounts WHERE UPPER(email) = UPPER('%s') LIMIT 1",
+            escapedEmail.c_str()))
+    {
+        fmt::println("Battle.net account '{}' already exists.", email);
+        return;
+    }
+
+    AscEmu::Cryptography::BNetSrpV1::RegistrationData registration;
+    if (!AscEmu::Cryptography::BNetSrpV1::makeRegistrationData(email, password, registration))
+    {
+        fmt::println("Couldn't generate Battle.net SRP credentials. Aborting.");
+        return;
+    }
+
+    std::string battleTag(email);
+    if (const size_t at = battleTag.find('@'); at != std::string::npos)
+        battleTag.resize(at);
+    battleTag += "#1";
+
+    const std::string escapedBattleTag = sLogonSQL->escapeString(battleTag);
+    if (!sLogonSQL->waitExecute(
+            "INSERT INTO battlenet_accounts(email, srp_version, srp_salt, srp_verifier, battle_tag, country) "
+            "VALUES('%s', 1, '%s', '%s', '%s', 'CH')",
+            escapedEmail.c_str(),
+            registration.saltHex.c_str(),
+            registration.verifierHex.c_str(),
+            escapedBattleTag.c_str()))
+    {
+        fmt::println("Couldn't save Battle.net account to database. Aborting.");
+        return;
+    }
+
+    auto created = sLogonSQL->query(
+        "SELECT id FROM battlenet_accounts WHERE UPPER(email)=UPPER('%s') LIMIT 1",
+        escapedEmail.c_str());
+    if (created && created->fetch())
+    {
+        const uint32_t bnetId = created->fetch()[0].asUint32();
+        // Preserve the intuitive old workflow: existing WoW accounts that use
+        // the same e-mail are linked automatically when the Battle.net account
+        // is created. Additional/different accounts can be linked explicitly.
+        sLogonSQL->waitExecute(
+            "INSERT INTO battlenet_game_accounts(battlenet_account_id, game_account_id) "
+            "SELECT %u, id FROM accounts WHERE UPPER(email)=UPPER('%s') "
+            "ON DUPLICATE KEY UPDATE battlenet_account_id=VALUES(battlenet_account_id)",
+            bnetId, escapedEmail.c_str());
+    }
+
+    fmt::println("Battle.net account '{}' created and matching WoW accounts linked.", email);
+}
+
+void LogonConsole::BNetAccountSetPassword(char* str)
+{
+    char email[512];
+    char password[512];
+
+    if (sscanf(str, "%511s %511s", email, password) != 2)
+    {
+        fmt::println("usage: bnet account set password <email> <password>");
+        return;
+    }
+
+    if (!sLogonSQL)
+        return;
+
+    const std::string escapedEmail = sLogonSQL->escapeString(email);
+    auto result = sLogonSQL->query(
+        "SELECT id, email FROM battlenet_accounts WHERE UPPER(email) = UPPER('%s') LIMIT 1",
+        escapedEmail.c_str());
+    if (!result)
+    {
+        fmt::println("Battle.net account '{}' does not exist.", email);
+        return;
+    }
+
+    Field* fields = result->fetch();
+    if (!fields)
+        return;
+
+    const uint32_t id = fields[0].asUint32();
+    const std::string identity = fields[1].asCString() != nullptr ? fields[1].asCString() : email;
+
+    AscEmu::Cryptography::BNetSrpV1::RegistrationData registration;
+    if (!AscEmu::Cryptography::BNetSrpV1::makeRegistrationData(identity, password, registration))
+    {
+        fmt::println("Couldn't generate Battle.net SRP credentials. Aborting.");
+        return;
+    }
+
+    if (!sLogonSQL->waitExecute(
+            "UPDATE battlenet_accounts SET srp_version=1, srp_salt='%s', srp_verifier='%s' WHERE id=%u",
+            registration.saltHex.c_str(),
+            registration.verifierHex.c_str(),
+            id))
+    {
+        fmt::println("Couldn't update Battle.net password.");
+        return;
+    }
+
+    fmt::println("Battle.net password updated for '{}'.", identity);
+}
+
+void LogonConsole::BNetAccountLink(char* str)
+{
+    char email[512];
+    char gameAccountName[512];
+
+    if (sscanf(str, "%511s %511s", email, gameAccountName) != 2)
+    {
+        fmt::println("usage: bnet account link <email> <wow-account-name>");
+        return;
+    }
+
+    if (!sLogonSQL)
+        return;
+
+    const std::string escapedEmail = sLogonSQL->escapeString(email);
+    const std::string escapedGameAccount = sLogonSQL->escapeString(gameAccountName);
+
+    auto bnetResult = sLogonSQL->query(
+        "SELECT id FROM battlenet_accounts WHERE UPPER(email) = UPPER('%s') LIMIT 1",
+        escapedEmail.c_str());
+    if (!bnetResult || !bnetResult->fetch())
+    {
+        fmt::println("Battle.net account '{}' does not exist.", email);
+        return;
+    }
+    const uint32_t bnetId = bnetResult->fetch()[0].asUint32();
+
+    auto gameResult = sLogonSQL->query(
+        "SELECT id, acc_name FROM accounts WHERE UPPER(acc_name) = UPPER('%s') LIMIT 1",
+        escapedGameAccount.c_str());
+    if (!gameResult || !gameResult->fetch())
+    {
+        fmt::println("WoW game account '{}' does not exist.", gameAccountName);
+        return;
+    }
+    const uint32_t gameId = gameResult->fetch()[0].asUint32();
+
+    if (!sLogonSQL->waitExecute(
+            "INSERT INTO battlenet_game_accounts(battlenet_account_id, game_account_id) VALUES(%u, %u) "
+            "ON DUPLICATE KEY UPDATE battlenet_account_id=VALUES(battlenet_account_id)",
+            bnetId,
+            gameId))
+    {
+        fmt::println("Couldn't link WoW game account.");
+        return;
+    }
+
+    fmt::println("Linked WoW game account '{}' ({}) to Battle.net account '{}' ({}).",
+        gameAccountName, gameId, email, bnetId);
 }
 
 void LogonConsole::checkAccountName(std::string name, uint8_t type)

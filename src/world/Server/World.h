@@ -145,7 +145,7 @@ private:
     std::mutex mSessionLock;
 
 public:
-    void addSession(std::unique_ptr<WorldSession> worldSession);
+    void addSession(std::unique_ptr<WorldSession> worldSession, bool sendInitialAccountDataTimes = true);
 
     WorldSession* getSessionByAccountId(uint32_t accountId);
     WorldSession* getSessionByAccountName(const std::string& accountName);

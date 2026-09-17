@@ -810,6 +810,22 @@ void Player::onAttachToWorld()
     SmsgBattlePetJournalLockAcquired battlePetJournalLockPacket;
     getSession()->sendManagedPacket(battlePetJournalLockPacket);
 
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    SmsgBattlePetJournal battlePetJournalPacket;
+    getSession()->sendManagedPacket(battlePetJournalPacket);
+
+    SmsgBattlePetJournalLockAcquired battlePetJournalLockPacket;
+    getSession()->sendManagedPacket(battlePetJournalLockPacket);
+
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    SmsgBattlePetJournal battlePetJournalPacket;
+    getSession()->sendManagedPacket(battlePetJournalPacket);
+
+    SmsgBattlePetJournalLockAcquired battlePetJournalLockPacket;
+    getSession()->sendManagedPacket(battlePetJournalLockPacket);
+
 #endif
 
 #if VERSION_STRING >= Cata
@@ -1387,7 +1403,7 @@ void Player::setFieldKills(uint32_t kills) { write(playerData()->field_kills.raw
 uint32_t Player::getLifetimeHonorableKills() const { return playerData()->field_lifetime_honorable_kills; }
 void Player::setLifetimeHonorableKills(uint32_t kills) { write(playerData()->field_lifetime_honorable_kills, kills); }
 
-#if VERSION_STRING != Mop
+#if VERSION_STRING != Mop && VERSION_STRING != AE_PROFILE_MIDNIGHT && VERSION_STRING != AE_PROFILE_FOREVER
 uint32_t Player::getPlayerFieldBytes2() const { return playerData()->player_field_bytes_2.raw; }
 void Player::setPlayerFieldBytes2(uint32_t bytes) { write(playerData()->player_field_bytes_2.raw, bytes); }
 
@@ -2891,7 +2907,23 @@ void Player::changeLanguage(uint64_t guid, uint8_t race)
             case SKILL_LANG_GILNEAN:
                 return 69270;
 #endif
-#if VERSION_STRING >= Mop
+#if VERSION_STRING == Mop
+            case SKILL_LANG_PANDAREN_NEUTRAL:
+                return 108127;
+            case SKILL_LANG_PANDAREN_ALLIANCE:
+                return 108130;
+            case SKILL_LANG_PANDAREN_HORDE:
+                return 108131;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+            case SKILL_LANG_PANDAREN_NEUTRAL:
+                return 108127;
+            case SKILL_LANG_PANDAREN_ALLIANCE:
+                return 108130;
+            case SKILL_LANG_PANDAREN_HORDE:
+                return 108131;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
             case SKILL_LANG_PANDAREN_NEUTRAL:
                 return 108127;
             case SKILL_LANG_PANDAREN_ALLIANCE:
@@ -2986,7 +3018,37 @@ void Player::changeLanguage(uint64_t guid, uint8_t race)
             CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_GOBLIN));
             break;
 #endif
-#if VERSION_STRING >= Mop
+#if VERSION_STRING == Mop
+        case RACE_PANDAREN_NEUTRAL:
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_NEUTRAL));
+            break;
+        case RACE_PANDAREN_ALLIANCE:
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_ALLIANCE));
+            break;
+        case RACE_PANDAREN_HORDE:
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_HORDE));
+            break;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+        case RACE_PANDAREN_NEUTRAL:
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_NEUTRAL));
+            break;
+        case RACE_PANDAREN_ALLIANCE:
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_ALLIANCE));
+            break;
+        case RACE_PANDAREN_HORDE:
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
+            CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_PANDAREN_HORDE));
+            break;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
         case RACE_PANDAREN_NEUTRAL:
             CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_COMMON));
             CharacterDatabase.execute("INSERT INTO `playerspells` (GUID, SpellID) VALUES ('%u', '%u')", static_cast<uint32_t>(guid), getSpellIdForLanguage(SKILL_LANG_ORCISH));
@@ -3023,6 +3085,14 @@ void Player::sendInitialLogonPackets()
 #if VERSION_STRING == Mop
     SmsgWorldServerInfo worldServerInfoPacket;
     getSession()->sendManagedPacket(worldServerInfoPacket);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    SmsgWorldServerInfo worldServerInfoPacket;
+    getSession()->sendManagedPacket(worldServerInfoPacket);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    SmsgWorldServerInfo worldServerInfoPacket;
+    getSession()->sendManagedPacket(worldServerInfoPacket);
 #endif
 
     sendSmsgInitialSpells();
@@ -3035,6 +3105,14 @@ void Player::sendInitialLogonPackets()
     sendSmsgInitialFactions();
 
 #if VERSION_STRING == Mop
+    SmsgLoadEquipmentSet equipmentSetPacket;
+    getSession()->sendManagedPacket(equipmentSetPacket);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    SmsgLoadEquipmentSet equipmentSetPacket;
+    getSession()->sendManagedPacket(equipmentSetPacket);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     SmsgLoadEquipmentSet equipmentSetPacket;
     getSession()->sendManagedPacket(equipmentSetPacket);
 #endif
@@ -3052,6 +3130,14 @@ void Player::sendInitialLogonPackets()
 #endif
 
 #if VERSION_STRING == Mop
+    SmsgSetActiveMover moverPacket(getGuid());
+    getSession()->sendManagedPacket(moverPacket);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    SmsgSetActiveMover moverPacket(getGuid());
+    getSession()->sendManagedPacket(moverPacket);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     SmsgSetActiveMover moverPacket(getGuid());
     getSession()->sendManagedPacket(moverPacket);
 #endif
@@ -3338,7 +3424,229 @@ void Player::initVisibleUpdateBits()
         Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, visible_items) + 1 + offset);
     }
 
-#if VERSION_STRING >= Mop
+#if VERSION_STRING == Mop
+    uint16_t questIdOffset = 15;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    uint16_t questIdOffset = 15;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    uint16_t questIdOffset = 15;
+#else
+    uint16_t questIdOffset = 5;
+#endif
+    for (uint16_t i = getOffsetForStructuredField(WoWPlayer, quests); i < getOffsetForStructuredField(WoWPlayer, visible_items); i += questIdOffset)
+        Player::m_visibleUpdateMask.SetBit(i);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, chosen_title));
+
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    Player::m_visibleUpdateMask.SetCount(getSizeOfStructure(WoWPlayer));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, guid) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, data));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, data) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, field_type.raw));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, entry));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, dynamic_field));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, scale_x));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charm_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charm_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, summon_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, summon_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charmed_by_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charmed_by_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, target_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, target_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, health));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_4));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_5));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_health));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_4));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_5));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, virtual_item_slot_display, 0));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, virtual_item_slot_display, 1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, virtual_item_slot_display, 2));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, level));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, faction_template));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_0));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, unit_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, unit_flags_2));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, base_attack_time, 0));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, base_attack_time, 1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, bounding_radius));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, combat_reach));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, native_display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, mount_display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, pet_number));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, pet_name_timestamp));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_spell));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, mod_cast_speed));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, npc_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, hover_height));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_timestamp));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_team));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_arbiter));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_arbiter) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_rank));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_level));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, base_mana));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, aura_state));
+
+    for (uint16_t i = 0; i < EQUIPMENT_SLOT_END; ++i)
+    {
+        uint32_t offset = i * 2;
+
+        Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, visible_items) + offset);
+        Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, visible_items) + 1 + offset);
+    }
+
+#if VERSION_STRING == Mop
+    uint16_t questIdOffset = 15;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    uint16_t questIdOffset = 15;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    uint16_t questIdOffset = 15;
+#else
+    uint16_t questIdOffset = 5;
+#endif
+    for (uint16_t i = getOffsetForStructuredField(WoWPlayer, quests); i < getOffsetForStructuredField(WoWPlayer, visible_items); i += questIdOffset)
+        Player::m_visibleUpdateMask.SetBit(i);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, chosen_title));
+
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    Player::m_visibleUpdateMask.SetCount(getSizeOfStructure(WoWPlayer));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, guid) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, data));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, data) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, field_type.raw));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, entry));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, dynamic_field));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, scale_x));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charm_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charm_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, summon_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, summon_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charmed_by_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charmed_by_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, target_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, target_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, health));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_4));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_5));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_health));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_4));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_5));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, virtual_item_slot_display, 0));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, virtual_item_slot_display, 1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, virtual_item_slot_display, 2));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, level));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, faction_template));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_0));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, unit_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, unit_flags_2));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, base_attack_time, 0));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredArrayField(WoWUnit, base_attack_time, 1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, bounding_radius));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, combat_reach));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, native_display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, mount_display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, pet_number));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, pet_name_timestamp));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_spell));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, mod_cast_speed));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, npc_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, hover_height));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_timestamp));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_team));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_arbiter));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_arbiter) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_rank));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_level));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, base_mana));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, aura_state));
+
+    for (uint16_t i = 0; i < EQUIPMENT_SLOT_END; ++i)
+    {
+        uint32_t offset = i * 2;
+
+        Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, visible_items) + offset);
+        Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, visible_items) + 1 + offset);
+    }
+
+#if VERSION_STRING == Mop
+    uint16_t questIdOffset = 15;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    uint16_t questIdOffset = 15;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     uint16_t questIdOffset = 15;
 #else
     uint16_t questIdOffset = 5;
@@ -3470,7 +3778,13 @@ void Player::initVisibleUpdateBits()
     uint16_t questIdOffset = 3;
 #elif VERSION_STRING == TBC
     uint16_t questIdOffset = 4;
-#elif VERSION_STRING >= Mop
+#elif VERSION_STRING == Mop
+    uint16_t questIdOffset = 15;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    uint16_t questIdOffset = 15;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     uint16_t questIdOffset = 15;
 #else
     uint16_t questIdOffset = 5;
@@ -5221,6 +5535,12 @@ void Player::setInitialPlayerProfessions()
     for (uint16_t skillId = SKILL_FROST; skillId != SKILL_PET_HYDRA; ++skillId)
 #elif VERSION_STRING == Mop
     for (uint16_t skillId = SKILL_SWORDS; skillId != SKILL_DIREHORN; ++skillId)
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    for (uint16_t skillId = SKILL_SWORDS; skillId != SKILL_DIREHORN; ++skillId)
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    for (uint16_t skillId = SKILL_SWORDS; skillId != SKILL_DIREHORN; ++skillId)
 #endif
     {
         const auto skillLine = sSkillLineStore.lookupEntry(skillId);
@@ -5340,6 +5660,28 @@ void Player::updateGlyphs()
         if (glyphSlot->Slot > 0)
             setGlyphSlot(static_cast<uint16_t>(glyphSlot->Slot - 1), glyphSlot->Id);
     }
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    for (uint32_t i = 0; i < sGlyphSlotStore.getNumRows(); ++i)
+    {
+        const auto glyphSlot = sGlyphSlotStore.lookupEntry(i);
+        if (glyphSlot == nullptr)
+            continue;
+
+        if (glyphSlot->Slot > 0)
+            setGlyphSlot(static_cast<uint16_t>(glyphSlot->Slot - 1), glyphSlot->Id);
+    }
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    for (uint32_t i = 0; i < sGlyphSlotStore.getNumRows(); ++i)
+    {
+        const auto glyphSlot = sGlyphSlotStore.lookupEntry(i);
+        if (glyphSlot == nullptr)
+            continue;
+
+        if (glyphSlot->Slot > 0)
+            setGlyphSlot(static_cast<uint16_t>(glyphSlot->Slot - 1), glyphSlot->Id);
+    }
 #else
     uint16_t slot = 0;
     for (uint32_t i = 0; i < sGlyphSlotStore.getNumRows(); ++i)
@@ -5373,6 +5715,12 @@ void Player::updateGlyphs()
     if (level >= 75)
         slotMask |= GS_MASK_LEVEL_75;
 #elif VERSION_STRING == Mop
+    // TODO
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    // TODO
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     // TODO
 #endif
 
@@ -5893,6 +6241,88 @@ void Player::learnTalent(uint32_t talentId, uint32_t talentRank)
     // Add the new talent to player talent map
     getActiveSpec().addTalent(talentId, static_cast<uint8_t>(talentRank));
 
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    auto talentInfo = sTalentStore.lookupEntry(talentId);
+    if (talentInfo == nullptr)
+        return;
+
+    uint32_t maxTalentRow = playerData()->max_talent_tiers;
+
+    if (talentInfo->playerClass != getClass())
+        return;
+
+    if (talentInfo->Row > maxTalentRow)
+        return;
+
+    // Check if player has already a spell in column
+    for (uint32_t i = 0; i < sTalentStore.getNumRows(); ++i)
+    {
+        if (auto talent = sTalentStore.lookupEntry(i))
+        {
+            if (talentInfo->Row == talent->Row && hasSpell(talent->SpellId))
+                return;
+        }
+    }
+
+    uint32_t spellId = talentInfo->SpellId;
+    if (spellId == 0)
+        return;
+
+    // Check if player already has the talent spell
+    if (hasSpell(spellId))
+        return;
+
+    const auto spellInfo = sSpellMgr.getSpellInfo(spellId);
+    if (spellInfo == nullptr)
+        return;
+
+    _addSpell(spellId, 0, false);
+
+    // Add the new talent to player talent map
+    getActiveSpec().addTalent(talentId, static_cast<uint8_t>(talentRank));
+
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    auto talentInfo = sTalentStore.lookupEntry(talentId);
+    if (talentInfo == nullptr)
+        return;
+
+    uint32_t maxTalentRow = playerData()->max_talent_tiers;
+
+    if (talentInfo->playerClass != getClass())
+        return;
+
+    if (talentInfo->Row > maxTalentRow)
+        return;
+
+    // Check if player has already a spell in column
+    for (uint32_t i = 0; i < sTalentStore.getNumRows(); ++i)
+    {
+        if (auto talent = sTalentStore.lookupEntry(i))
+        {
+            if (talentInfo->Row == talent->Row && hasSpell(talent->SpellId))
+                return;
+        }
+    }
+
+    uint32_t spellId = talentInfo->SpellId;
+    if (spellId == 0)
+        return;
+
+    // Check if player already has the talent spell
+    if (hasSpell(spellId))
+        return;
+
+    const auto spellInfo = sSpellMgr.getSpellInfo(spellId);
+    if (spellInfo == nullptr)
+        return;
+
+    _addSpell(spellId, 0, false);
+
+    // Add the new talent to player talent map
+    getActiveSpec().addTalent(talentId, static_cast<uint8_t>(talentRank));
+
 #else // < Mop
     auto curTalentPoints = getActiveSpec().getTalentPoints();
     if (curTalentPoints == 0)
@@ -6044,6 +6474,58 @@ void Player::learnTalent(uint32_t talentId, uint32_t talentRank)
 }
 
 #if VERSION_STRING == Mop
+uint32_t Player::getCurrentSpecId() const { return playerData()->current_spec_id; }
+void Player::setCurrentSpecId(uint32_t specializationId) { write(playerData()->current_spec_id, specializationId); }
+
+void Player::setPrimaryTalentSpecialization(uint32_t specializationTabId)
+{
+    if (specializationTabId >= 4)
+        return;
+
+    // Player already chose a specialization for the currently active spec slot - this opcode only
+    // covers the initial choice, switching specs later happens through activateTalentSpec()
+    if (getActiveSpec().getSpecializationId() != 0)
+        return;
+
+    const auto specializationTabs = getClassSpecializations(static_cast<uint8_t>(getClass()));
+    const uint32_t specializationId = specializationTabs[specializationTabId];
+    if (specializationId == 0)
+        return;
+
+    getActiveSpec().setSpecializationId(specializationId);
+    setCurrentSpecId(specializationId);
+
+    sendTalentsInfo();
+    saveToDB(false);
+}
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+uint32_t Player::getCurrentSpecId() const { return playerData()->current_spec_id; }
+void Player::setCurrentSpecId(uint32_t specializationId) { write(playerData()->current_spec_id, specializationId); }
+
+void Player::setPrimaryTalentSpecialization(uint32_t specializationTabId)
+{
+    if (specializationTabId >= 4)
+        return;
+
+    // Player already chose a specialization for the currently active spec slot - this opcode only
+    // covers the initial choice, switching specs later happens through activateTalentSpec()
+    if (getActiveSpec().getSpecializationId() != 0)
+        return;
+
+    const auto specializationTabs = getClassSpecializations(static_cast<uint8_t>(getClass()));
+    const uint32_t specializationId = specializationTabs[specializationTabId];
+    if (specializationId == 0)
+        return;
+
+    getActiveSpec().setSpecializationId(specializationId);
+    setCurrentSpecId(specializationId);
+
+    sendTalentsInfo();
+    saveToDB(false);
+}
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 uint32_t Player::getCurrentSpecId() const { return playerData()->current_spec_id; }
 void Player::setCurrentSpecId(uint32_t specializationId) { write(playerData()->current_spec_id, specializationId); }
 
@@ -13475,6 +13957,42 @@ void Player::modifyCurrency(uint32_t id, int32_t count, bool printLog/* = true*/
         if (!printLog)
             return;
     }
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    if (isNewEntry)
+    {
+        AscEmu::Packets::CurrencyRecord record;
+        record.id = id;
+        record.quantity = playerCurrency.quantity / precision;
+        record.weeklyQuantity = playerCurrency.weeklyQuantity / precision;
+        record.weekCap = weekCap / precision;
+        record.trackedQuantity = playerCurrency.trackedQuantity / precision;
+        record.flags = playerCurrency.flags;
+
+        AscEmu::Packets::SmsgSetupCurrency setupPacket({ record });
+        m_session->sendManagedPacket(setupPacket);
+
+        if (!printLog)
+            return;
+    }
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    if (isNewEntry)
+    {
+        AscEmu::Packets::CurrencyRecord record;
+        record.id = id;
+        record.quantity = playerCurrency.quantity / precision;
+        record.weeklyQuantity = playerCurrency.weeklyQuantity / precision;
+        record.weekCap = weekCap / precision;
+        record.trackedQuantity = playerCurrency.trackedQuantity / precision;
+        record.flags = playerCurrency.flags;
+
+        AscEmu::Packets::SmsgSetupCurrency setupPacket({ record });
+        m_session->sendManagedPacket(setupPacket);
+
+        if (!printLog)
+            return;
+    }
 #endif
 
     AscEmu::Packets::SmsgUpdateCurrency updatePacket(
@@ -13723,6 +14241,114 @@ void Player::processPendingUpdates()
 }
 
 #if VERSION_STRING == Mop
+void Player::resendCreateAndActiveMoverForMoP()
+{
+    if (!m_session)
+        return;
+    if (!IsInWorld())
+    {
+        sLogger.info("WORLD: resend create+active mover skipped for {} (player not InWorld yet)", getName());
+        return;
+    }
+    constexpr uint32_t kMaxObjectUpdateFailedResends = 5u;
+    if (m_objectUpdateFailedResendCount >= kMaxObjectUpdateFailedResends)
+    {
+        sLogger.failure("WORLD: MoP player create rejected {} times by client for {}; stopping resend (client may need correct SMSG_UPDATE_OBJECT format)", kMaxObjectUpdateFailedResends, getName());
+        return;
+    }
+    const uint32_t now = Util::getMSTime();
+    // First resend is always allowed (m_lastObjectUpdateFailedResend==0); then throttle 1.5s
+    if (m_lastObjectUpdateFailedResend != 0 && (now - m_lastObjectUpdateFailedResend < 1500u))
+    {
+        sLogger.debug("resendCreateAndActiveMoverForMoP: throttled for {}", getName());
+        return;
+    }
+    m_lastObjectUpdateFailedResend = now;
+    ++m_objectUpdateFailedResendCount;
+
+    sLogger.info("WORLD: resending LOGIN_VERIFY_WORLD + SetActiveMover + create for {} (attempt {}/{})", getName(), m_objectUpdateFailedResendCount, kMaxObjectUpdateFailedResends);
+    // MoP: send in order client may expect - verify world first, then mover, then create (mirrors panda-core flow).
+    sendLoginVerifyWorldPacket();
+
+    SmsgSetActiveMover moverPacket(getGuid());
+    getSession()->sendManagedPacket(moverPacket);
+
+    ByteBuffer pbuf(10000);
+    const uint32_t count = buildCreateUpdateBlockForPlayer(&pbuf, this);
+    sLogger.info("WORLD: resend create block for {} size={} bytes (attempt {}/{})", getName(), pbuf.size(), m_objectUpdateFailedResendCount, kMaxObjectUpdateFailedResends);
+    getUpdateMgr().pushCreationData(&pbuf, count);
+    processPendingUpdates();
+
+    // MoP: client may be waiting for CUF profiles after create to finish loading.
+    SmsgLoadCufProfiles cufProfilesPacket;
+    getSession()->sendManagedPacket(cufProfilesPacket);
+
+    // MoP: schedule one delayed retry in 2s (after throttle) in case client missed the first resend; stop when cap reached.
+    if (m_objectUpdateFailedResendCount < kMaxObjectUpdateFailedResends)
+        sEventMgr.AddEvent(this, &Player::resendCreateAndActiveMoverForMoP, EVENT_PLAYER_MOP_PROCESS_QUEUE, 2000, 1, 0);
+}
+
+void Player::eventProcessQueuedPacketsMoP()
+{
+    if (m_session && IsInWorld())
+        m_session->processQueuedPackets(static_cast<uint32_t>(GetInstanceID()));
+}
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+void Player::resendCreateAndActiveMoverForMoP()
+{
+    if (!m_session)
+        return;
+    if (!IsInWorld())
+    {
+        sLogger.info("WORLD: resend create+active mover skipped for {} (player not InWorld yet)", getName());
+        return;
+    }
+    constexpr uint32_t kMaxObjectUpdateFailedResends = 5u;
+    if (m_objectUpdateFailedResendCount >= kMaxObjectUpdateFailedResends)
+    {
+        sLogger.failure("WORLD: MoP player create rejected {} times by client for {}; stopping resend (client may need correct SMSG_UPDATE_OBJECT format)", kMaxObjectUpdateFailedResends, getName());
+        return;
+    }
+    const uint32_t now = Util::getMSTime();
+    // First resend is always allowed (m_lastObjectUpdateFailedResend==0); then throttle 1.5s
+    if (m_lastObjectUpdateFailedResend != 0 && (now - m_lastObjectUpdateFailedResend < 1500u))
+    {
+        sLogger.debug("resendCreateAndActiveMoverForMoP: throttled for {}", getName());
+        return;
+    }
+    m_lastObjectUpdateFailedResend = now;
+    ++m_objectUpdateFailedResendCount;
+
+    sLogger.info("WORLD: resending LOGIN_VERIFY_WORLD + SetActiveMover + create for {} (attempt {}/{})", getName(), m_objectUpdateFailedResendCount, kMaxObjectUpdateFailedResends);
+    // MoP: send in order client may expect - verify world first, then mover, then create (mirrors panda-core flow).
+    sendLoginVerifyWorldPacket();
+
+    SmsgSetActiveMover moverPacket(getGuid());
+    getSession()->sendManagedPacket(moverPacket);
+
+    ByteBuffer pbuf(10000);
+    const uint32_t count = buildCreateUpdateBlockForPlayer(&pbuf, this);
+    sLogger.info("WORLD: resend create block for {} size={} bytes (attempt {}/{})", getName(), pbuf.size(), m_objectUpdateFailedResendCount, kMaxObjectUpdateFailedResends);
+    getUpdateMgr().pushCreationData(&pbuf, count);
+    processPendingUpdates();
+
+    // MoP: client may be waiting for CUF profiles after create to finish loading.
+    SmsgLoadCufProfiles cufProfilesPacket;
+    getSession()->sendManagedPacket(cufProfilesPacket);
+
+    // MoP: schedule one delayed retry in 2s (after throttle) in case client missed the first resend; stop when cap reached.
+    if (m_objectUpdateFailedResendCount < kMaxObjectUpdateFailedResends)
+        sEventMgr.AddEvent(this, &Player::resendCreateAndActiveMoverForMoP, EVENT_PLAYER_MOP_PROCESS_QUEUE, 2000, 1, 0);
+}
+
+void Player::eventProcessQueuedPacketsMoP()
+{
+    if (m_session && IsInWorld())
+        m_session->processQueuedPackets(static_cast<uint32_t>(GetInstanceID()));
+}
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 void Player::resendCreateAndActiveMoverForMoP()
 {
     if (!m_session)
@@ -15711,6 +16337,48 @@ float Player::getDodgeChance()
     float tmp = 100.0f * baseCritVal;
     if (critPerAgiVal != 0.0f)
         tmp += agi / critPerAgiVal;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    // Mop only: gtChanceToMeleeCritBase.dbc gained per-level rows (same layout as
+    // gtChanceToMeleeCrit.dbc), and the agility scaling value became a divisor
+    // ("agility points needed per 1%"), not a multiplier. Cata's DBC still has
+    // only 11 rows (class-indexed) and tiny multiplier-style values (~0.0004-0.0005),
+    // confirmed against the real Cata gtChanceToMeleeCrit.dbc, so Cata keeps the old formula below.
+    auto baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(level - 1 + (playerClass - 1) * 100);
+    if (baseCrit == nullptr)
+        baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    auto critPerAgi = sGtChanceToMeleeCritStore.lookupEntry(level - 1 + (playerClass - 1) * 100);
+    if (critPerAgi == nullptr)
+        critPerAgi = sGtChanceToMeleeCritStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    const float baseCritVal = baseCrit ? baseCrit->val : 0.0f;
+    const float critPerAgiVal = critPerAgi ? critPerAgi->val : 0.0f;
+
+    float tmp = 100.0f * baseCritVal;
+    if (critPerAgiVal != 0.0f)
+        tmp += agi / critPerAgiVal;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    // Mop only: gtChanceToMeleeCritBase.dbc gained per-level rows (same layout as
+    // gtChanceToMeleeCrit.dbc), and the agility scaling value became a divisor
+    // ("agility points needed per 1%"), not a multiplier. Cata's DBC still has
+    // only 11 rows (class-indexed) and tiny multiplier-style values (~0.0004-0.0005),
+    // confirmed against the real Cata gtChanceToMeleeCrit.dbc, so Cata keeps the old formula below.
+    auto baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(level - 1 + (playerClass - 1) * 100);
+    if (baseCrit == nullptr)
+        baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    auto critPerAgi = sGtChanceToMeleeCritStore.lookupEntry(level - 1 + (playerClass - 1) * 100);
+    if (critPerAgi == nullptr)
+        critPerAgi = sGtChanceToMeleeCritStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    const float baseCritVal = baseCrit ? baseCrit->val : 0.0f;
+    const float critPerAgiVal = critPerAgi ? critPerAgi->val : 0.0f;
+
+    float tmp = 100.0f * baseCritVal;
+    if (critPerAgiVal != 0.0f)
+        tmp += agi / critPerAgiVal;
 #else
     // Base dodge + dodge from agility
     auto baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(playerClass - 1);
@@ -15811,6 +16479,32 @@ void Player::updateChances()
     tmp = 100 * (baseCrit ? baseCrit->val : 0.0f);
     if (CritPerAgi != nullptr && CritPerAgi->val != 0.0f)
         tmp += getStat(STAT_AGILITY) / CritPerAgi->val;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    auto baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
+    if (baseCrit == nullptr)
+        baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    auto CritPerAgi = sGtChanceToMeleeCritStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
+    if (CritPerAgi == nullptr)
+        CritPerAgi = sGtChanceToMeleeCritStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    tmp = 100 * (baseCrit ? baseCrit->val : 0.0f);
+    if (CritPerAgi != nullptr && CritPerAgi->val != 0.0f)
+        tmp += getStat(STAT_AGILITY) / CritPerAgi->val;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    auto baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
+    if (baseCrit == nullptr)
+        baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    auto CritPerAgi = sGtChanceToMeleeCritStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
+    if (CritPerAgi == nullptr)
+        CritPerAgi = sGtChanceToMeleeCritStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    tmp = 100 * (baseCrit ? baseCrit->val : 0.0f);
+    if (CritPerAgi != nullptr && CritPerAgi->val != 0.0f)
+        tmp += getStat(STAT_AGILITY) / CritPerAgi->val;
 #else
     auto baseCrit = sGtChanceToMeleeCritBaseStore.lookupEntry(playerClass - 1);
 
@@ -15847,6 +16541,32 @@ void Player::updateChances()
     setRangedCritPercentage(std::min(rcr, 95.0f));
 
 #if VERSION_STRING == Mop
+    auto SpellCritBase = sGtChanceToSpellCritBaseStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
+    if (SpellCritBase == nullptr)
+        SpellCritBase = sGtChanceToSpellCritBaseStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    auto SpellCritPerInt = sGtChanceToSpellCritStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
+    if (SpellCritPerInt == nullptr)
+        SpellCritPerInt = sGtChanceToSpellCritStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    float spellCritFromStats = 100 * (SpellCritBase ? SpellCritBase->val : 0.0f);
+    if (SpellCritPerInt != nullptr && SpellCritPerInt->val != 0.0f)
+        spellCritFromStats += getStat(STAT_INTELLECT) / SpellCritPerInt->val;
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    auto SpellCritBase = sGtChanceToSpellCritBaseStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
+    if (SpellCritBase == nullptr)
+        SpellCritBase = sGtChanceToSpellCritBaseStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    auto SpellCritPerInt = sGtChanceToSpellCritStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
+    if (SpellCritPerInt == nullptr)
+        SpellCritPerInt = sGtChanceToSpellCritStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);
+
+    float spellCritFromStats = 100 * (SpellCritBase ? SpellCritBase->val : 0.0f);
+    if (SpellCritPerInt != nullptr && SpellCritPerInt->val != 0.0f)
+        spellCritFromStats += getStat(STAT_INTELLECT) / SpellCritPerInt->val;
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
     auto SpellCritBase = sGtChanceToSpellCritBaseStore.lookupEntry(playerLevel - 1 + (playerClass - 1) * 100);
     if (SpellCritBase == nullptr)
         SpellCritBase = sGtChanceToSpellCritBaseStore.lookupEntry(DBC_PLAYER_LEVEL_CAP - 1 + (playerClass - 1) * 100);

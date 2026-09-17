@@ -69,6 +69,34 @@
              RemotePassword = "change_me_logon">
 
 ################################################################################
+# Battle.net World Protocol
+#
+#    Enabled:
+#        Enables the modern Battle.net WorldSocket V2 initializer used by
+#        current Classic clients. When enabled, new client sockets do not use
+#        the legacy IP/build lookup through LogonComm before the world protocol
+#        starts. When BattleNetComm is enabled as well, the legacy LogonComm
+#        connection is not started.
+#        Default: 0
+#
+
+<BattleNetWorld Enabled = "1">
+
+################################################################################
+# Internal Battle.net communication
+#
+# This is independent from the legacy LogonComm path. Battle.net-authenticated
+# clients receive pending World sessions over this private channel.
+################################################################################
+
+<BattleNetComm Enabled      = "1"
+               Host         = "127.0.0.1"
+               Port         = "1120"
+               RealmId      = "1"
+               RealmName    = "AscEmu"
+               SharedSecret = "ascemu-bnetcomm">
+
+################################################################################
 # RealmServer Settings
 #
 #    Name:

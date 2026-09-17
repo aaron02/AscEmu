@@ -140,6 +140,38 @@ struct WoWCorpse : WoWObject
     uint32_t corpse_flags;
     uint32_t dynamic_flags;
 };
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+
+static inline constexpr uint8_t WOWCORPSE_ITEM_COUNT = 19;
+
+struct WoWCorpse : WoWObject
+{
+    uint64_t owner_guid;
+    uint64_t party_guid;
+    uint32_t display_id;
+    std::array<uint32_t, WOWCORPSE_ITEM_COUNT> item;
+    corpse_bytes_1_union corpse_bytes_1;
+    corpse_bytes_2_union corpse_bytes_2;
+    uint32_t corpse_flags;
+    uint32_t dynamic_flags;
+};
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+
+static inline constexpr uint8_t WOWCORPSE_ITEM_COUNT = 19;
+
+struct WoWCorpse : WoWObject
+{
+    uint64_t owner_guid;
+    uint64_t party_guid;
+    uint32_t display_id;
+    std::array<uint32_t, WOWCORPSE_ITEM_COUNT> item;
+    corpse_bytes_1_union corpse_bytes_1;
+    corpse_bytes_2_union corpse_bytes_2;
+    uint32_t corpse_flags;
+    uint32_t dynamic_flags;
+};
 #endif
 
 #pragma pack(pop)

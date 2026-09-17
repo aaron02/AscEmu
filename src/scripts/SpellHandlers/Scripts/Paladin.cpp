@@ -896,6 +896,8 @@ public:
 #elif VERSION_STRING == Mop
         // Weapon damage starts at 2.4% and goes up to 12% if target has five stacks of debuff
         float_t dmgPercent = 2.4f;
+#elif VERSION_STRING > Mop
+        float_t dmgPercent = 2.4f;
 #endif
 
         if (const auto* const dotAur = spell->getUnitTarget()->getAuraWithId(auraId))

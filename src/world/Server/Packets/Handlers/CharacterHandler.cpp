@@ -6,6 +6,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "BuildInfo.hpp"
 #include "Chat/ChatDefines.hpp"
 #include "Server/WorldSession.h"
+#include "Server/WorldSocket.hpp"
 #include "Server/Packets/CmsgSetFactionAtWar.h"
 #include "Server/Packets/CmsgSetFactionInactive.h"
 #include "Objects/Units/Players/Player.hpp"
@@ -740,6 +741,14 @@ void WorldSession::fullLogin(Player* player)
 #if VERSION_STRING == Mop
     SmsgHotfixNotifyBlob hotfixPacket;
     sendManagedPacket(hotfixPacket);
+#elif defined(AE_MIDNIGHT)
+// Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
+    SmsgHotfixNotifyBlob hotfixPacket;
+    sendManagedPacket(hotfixPacket);
+#elif defined(AE_FOREVER)
+// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+    SmsgHotfixNotifyBlob hotfixPacket;
+    sendManagedPacket(hotfixPacket);
 #endif
 
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -997,6 +1006,7 @@ void WorldSession::characterEnumProc(QueryResult* result)
     }
 
     sLogger.debug("Character Enum Built in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+
     SmsgEnumCharactersResult enumPacket(charRealCount, enumData);
     sendManagedPacket(enumPacket);
 }

@@ -38,6 +38,7 @@ void Socket::readCallback(uint32_t)
         return;
     }
 
+    logFirstRead(readBuffer.GetBuffer(), static_cast<size_t>(bytes));
     readBuffer.IncrementWritten(bytes);
     onRead();
     m_bytesReceived += bytes;
@@ -57,6 +58,7 @@ void Socket::writeCallback()
 
     m_bytesSent += bytesWritten;
     writeBuffer.Remove(bytesWritten);
+    completeDelayedDisconnectIfReady();
 }
 
 void Socket::setupReadEvent()
@@ -100,6 +102,7 @@ void Socket::readCallback(uint32_t)
         return;
     }
 
+    logFirstRead(readBuffer.GetBuffer(), static_cast<size_t>(bytes));
     readBuffer.IncrementWritten(bytes);
     onRead();
     m_bytesReceived += bytes;
@@ -119,6 +122,7 @@ void Socket::writeCallback()
 
     m_bytesSent += bytesWritten;
     writeBuffer.Remove(bytesWritten);
+    completeDelayedDisconnectIfReady();
 }
 
 void Socket::setupReadEvent()

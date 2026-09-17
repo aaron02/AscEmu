@@ -302,7 +302,7 @@ float World::getRAMUsage()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Session functions
-void World::addSession(std::unique_ptr<WorldSession> sessionHolder)
+void World::addSession(std::unique_ptr<WorldSession> sessionHolder, bool sendInitialAccountDataTimes)
 {
     if (sessionHolder)
     {
@@ -315,7 +315,8 @@ void World::addSession(std::unique_ptr<WorldSession> sessionHolder)
             setNewPeakSessionCount(static_cast<uint32_t>(mActiveSessionMapStore.size()));
 
 #ifndef AE_TBC
-        worldSession->sendAccountDataTimes(GLOBAL_CACHE_MASK);
+        if (sendInitialAccountDataTimes)
+            worldSession->sendAccountDataTimes(GLOBAL_CACHE_MASK);
 #endif
     }
 }
@@ -932,7 +933,9 @@ void World::loadMySQLStores()
         },
         []{
             sMySQLStore.loadNpcTextTable();
+#if !defined(AE_MODERN_CLIENT)
             sMySQLStore.loadNpcScriptTextTable();
+#endif
             sMySQLStore.loadGossipMenuOptionTable();
             sMySQLStore.loadGraveyardsTable();
             sMySQLStore.loadTeleportCoordsTable();
@@ -978,7 +981,9 @@ void World::loadMySQLStores()
             sMySQLStore.loadLocalesGossipMenuOption();
             sMySQLStore.loadLocalesItem();
             sMySQLStore.loadLocalesItemPages();
+#if !defined(AE_MODERN_CLIENT)
             sMySQLStore.loadLocalesNpcScriptText();
+#endif
             sMySQLStore.loadLocalesNpcText();
             sMySQLStore.loadLocalesPointsOfInterest();
             sMySQLStore.loadLocalesQuest();
@@ -994,7 +999,9 @@ void World::loadMySQLStores()
     sMySQLStore.loadTransportEntrys();
     sMySQLStore.loadGossipMenuItemsTable();
     sMySQLStore.loadRecallTable();
+#if !defined(AE_MODERN_CLIENT)
     sMySQLStore.loadCreatureAIScriptsTable();
+#endif
     sMySQLStore.loadSpawnGroupIds();
 
     sLogger.info("Done. MySQLStore loaded in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
@@ -1060,7 +1067,9 @@ void World::loadMySQLTablesByTask()
         },
         []{
             sQuestMgr.LoadExtraQuestStuff();
+#if !defined(AE_MODERN_CLIENT)
             sObjectMgr.loadEventScripts();
+#endif
             sWeatherMgr.loadFromDB();
             sAddonMgr.LoadFromDB();
             sGameEventMgr.LoadFromDB();

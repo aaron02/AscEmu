@@ -1,5 +1,13 @@
 # Copyright (c) 2014-2026 AscEmu Team <http://www.ascemu.org>
 
+# Modern clients intentionally do not build the legacy script module stack.
+# Midnight/Forever currently require dedicated scripts and spell handlers; the
+# Classic-MoP modules are not considered wire/data compatible with these clients.
+if (ASCEMU_VERSION STREQUAL "Midnight" OR ASCEMU_VERSION STREQUAL "Forever")
+    message(STATUS "ASCEMU_VERSION=${ASCEMU_VERSION}: legacy script modules are disabled")
+    return()
+endif ()
+
 # all script libraries have SCRIPTLIB defined.
 add_compile_options(-DSCRIPTLIB -DSKIP_ALLOCATOR_SHARING)
 

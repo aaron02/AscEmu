@@ -2984,6 +2984,24 @@ void MySQLDataStore::loadPlayerCreateInfoLevelstats()
 {
     auto startTime = Util::TimeNow();
 
+#if VERSION_STRING == AE_PROFILE_FOREVER
+#ifndef AE_FOREVER_USE_TEMP_LEVELSTATS
+    #error "Forever still uses temporary player level stats. Implement modern DB2 player stats before removing AE_FOREVER_USE_TEMP_LEVELSTATS."
+#endif
+
+    uint32_t player_levelstats_count = 0;
+    if (auto& playerCreateInfo = _playerCreateInfoStoreNew[1][4])
+    {
+        CreateInfo_Levelstats lvl{};
+        lvl.strength = 21;
+        lvl.agility = 23;
+        lvl.stamina = 21;
+        lvl.intellect = 20;
+        lvl.spirit = 20;
+        playerCreateInfo->level_stats[1] = lvl;
+        ++player_levelstats_count;
+    }
+#else
     //                                                           0     1      2          3           4            5             6             7
     auto player_levelstats_result = WorldDatabase.query("SELECT race, class, level, BaseStrength, BaseAgility, BaseStamina, BaseIntellect, BaseSpirit FROM player_levelstats WHERE build = %u", VERSION_STRING);
 
@@ -3004,7 +3022,6 @@ void MySQLDataStore::loadPlayerCreateInfoLevelstats()
         uint32_t _class = fields[1].asUint32();
         uint32_t level = fields[2].asUint32();
 
-
         if (auto& playerCreateInfo = _playerCreateInfoStoreNew[_race][_class])
         {
             CreateInfo_Levelstats lvl{};
@@ -3013,13 +3030,11 @@ void MySQLDataStore::loadPlayerCreateInfoLevelstats()
             lvl.stamina = fields[5].asUint32();
             lvl.intellect = fields[6].asUint32();
             lvl.spirit = fields[7].asUint32();
-
             playerCreateInfo->level_stats.insert(std::make_pair(level, lvl));
-
             ++player_levelstats_count;
         }
-
     } while (player_levelstats_result->nextRow());
+#endif
 
     sLogger.info("MySQLDataLoads : Loaded {} rows from `player_levelstats` table in {} ms!", player_levelstats_count, static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
 

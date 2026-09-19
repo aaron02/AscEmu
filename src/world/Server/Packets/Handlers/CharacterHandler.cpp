@@ -52,6 +52,13 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Storage/WDB/WDBStructures.hpp"
 #include "Utilities/Strings.hpp"
 
+#if defined(AE_FOREVER)
+#include "version/Forever/Opcodes.hpp"
+#include "version/Forever/World/InWorldBootstrap.hpp"
+#include "version/Forever/World/PostAuthBootstrap.hpp"
+#include "WoWGuid.hpp"
+#endif
+
 using namespace AscEmu::Packets;
 
 CharacterErrorCodes VerifyName(utf8_string name)
@@ -225,6 +232,22 @@ void WorldSession::beginPlayerLogin(uint32_t guidLow)
     query->addQuery("SELECT guid,class FROM characters WHERE guid = %u AND login_flags = %u", guidLow, static_cast<uint32_t>(LOGIN_NO_FLAG));
     CharacterDatabase.queueAsyncQuery(std::move(query));
 }
+
+#if defined(AE_FOREVER)
+void WorldSession::beginForeverPlayerLogin(uint32_t guidLow)
+{
+    if (sObjectMgr.getPlayer(guidLow) != nullptr || m_loggingInPlayer || _player)
+    {
+        sLogger.warning("WorldSession::Forever: player login rejected guidLow={} because the character is already active or loading.", guidLow);
+        return;
+    }
+
+    sLogger.info("WorldSession::Forever: starting DB-backed player load guidLow={} without legacy login packets.", guidLow);
+    auto query = std::make_unique<AsyncQuery>(std::make_unique<SQLClassCallbackP0<WorldSession>>(this, &WorldSession::loadPlayerFromDBProc));
+    query->addQuery("SELECT guid,class FROM characters WHERE guid = %u AND login_flags = %u", guidLow, static_cast<uint32_t>(LOGIN_NO_FLAG));
+    CharacterDatabase.queueAsyncQuery(std::move(query));
+}
+#endif
 
 void WorldSession::handleCharRenameOpcode(WorldPacket& recvPacket)
 {
@@ -825,6 +848,118 @@ void WorldSession::fullLogin(Player* player)
     if (Group* group = player->getGroup())
         group->Update();
 }
+
+
+#if defined(AE_FOREVER)
+void WorldSession::fullLoginForever(Player* player)
+{
+    if (player == nullptr)
+        return;
+
+    sLogger.info("WorldSession::Forever: finalizing server-side login state for {} ({}) without legacy network bootstrap.", player->getName(), player->getGuidLow());
+
+    SetPlayer(player);
+    m_MoverWoWGuid.init(player->getGuid());
+
+    player->setLoginPosition();
+    player->setPlayerInfoIfNeeded();
+
+    const bool canEnterWorld = player->logOntoTransport();
+
+    CharacterDatabase.execute("UPDATE characters SET online = 1 WHERE guid = %u", player->getGuidLow());
+    sWorld.incrementPlayerCount(player->getTeam());
+    player->m_playedTime[2] = uint32_t(UNIXTIME);
+
+    if (player->m_isResting)
+        player->applyPlayerRestState(true);
+
+    if (player->m_timeLogoff > 0 && player->getLevel() < player->getMaxLevel())
+    {
+        const uint32_t currenttime = uint32_t(UNIXTIME);
+        const uint32_t timediff = currenttime - player->m_timeLogoff;
+        if (timediff > 0)
+            player->addCalculatedRestXp(timediff);
+    }
+
+    player->setEnteringToWorld();
+
+    if (canEnterWorld && !player->getWorldMap())
+    {
+        const auto mapInfo = sMySQLStore.getWorldMapInfo(player->GetMapId());
+        if (mapInfo == nullptr || player->GetMapId() >= MAX_NUM_MAPS)
+        {
+            sLogger.failure("WorldSession::Forever: invalid login map {} for {} ({}).", player->GetMapId(), player->getName(), player->getGuidLow());
+            Disconnect();
+            return;
+        }
+
+        WorldMap* map = sMapMgr.findWorldMap(player->GetMapId(), player->GetInstanceID());
+        if (map == nullptr)
+        {
+            sLogger.failure("WorldSession::Forever: resolved login map unavailable for {} ({}) map={} instance={}.", player->getName(), player->getGuidLow(), player->GetMapId(), player->GetInstanceID());
+            Disconnect();
+            return;
+        }
+
+        if (!map->onPlayerEnter(player))
+        {
+            sLogger.failure("WorldSession::Forever: map attach rejected for {} ({}) map={} instance={}.", player->getName(), player->getGuidLow(), player->GetMapId(), player->GetInstanceID());
+            Disconnect();
+            return;
+        }
+    }
+    else if (!player->getWorldMap())
+    {
+        sLogger.failure("WorldSession::Forever: cannot enter world for {} ({}) map={} instance={}.", player->getName(), player->getGuidLow(), player->GetMapId(), player->GetInstanceID());
+        Disconnect();
+        return;
+    }
+
+    sHookInterface.OnFullLogin(player);
+    sObjectMgr.addPlayer(player);
+
+    if (Group* group = player->getGroup())
+        group->Update();
+
+    WorldSocket* instanceSocket = GetForeverInstanceSocket();
+    if (instanceSocket == nullptr || !instanceSocket->isConnected())
+    {
+        sLogger.failure("WorldSession::Forever: instance socket unavailable while starting in-world bootstrap for {} ({}).", player->getName(), player->getGuidLow());
+        Disconnect();
+        return;
+    }
+
+    const std::vector<uint8_t> packedPlayerGuid = WoWGuid::createModernPlayer(instanceSocket->getForeverRealmId(), player->getGuidLow()).packModern();
+    ByteBuffer accountDataTimes;
+    accountDataTimes.append(packedPlayerGuid.data(), packedPlayerGuid.size());
+    accountDataTimes << int64_t(static_cast<int64_t>(UNIXTIME));
+    for (uint32_t i = 0; i < 20U; ++i)
+        accountDataTimes << int64_t(0);
+
+    if (!instanceSocket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ACCOUNT_DATA_TIMES, accountDataTimes.contents(), static_cast<uint32_t>(accountDataTimes.size())))
+    {
+        sLogger.failure("WorldSession::Forever: failed to send in-world SMSG_ACCOUNT_DATA_TIMES for {} ({}).", player->getName(), player->getGuidLow());
+        Disconnect();
+        return;
+    }
+
+    if (!instanceSocket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_FEATURE_SYSTEM_STATUS, AscEmu::Version::Forever::InWorldBootstrap::FeatureSystemStatus460063.data(), static_cast<uint32_t>(AscEmu::Version::Forever::InWorldBootstrap::FeatureSystemStatus460063.size())))
+    {
+        sLogger.failure("WorldSession::Forever: failed to send in-world SMSG_FEATURE_SYSTEM_STATUS for {} ({}).", player->getName(), player->getGuidLow());
+        Disconnect();
+        return;
+    }
+
+    if (!instanceSocket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_SET_TIME_ZONE_INFORMATION, AscEmu::Version::Forever::PostAuthBootstrap::TimeZone460123.data(), static_cast<uint32_t>(AscEmu::Version::Forever::PostAuthBootstrap::TimeZone460123.size())))
+    {
+        sLogger.failure("WorldSession::Forever: failed to send in-world SMSG_SET_TIME_ZONE_INFORMATION for {} ({}).", player->getName(), player->getGuidLow());
+        Disconnect();
+        return;
+    }
+
+    sLogger.info("WorldSession::Forever: server-side player login complete for {} ({}) map={} instance={} position=({}, {}, {}, {}); sent verified 69913 in-world bootstrap prefix (AccountDataTimes, FeatureSystemStatus, TimeZone).", player->getName(), player->getGuidLow(), player->GetMapId(), player->GetInstanceID(), player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation());
+}
+#endif
 
 void WorldSession::handleSetPlayerDeclinedNamesOpcode(WorldPacket& recvPacket)
 {

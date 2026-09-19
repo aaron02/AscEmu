@@ -16158,7 +16158,11 @@ void Player::loadFromDBProc(QueryResultVector& results)
     m_achievementMgr->updateAllAchievementCriteria();
 #endif
 
+#if defined(AE_FOREVER)
+    m_session->fullLoginForever(this);
+#else
     m_session->fullLogin(this);
+#endif
     m_session->m_loggingInPlayer = nullptr;
 
     if (!isAlive())

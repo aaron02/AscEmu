@@ -392,11 +392,17 @@ protected:
     public:
         void loadPlayerFromDBProc(QueryResultVector& results);
         void beginPlayerLogin(uint32_t guidLow);
+#if defined(AE_FOREVER)
+        void beginForeverPlayerLogin(uint32_t guidLow);
+#endif
         uint8_t deleteCharacter(WoWGuid guid);
 
         void initGMMyMaster();
         void sendServerStats();
         void fullLogin(Player* player);
+#if defined(AE_FOREVER)
+        void fullLoginForever(Player* player);
+#endif
         void characterEnumProc(QueryResult* result);
         void loadAccountDataProc(QueryResult* result);
 

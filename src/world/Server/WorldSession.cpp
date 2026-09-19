@@ -675,7 +675,6 @@ void WorldSession::SendPacket(WorldPacket* packet)
     }
 
 #if defined(AE_FOREVER)
-    sLogger.info("WorldSession::Forever: blocked legacy TX {} opcode=0x{:04X} payload={} byte(s).", sOpcodeTables.getNameForOpcode(packet->getOpcode()), packet->getOpcode(), packet->size());
     return;
 #endif
 
@@ -686,7 +685,6 @@ void WorldSession::SendPacket(WorldPacket* packet)
 void WorldSession::OutPacket(uint16_t opcode)
 {
 #if defined(AE_FOREVER)
-    sLogger.info("WorldSession::Forever: blocked legacy TX {} opcode=0x{:04X} payload=0 byte(s).", sOpcodeTables.getNameForOpcode(opcode), opcode);
     return;
 #endif
 
@@ -697,7 +695,6 @@ void WorldSession::OutPacket(uint16_t opcode)
 void WorldSession::OutPacket(uint16_t opcode, uint16_t len, const void* data)
 {
 #if defined(AE_FOREVER)
-    sLogger.info("WorldSession::Forever: blocked legacy TX {} opcode=0x{:04X} payload={} byte(s).", sOpcodeTables.getNameForOpcode(opcode), opcode, len);
     return;
 #endif
 

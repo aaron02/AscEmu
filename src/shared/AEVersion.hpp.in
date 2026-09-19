@@ -16,9 +16,10 @@ This file is released under the MIT license. See README-MIT for more information
 #define Cata 15595
 #define Mop 18414
 #define AE_PROFILE_MIDNIGHT 69814
-// Forever has no supported public build profile yet. This is only a unique
-// compile-time profile token; BUILD_VERSION remains 0 until one is added.
-#define AE_PROFILE_FOREVER 100000
+#define AE_PROFILE_FOREVER 69913
+
+// TODO: Remove when Forever player level stats are loaded from modern DB2 data.
+#define AE_FOREVER_USE_TEMP_LEVELSTATS
 
 #define AE_CLIENT_PROFILE @ASCEMU_VERSION_TOKEN@
 
@@ -58,9 +59,9 @@ This file is released under the MIT license. See README-MIT for more information
     #define AE_FOREVER
     #define AE_MODERN_CLIENT
     #define AE_BATTLENET
-    #define VERSION 0, 0, 0
+    #define VERSION 1, 60, 1
     #define VERSION_STRING AE_PROFILE_FOREVER
-    #define BUILD_VERSION 0
+    #define BUILD_VERSION 69913
 #else
     #error Unsupported ASCEMU_VERSION
 #endif

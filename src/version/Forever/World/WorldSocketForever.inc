@@ -30,6 +30,7 @@ protected:
     bool handleForeverCharEnumOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverCheckCharacterNameOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverCharCreateOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
+    bool handleForeverPlayerLoginOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverCharDeleteOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverUndeleteCooldownOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverCharacterListAckOpcode(AscEmu::Version::Forever::Packets::Packet& packet);

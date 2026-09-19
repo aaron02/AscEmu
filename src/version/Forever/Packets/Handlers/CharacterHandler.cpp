@@ -1,5 +1,5 @@
 #include "version/Forever/Packets/CharacterPackets.hpp"
-#include "version/Forever/Defines/ObjectGuid.hpp"
+#include "shared/WoWGuid.hpp"
 #include "version/Forever/Packets/Packet.hpp"
 #include "version/Forever/World/ProtocolUtils.hpp"
 #include "version/Forever/Opcodes.hpp"
@@ -13,6 +13,8 @@
 #include "Logging/Logger.hpp"
 
 #include <cstdint>
+#include <cstring>
+#include <limits>
 
 
 bool WorldSocket::handleForeverCharEnumOpcode(AscEmu::Version::Forever::Packets::Packet& packet)
@@ -87,6 +89,44 @@ bool WorldSocket::handleForeverCheckCharacterNameOpcode(AscEmu::Version::Forever
     return sendForeverPacket(Opcode::SMSG_CHECK_CHARACTER_NAME_AVAILABILITY_RESULT, response.contents(), static_cast<uint32_t>(response.size()));
 }
 
+bool WorldSocket::handleForeverPlayerLoginOpcode(AscEmu::Version::Forever::Packets::Packet& packet)
+{
+    using namespace AscEmu::Version::Forever;
+
+    WoWGuid guid;
+    size_t consumed = 0;
+    if (!WoWGuid::unpackModern(packet.contents(), packet.size(), guid, consumed) || guid.getModernHighType() != ModernHighGuid::Player || guid.getModernRealmId() != m_foreverRealmId || guid.getModernLow() == 0 || guid.getModernLow() > std::numeric_limits<uint32_t>::max())
+    {
+        sLogger.warning("WorldSocket::Forever: malformed CMSG_PLAYER_LOGIN size={} bytes=[{}].", packet.size(), bytesToHex(packet.contents(), packet.size()));
+        return true;
+    }
+
+    if (packet.size() != consumed + sizeof(float) + sizeof(uint8_t))
+    {
+        sLogger.warning("WorldSocket::Forever: CMSG_PLAYER_LOGIN unexpected layout guidBytes={} totalBytes={} bytes=[{}].", consumed, packet.size(), bytesToHex(packet.contents(), packet.size()));
+        return true;
+    }
+
+    float farClip = 0.0f;
+    std::memcpy(&farClip, packet.contents() + consumed, sizeof(farClip));
+    const uint8_t unknown = packet.contents()[consumed + sizeof(farClip)];
+    const uint32_t guidLow = static_cast<uint32_t>(guid.getModernLow());
+
+    if (m_session == nullptr)
+        return false;
+
+    const auto ownership = CharacterDatabase.query("SELECT guid FROM characters WHERE guid = %u AND acct = %u", guidLow, m_session->GetAccountId());
+    if (ownership == nullptr)
+    {
+        sLogger.warning("WorldSocket::Forever: CMSG_PLAYER_LOGIN rejected guidLow={} because it does not belong to account={}.", guidLow, m_session->GetAccountId());
+        return true;
+    }
+
+    sLogger.info("WorldSocket::Forever: CMSG_PLAYER_LOGIN guidLow={} realm={} farClip={} unknown={}; handing off to WorldSession login.", guidLow, guid.getModernRealmId(), farClip, unknown);
+    m_session->beginPlayerLogin(guidLow);
+    return true;
+}
+
 bool WorldSocket::handleForeverCharCreateOpcode(AscEmu::Version::Forever::Packets::Packet& packet)
 {
     return handleForeverCreateCharacter(packet.contents(), static_cast<uint32_t>(packet.size()));
@@ -96,8 +136,8 @@ bool WorldSocket::handleForeverCharDeleteOpcode(AscEmu::Version::Forever::Packet
 {
     using namespace AscEmu::Version::Forever;
 
-    ObjectGuid guid;
-    if (!ObjectGuid::unpack(packet.contents(), packet.size(), guid) || guid.getHighType() != AscEmu::Version::Forever::HighGuid::Player || guid.getRealmId() != m_foreverRealmId || guid.getLow() == 0 || guid.getLow() > UINT32_MAX)
+    WoWGuid guid;
+    if (!WoWGuid::unpackModern(packet.contents(), packet.size(), guid) || guid.getModernHighType() != ModernHighGuid::Player || guid.getModernRealmId() != m_foreverRealmId || guid.getModernLow() == 0 || guid.getModernLow() > UINT32_MAX)
     {
         sLogger.warning("WorldSocket::Forever: malformed CMSG_CHAR_DELETE payload size={} bytes=[{}].", packet.size(), bytesToHex(packet.contents(), packet.size()));
 
@@ -106,7 +146,7 @@ bool WorldSocket::handleForeverCharDeleteOpcode(AscEmu::Version::Forever::Packet
         return sendForeverPacket(Opcode::SMSG_DELETE_CHAR, response.contents(), static_cast<uint32_t>(response.size()));
     }
 
-    const uint64_t guidLow = guid.getLow();
+    const uint64_t guidLow = guid.getModernLow();
 
     WorldSession* session = getSession();
     if (session == nullptr)

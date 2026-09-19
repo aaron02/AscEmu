@@ -382,6 +382,7 @@ protected:
         // CharacterHandler.cpp
     public:
         void loadPlayerFromDBProc(QueryResultVector& results);
+        void beginPlayerLogin(uint32_t guidLow);
         uint8_t deleteCharacter(WoWGuid guid);
 
         void initGMMyMaster();

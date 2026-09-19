@@ -19,6 +19,7 @@ namespace AscEmu::Version::Forever
         registerOpcode(Opcode::CMSG_ENUM_CHARACTERS, &WorldSocket::handleForeverCharEnumOpcode);
         registerOpcode(Opcode::CMSG_CHECK_CHARACTER_NAME_AVAILABILITY, &WorldSocket::handleForeverCheckCharacterNameOpcode);
         registerOpcode(Opcode::CMSG_CREATE_CHARACTER, &WorldSocket::handleForeverCharCreateOpcode);
+        registerOpcode(Opcode::CMSG_PLAYER_LOGIN, &WorldSocket::handleForeverPlayerLoginOpcode);
         registerOpcode(Opcode::CMSG_CHAR_DELETE, &WorldSocket::handleForeverCharDeleteOpcode);
         registerOpcode(Opcode::CMSG_GET_UNDELETE_CHARACTER_COOLDOWN_STATUS, &WorldSocket::handleForeverUndeleteCooldownOpcode);
 

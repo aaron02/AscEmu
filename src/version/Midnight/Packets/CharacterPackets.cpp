@@ -1,5 +1,5 @@
 #include "version/Midnight/Packets/CharacterPackets.hpp"
-#include "version/Midnight/Defines/ObjectGuid.hpp"
+#include "shared/WoWGuid.hpp"
 
 #include <algorithm>
 
@@ -8,9 +8,9 @@ namespace AscEmu::Version::Midnight::Packets
 
     namespace
     {
-        void appendObjectGuid(Packet& packet, const AscEmu::Version::Midnight::ObjectGuid& guid)
+        void appendObjectGuid(Packet& packet, const WoWGuid& guid)
         {
-            const std::vector<uint8_t> packed = guid.pack();
+            const std::vector<uint8_t> packed = guid.packModern();
             if (!packed.empty())
                 packet.append(packed.data(), packed.size());
         }
@@ -46,7 +46,7 @@ namespace AscEmu::Version::Midnight::Packets
         uint16_t listPosition = 0;
         for (const CharacterEnumEntry& character : characters)
         {
-            appendObjectGuid(packet, ObjectGuid::createPlayer(realmId, character.guid));
+            appendObjectGuid(packet, WoWGuid::createModernPlayer(realmId, character.guid));
             packet << uint32_t(virtualRealmAddress);
             packet << uint16_t(listPosition++);
             packet << uint8_t(character.race);
@@ -62,9 +62,9 @@ namespace AscEmu::Version::Midnight::Packets
             const uint64_t guildClubMemberId = character.guid | (static_cast<uint64_t>(realmId & 0x0FFFU) << 48U);
             packet << guildClubMemberId;
             if (character.guildId != 0)
-                appendObjectGuid(packet, ObjectGuid::createGuild(realmId, character.guildId));
+                appendObjectGuid(packet, WoWGuid::createModernGuild(realmId, character.guildId));
             else
-                appendObjectGuid(packet, ObjectGuid::empty());
+                appendObjectGuid(packet, WoWGuid::createModernEmpty());
 
             packet << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0); // Flags 1..4
             packet << uint8_t(0); // CantLoginReason
@@ -204,8 +204,8 @@ namespace AscEmu::Version::Midnight::Packets
         // Keep the exact build-69814 create-response GUID layout that was
         // already proven to work before the Midnight packet isolation.
         // Unlike character-enum GUIDs, SMSG_CREATE_CHAR used a Player GUID
-        // with only the HighGuid::Player bits set and no realm-id bits.
-        appendObjectGuid(packet, ObjectGuid(uint64_t(HighGuid::Player) << 58U, characterGuid));
+        // with only the ModernHighGuid::Player bits set and no realm-id bits.
+        appendObjectGuid(packet, WoWGuid::createModern(uint64_t(ModernHighGuid::Player) << 58U, characterGuid));
         return true;
     }
 

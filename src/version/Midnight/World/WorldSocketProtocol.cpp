@@ -25,7 +25,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "version/Midnight/Auth.hpp"
 #include "version/Midnight/BattleNet/Protocol.hpp"
 #include "version/Midnight/BuildProfile.hpp"
-#include "version/Midnight/Defines/ObjectGuid.hpp"
+#include "shared/WoWGuid.hpp"
 #include "version/Midnight/OpcodeTable.hpp"
 #include "version/Midnight/Opcodes.hpp"
 
@@ -844,9 +844,9 @@ namespace
 
 
 
-    void appendMidnightObjectGuid(ByteBuffer& buffer, const AscEmu::Version::Midnight::ObjectGuid& guid)
+    void appendMidnightObjectGuid(ByteBuffer& buffer, const WoWGuid& guid)
     {
-        const std::vector<uint8_t> packed = guid.pack();
+        const std::vector<uint8_t> packed = guid.packModern();
         buffer.append(packed.data(), packed.size());
     }
 
@@ -1652,7 +1652,7 @@ bool WorldSocket::finalizeBattleNetV2WorldSession()
     {
         const uint32_t SMSG_ACCOUNT_DATA_TIMES_RAW = AscEmu::Version::Midnight::sOpcodeTable.getHexValueForInternalId(AscEmu::Version::Midnight::Opcode::SMSG_ACCOUNT_DATA_TIMES);
         ByteBuffer packet;
-        appendMidnightObjectGuid(packet, AscEmu::Version::Midnight::ObjectGuid::empty());
+        appendMidnightObjectGuid(packet, WoWGuid::createModernEmpty());
         packet << int64_t(UNIXTIME);
         for (uint32_t i = 0; i < 20U; ++i)
             packet << int64_t(0);

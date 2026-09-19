@@ -209,8 +209,12 @@ void WorldSession::handlePlayerLoginOpcode(WorldPacket& recvPacket)
         return;
 
     sLogger.debugOpcode("Received CMSG_PLAYER_LOGIN {} (guidLow).", srlPacket.guid.getLowGuid());
+    beginPlayerLogin(srlPacket.guid.getLowGuid());
+}
 
-    if (sObjectMgr.getPlayer(srlPacket.guid.getLowGuid()) != nullptr || m_loggingInPlayer || _player)
+void WorldSession::beginPlayerLogin(uint32_t guidLow)
+{
+    if (sObjectMgr.getPlayer(guidLow) != nullptr || m_loggingInPlayer || _player)
     {
         SmsgCharacterLoginFailed managedPacket(E_CHAR_LOGIN_DUPLICATE_CHARACTER);
         sendManagedPacket(managedPacket);
@@ -218,8 +222,7 @@ void WorldSession::handlePlayerLoginOpcode(WorldPacket& recvPacket)
     }
 
     auto query = std::make_unique<AsyncQuery>(std::make_unique<SQLClassCallbackP0<WorldSession>>(this, &WorldSession::loadPlayerFromDBProc));
-    query->addQuery("SELECT guid,class FROM characters WHERE guid = %u AND login_flags = %u",
-        srlPacket.guid.getLowGuid(), static_cast<uint32_t>(LOGIN_NO_FLAG));
+    query->addQuery("SELECT guid,class FROM characters WHERE guid = %u AND login_flags = %u", guidLow, static_cast<uint32_t>(LOGIN_NO_FLAG));
     CharacterDatabase.queueAsyncQuery(std::move(query));
 }
 

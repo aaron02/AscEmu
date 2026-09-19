@@ -8,8 +8,11 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Platform/SymbolVisibility.hpp"
 #include "Debugging/Errors.hpp"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <vector>
 
 #define BitCount1(x) ((x) & 1)
 #define BitCount2(x) ( BitCount1(x) + BitCount1((x)>>1) )
@@ -40,6 +43,13 @@ enum HIGHGUID_TYPE : uint32_t
     LOWGUID_ENTRY_MASK          = 0x00FFFFFF,
 };
 
+enum class ModernHighGuid : uint8_t
+{
+    Null   = 0,
+    Player = 2,
+    Guild  = 28
+};
+
 enum class HighGuid : uint64_t
 {
     Player          = 0x00000000,
@@ -68,7 +78,7 @@ class SERVER_DECL WoWGuid
 public:
     WoWGuid() noexcept { clear(); }
     WoWGuid(uint64_t guid) noexcept { init(guid); }
-    WoWGuid(WoWGuid const& other) noexcept { init(other._raw.value); }
+    WoWGuid(WoWGuid const& other) noexcept = default;
 
     explicit WoWGuid(uint8_t mask) noexcept { init(mask); }
     explicit WoWGuid(uint8_t mask, const uint8_t* fields) noexcept { init(mask, fields); }
@@ -81,7 +91,7 @@ public:
         init(raw);
     }
 
-    bool isEmpty() const noexcept { return _raw.value == 0; }
+    bool isEmpty() const noexcept { return _raw.value == 0 && _modernHigh == 0; }
     explicit operator bool() const noexcept { return !isEmpty(); }
 
     uint8_t& operator[](uint32_t index)
@@ -99,7 +109,7 @@ public:
     operator uint64_t() const noexcept { return _raw.value; }
 
     WoWGuid& operator=(uint64_t guid) noexcept { init(guid); return *this; }
-    WoWGuid& operator=(WoWGuid const& other) noexcept { init(other._raw.value); return *this; }
+    WoWGuid& operator=(WoWGuid const& other) noexcept = default;
 
     // Raw lower 32 bits of the packed GUID. This is not necessarily the object counter.
     uint32_t getLowGuid() const noexcept
@@ -122,6 +132,7 @@ public:
     void clear() noexcept
     {
         _raw.value = 0;
+        _modernHigh = 0;
         guidmask   = 0;
         m_fieldcount = 0;
         m_compiled = false;
@@ -164,7 +175,7 @@ public:
         _compileByNew();
     }
 
-    void init(WoWGuid const& guid) noexcept { init(guid._raw.value); }
+    void init(WoWGuid const& guid) noexcept { *this = guid; }
 
     // Raw lower 32 bits of a packed GUID.
     static uint32_t getLowGuidFromRaw(uint64_t guid) noexcept
@@ -201,6 +212,102 @@ public:
         return (uint64_t(HIGHGUID_TYPE_ITEM) << 32) | uint64_t(lowGuid);
     }
 
+    static constexpr std::size_t ModernBytesSize = 16;
+
+    static WoWGuid createModern(uint64_t high, uint64_t low) noexcept
+    {
+        WoWGuid guid;
+        guid._raw.value = low;
+        guid._modernHigh = high;
+        return guid;
+    }
+
+    static WoWGuid createModernPlayer(uint32_t realmId, uint64_t dbId, uint8_t subType = 0, uint32_t arg1 = 0) noexcept
+    {
+        return createModern((uint64_t(ModernHighGuid::Player) << 58U) | (uint64_t(realmId) << 42U) | (uint64_t(subType & 0x3U) << 40U) | (uint64_t(arg1 & 0xFFFFFFU) << 16U), dbId);
+    }
+
+    static WoWGuid createModernGuild(uint32_t realmId, uint64_t dbId) noexcept
+    {
+        return createModern((uint64_t(ModernHighGuid::Guild) << 58U) | (uint64_t(realmId) << 42U), dbId);
+    }
+
+    static WoWGuid createModernEmpty() noexcept { return createModern(0, 0); }
+
+    uint64_t getModernRawValue(std::size_t index) const noexcept { ASSERT(index < 2); return index == 0 ? _raw.value : _modernHigh; }
+    uint64_t getModernLow() const noexcept { return _raw.value; }
+    uint64_t getModernHigh() const noexcept { return _modernHigh; }
+    ModernHighGuid getModernHighType() const noexcept { return static_cast<ModernHighGuid>((_modernHigh >> 58U) & 0x3FU); }
+    uint32_t getModernRealmId() const noexcept { return static_cast<uint32_t>((_modernHigh >> 42U) & 0xFFFFU); }
+    bool isModernEmpty() const noexcept { return _raw.value == 0 && _modernHigh == 0; }
+
+    static bool unpackModern(const uint8_t* data, std::size_t size, WoWGuid& guid, std::size_t& consumed)
+    {
+        consumed = 0;
+        if (data == nullptr || size < sizeof(uint16_t))
+            return false;
+
+        const uint16_t mask = static_cast<uint16_t>(data[0]) | (static_cast<uint16_t>(data[1]) << 8U);
+        std::array<uint8_t, ModernBytesSize> raw{};
+        std::size_t offset = sizeof(uint16_t);
+
+        for (std::size_t i = 0; i < raw.size(); ++i)
+        {
+            if ((mask & (uint16_t(1U) << i)) == 0)
+                continue;
+            if (offset >= size)
+                return false;
+            raw[i] = data[offset++];
+        }
+
+        uint64_t low = 0;
+        uint64_t high = 0;
+        for (std::size_t i = 0; i < sizeof(uint64_t); ++i)
+        {
+            low |= static_cast<uint64_t>(raw[i]) << (i * 8U);
+            high |= static_cast<uint64_t>(raw[i + sizeof(uint64_t)]) << (i * 8U);
+        }
+
+        guid = createModern(high, low);
+        consumed = offset;
+        return true;
+    }
+
+    static bool unpackModern(const uint8_t* data, std::size_t size, WoWGuid& guid)
+    {
+        std::size_t consumed = 0;
+        return unpackModern(data, size, guid, consumed) && consumed == size;
+    }
+
+    std::vector<uint8_t> packModern() const
+    {
+        std::array<uint8_t, ModernBytesSize> raw{};
+        const std::array<uint64_t, 2> words{ _raw.value, _modernHigh };
+        for (std::size_t word = 0; word < words.size(); ++word)
+        {
+            for (std::size_t byte = 0; byte < sizeof(uint64_t); ++byte)
+                raw[word * sizeof(uint64_t) + byte] = static_cast<uint8_t>((words[word] >> (byte * 8U)) & 0xFFU);
+        }
+
+        uint16_t mask = 0;
+        std::vector<uint8_t> packed;
+        packed.reserve(2 + ModernBytesSize);
+        packed.push_back(0);
+        packed.push_back(0);
+
+        for (std::size_t i = 0; i < raw.size(); ++i)
+        {
+            if (raw[i] == 0)
+                continue;
+            mask |= static_cast<uint16_t>(uint16_t(1U) << i);
+            packed.push_back(raw[i]);
+        }
+
+        packed[0] = static_cast<uint8_t>(mask & 0xFFU);
+        packed[1] = static_cast<uint8_t>((mask >> 8U) & 0xFFU);
+        return packed;
+    }
+
     uint64_t getRawGuid() const noexcept { return _raw.value; }
 
     const uint8_t* getNewGuid() const noexcept { return m_guidfields; }
@@ -208,7 +315,7 @@ public:
     uint8_t getNewGuidMask() const noexcept { return guidmask; }
 
     // helpers
-    bool     operator!() const noexcept { return _raw.value == 0; }
+    bool     operator!() const noexcept { return isEmpty(); }
 
     bool     operator==(int v) const noexcept { return _raw.value == static_cast<uint64_t>(v); }
     bool     operator!=(int v) const noexcept { return _raw.value != static_cast<uint64_t>(v); }
@@ -219,9 +326,9 @@ public:
     uint64_t operator&(uint64_t v) const noexcept { return _raw.value & v; }
     uint64_t operator&(unsigned int v) const noexcept { return _raw.value & uint64_t(v); }
 
-    bool     operator==(WoWGuid const& other) const noexcept { return _raw.value == other._raw.value; }
-    bool     operator!=(WoWGuid const& other) const noexcept { return _raw.value != other._raw.value; }
-    bool     operator<(WoWGuid const& other) const noexcept { return _raw.value < other._raw.value; }
+    bool     operator==(WoWGuid const& other) const noexcept { return _raw.value == other._raw.value && _modernHigh == other._modernHigh; }
+    bool     operator!=(WoWGuid const& other) const noexcept { return !(*this == other); }
+    bool     operator<(WoWGuid const& other) const noexcept { return _modernHigh != other._modernHigh ? _modernHigh < other._modernHigh : _raw.value < other._raw.value; }
 
     // symmetric operators
     friend bool operator==(int v, WoWGuid const& a) noexcept { return a == v; }
@@ -265,6 +372,7 @@ private:
         uint8_t  byte[8];
     } _raw{};
 
+    uint64_t _modernHigh{};
     uint8_t guidmask{};
     uint8_t m_guidfields[8]{};
     uint8_t m_fieldcount{};
@@ -309,7 +417,10 @@ namespace std
     {
         std::size_t operator()(const WoWGuid& guid) const noexcept
         {
-            return std::hash<uint64_t>{}(guid.getRawGuid());
+            const std::size_t legacyHash = std::hash<uint64_t>{}(guid.getRawGuid());
+            if (guid.getModernHigh() == 0)
+                return legacyHash;
+            return legacyHash ^ (std::hash<uint64_t>{}(guid.getModernHigh()) << 1U);
         }
     };
 }

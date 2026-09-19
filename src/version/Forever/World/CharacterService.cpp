@@ -7,7 +7,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "Logging/Logger.hpp"
 #include "version/Forever/BuildProfile.hpp"
-#include "version/Forever/Defines/ObjectGuid.hpp"
+#include "shared/WoWGuid.hpp"
 #include "version/Forever/Opcodes.hpp"
 #include "version/Forever/Packets/CharacterPackets.hpp"
 #include "version/Forever/World/CharacterSelectBootstrap.hpp"
@@ -274,7 +274,6 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
 bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
 {
     using namespace AscEmu::Version::Forever;
-    using AscEmu::Version::Forever::ObjectGuid;
 
     if (m_session == nullptr)
     {
@@ -396,7 +395,7 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
     for (size_t index = 0; index < characters.size(); ++index)
     {
         const auto& character = characters[index];
-        const std::vector<uint8_t> packedGuid = ObjectGuid::createPlayer(m_foreverRealmId, character.guid).pack();
+        const std::vector<uint8_t> packedGuid = WoWGuid::createModernPlayer(m_foreverRealmId, character.guid).packModern();
         sLogger.info("WorldSocket::Forever: enum character #{} guid={} first='{}' last='{}' race={} class={} gender={} level={} map={} zone={} customizations={} packed_guid={} byte(s).", index + 1U, character.guid, character.firstName, character.lastName, character.race, character.charClass, character.gender, character.level, character.mapId, character.zoneId, character.customizations.size(), packedGuid.size());
     }
 
@@ -413,8 +412,7 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
     {
         characterListState << uint8_t(0);
 
-        const std::vector<uint8_t> packedGuid =
-            ObjectGuid::createPlayer(m_foreverRealmId, character.guid).pack();
+        const std::vector<uint8_t> packedGuid = WoWGuid::createModernPlayer(m_foreverRealmId, character.guid).packModern();
         characterListState.append(packedGuid.data(), packedGuid.size());
 
         characterListState << uint32_t(0);

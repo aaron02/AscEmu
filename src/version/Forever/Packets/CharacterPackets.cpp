@@ -1,5 +1,5 @@
 #include "version/Forever/Packets/CharacterPackets.hpp"
-#include "version/Forever/Defines/ObjectGuid.hpp"
+#include "shared/WoWGuid.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -159,7 +159,7 @@ namespace AscEmu::Version::Forever::Packets
         ByteBuffer packet;
         packet << result;
 
-        const auto packedGuid = ObjectGuid::createPlayer(realmId, characterGuid).pack();
+        const auto packedGuid = WoWGuid::createModernPlayer(realmId, characterGuid).packModern();
         packet.append(packedGuid.data(), packedGuid.size());
         return packet;
     }
@@ -203,7 +203,7 @@ namespace AscEmu::Version::Forever::Packets
 
         for (const CharacterEnumEntry& character : characters)
         {
-            const std::vector<uint8_t> packedGuid = ObjectGuid::createPlayer(realmId, character.guid).pack();
+            const std::vector<uint8_t> packedGuid = WoWGuid::createModernPlayer(realmId, character.guid).packModern();
             packet.append(packedGuid.data(), packedGuid.size());
             packet << virtualRealmAddress;
             packet << uint16_t(0); // 69913 carries visible ordering in account-data type 16
@@ -215,7 +215,7 @@ namespace AscEmu::Version::Forever::Packets
             packet << character.x << character.y << character.z;
             packet << (character.guid | (static_cast<uint64_t>(realmId & 0x0FFFU) << 48U));
 
-            const std::vector<uint8_t> emptyGuildGuid = ObjectGuid::empty().pack();
+            const std::vector<uint8_t> emptyGuildGuid = WoWGuid::createModernEmpty().packModern();
             packet.append(emptyGuildGuid.data(), emptyGuildGuid.size());
 
             packet << uint32_t(0);

@@ -129,10 +129,28 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             return {};
 
         std::array<uint8_t, Template69913::MovementTail.size()> movementTail = Template69913::MovementTail;
-        std::memcpy(movementTail.data() + 12, &x, sizeof(float));
-        std::memcpy(movementTail.data() + 16, &y, sizeof(float));
-        std::memcpy(movementTail.data() + 20, &z, sizeof(float));
-        std::memcpy(movementTail.data() + 24, &orientation, sizeof(float));
+
+        // The captured retail character was rooted. MovementFlags bit 0x00000400 is
+        // MOVEMENTFLAG_ROOT; leaving it in the temporary template lets the client turn
+        // but prevents all translational movement. Clear only that captured state bit.
+        uint32_t movementFlags = 0;
+        std::memcpy(&movementFlags, movementTail.data(), sizeof(movementFlags));
+        movementFlags &= ~uint32_t(0x00000400);
+        std::memcpy(movementTail.data(), &movementFlags, sizeof(movementFlags));
+
+        // 69913 carries the self position twice in the captured CreateObject2 movement block:
+        // once in MovementInfo and once again in EntityPosition because HasEntityPosition is set.
+        // Both must describe the same player position or the client keeps the captured retail
+        // entity position while locally simulating movement from the patched MovementInfo.
+        constexpr size_t movementPositionOffset = 12;
+        constexpr size_t entityPositionOffset = 167;
+        std::memcpy(movementTail.data() + movementPositionOffset + 0, &x, sizeof(float));
+        std::memcpy(movementTail.data() + movementPositionOffset + 4, &y, sizeof(float));
+        std::memcpy(movementTail.data() + movementPositionOffset + 8, &z, sizeof(float));
+        std::memcpy(movementTail.data() + movementPositionOffset + 12, &orientation, sizeof(float));
+        std::memcpy(movementTail.data() + entityPositionOffset + 0, &x, sizeof(float));
+        std::memcpy(movementTail.data() + entityPositionOffset + 4, &y, sizeof(float));
+        std::memcpy(movementTail.data() + entityPositionOffset + 8, &z, sizeof(float));
 
         ByteBuffer block;
         block << uint8_t(UPDATE_TYPE_CREATE_OBJECT_2);

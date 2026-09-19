@@ -51,6 +51,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Script/ScriptMgr.hpp"
 #include "Storage/WDB/WDBStructures.hpp"
 #include "Utilities/Strings.hpp"
+#include "Utilities/Util.hpp"
 
 #if defined(AE_FOREVER)
 #include "version/Forever/Opcodes.hpp"
@@ -957,7 +958,26 @@ void WorldSession::fullLoginForever(Player* player)
         return;
     }
 
-    sLogger.info("WorldSession::Forever: server-side player login complete for {} ({}) map={} instance={} position=({}, {}, {}, {}); sent verified 69913 in-world bootstrap prefix (AccountDataTimes, FeatureSystemStatus, TimeZone).", player->getName(), player->getGuidLow(), player->GetMapId(), player->GetInstanceID(), player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation());
+    ByteBuffer loginVerifyWorld;
+    loginVerifyWorld << uint32_t(player->GetMapId()) << float(player->GetPositionX()) << float(player->GetPositionY()) << float(player->GetPositionZ()) << float(player->GetOrientation()) << uint32_t(0);
+    if (!instanceSocket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_LOGIN_VERIFY_WORLD, loginVerifyWorld.contents(), static_cast<uint32_t>(loginVerifyWorld.size())))
+    {
+        sLogger.failure("WorldSession::Forever: failed to send SMSG_LOGIN_VERIFY_WORLD for {} ({}).", player->getName(), player->getGuidLow());
+        Disconnect();
+        return;
+    }
+
+    const uint32_t gameTime = Util::getGameTime();
+    ByteBuffer loginSetTimeSpeed;
+    loginSetTimeSpeed << gameTime << gameTime << float(0.016666667f) << int32_t(0) << int32_t(0);
+    if (!instanceSocket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_LOGIN_SET_TIME_SPEED, loginSetTimeSpeed.contents(), static_cast<uint32_t>(loginSetTimeSpeed.size())))
+    {
+        sLogger.failure("WorldSession::Forever: failed to send SMSG_LOGIN_SET_TIME_SPEED for {} ({}).", player->getName(), player->getGuidLow());
+        Disconnect();
+        return;
+    }
+
+    sLogger.info("WorldSession::Forever: server-side player login complete for {} ({}) map={} instance={} position=({}, {}, {}, {}); sent verified 69913 world transition prefix through LOGIN_VERIFY_WORLD and LOGIN_SET_TIME_SPEED.", player->getName(), player->getGuidLow(), player->GetMapId(), player->GetInstanceID(), player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation());
 }
 #endif
 

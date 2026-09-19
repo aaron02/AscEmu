@@ -152,7 +152,7 @@ WorldSocket::~WorldSocket()
 
     if (m_session)
     {
-        m_session->SetSocket(nullptr);
+        m_session->ClearForeverSocket(this);
         m_session = nullptr;
     }
 }
@@ -246,9 +246,6 @@ void WorldSocket::onConnect()
 
 void WorldSocket::onDisconnect()
 {
-    if (!m_queue.hasItems())
-        return;
-
     while (auto pck = m_queue.tryPop())
     {
     }

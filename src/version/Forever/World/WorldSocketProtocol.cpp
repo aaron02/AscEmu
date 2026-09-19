@@ -37,15 +37,35 @@ This file is released under the MIT license. See README-MIT for more information
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <cstdio>
 #include <ctime>
 #include <iomanip>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace
 {
+    struct ForeverPendingInstanceLogin
+    {
+        WorldSession* session{nullptr};
+        WorldSocket* realmSocket{nullptr};
+        uint32_t guidLow{0};
+        uint32_t clientBuild{0};
+        std::array<uint8_t, 40> sessionKey{};
+        uint32_t regionId{0};
+        uint32_t battlegroupId{0};
+        uint32_t realmId{0};
+        uint32_t nativeRealmAddress{0};
+        uint32_t key3{0};
+    };
+
+    std::mutex sForeverPendingInstanceLoginsLock;
+    std::unordered_map<uint64_t, ForeverPendingInstanceLogin> sForeverPendingInstanceLogins;
+
     uint32_t readUInt32LE(const uint8_t* data)
     {
         uint32_t value = 0;
@@ -202,6 +222,27 @@ namespace
         const unsigned char* result = HMAC(EVP_sha512(), key, static_cast<int>(keySize),
             input.empty() ? nullptr : input.data(), input.size(), digest.data(), &digestSize);
         return result != nullptr && digestSize == digest.size();
+    }
+
+    bool deriveForeverEncryptionKeyFromSession(const std::array<uint8_t, 40>& sessionKey, const std::array<uint8_t, 32>& localChallenge, const std::array<uint8_t, 32>& serverChallenge, std::array<uint8_t, 32>& encryptionKey)
+    {
+        std::array<uint8_t, 64> digest{};
+        if (!foreverHmacSha512(sessionKey.data(), sessionKey.size(), { { localChallenge.data(), localChallenge.size() }, { serverChallenge.data(), serverChallenge.size() }, { AscEmu::Version::Forever::EncryptionKeySeed.data(), AscEmu::Version::Forever::EncryptionKeySeed.size() } }, digest))
+            return false;
+
+        std::copy_n(digest.begin(), encryptionKey.size(), encryptionKey.begin());
+        return true;
+    }
+
+    bool parseIpv4Address(std::string_view address, std::array<uint8_t, 4>& bytes)
+    {
+        unsigned int a = 0, b = 0, c = 0, d = 0;
+        char tail = 0;
+        const std::string text(address);
+        if (std::sscanf(text.c_str(), "%u.%u.%u.%u%c", &a, &b, &c, &d, &tail) != 4 || a > 255 || b > 255 || c > 255 || d > 255)
+            return false;
+        bytes = { static_cast<uint8_t>(a), static_cast<uint8_t>(b), static_cast<uint8_t>(c), static_cast<uint8_t>(d) };
+        return true;
     }
 
     bool generateForeverSessionKey(const std::array<uint8_t, 64>& seed, std::array<uint8_t, 40>& sessionKey)
@@ -958,10 +999,14 @@ bool WorldSocket::processForeverAuthPacket()
 
     if (opcode == WorldProtocol::CMSG_AUTH_SESSION)
     {
-        sLogger.info(
-            "WorldSocket::Forever: RX CMSG_AUTH_SESSION payload={} byte(s).",
-            payload.size());
+        sLogger.info("WorldSocket::Forever: RX CMSG_AUTH_SESSION payload={} byte(s).", payload.size());
         return processForeverAuthSession(opcode, payload);
+    }
+
+    if (opcode == WorldProtocol::CMSG_AUTH_CONTINUED_SESSION)
+    {
+        sLogger.info("WorldSocket::Forever: RX CMSG_AUTH_CONTINUED_SESSION payload={} byte(s).", payload.size());
+        return processForeverAuthContinuedSession(opcode, payload);
     }
 
     if (opcode == WorldProtocol::CMSG_ENTER_ENCRYPTED_MODE_ACK)
@@ -1018,6 +1063,78 @@ bool WorldSocket::processForeverAuthPacket()
         static_cast<uint32_t>(m_foreverWorldState),
         m_foreverClientBuild);
 
+    return true;
+}
+
+bool WorldSocket::beginForeverInstanceLogin(uint32_t guidLow)
+{
+    using namespace AscEmu::Version::Forever;
+
+    if (m_session == nullptr || m_foreverWorldState != ForeverWorldState::Encrypted)
+        return false;
+    if (m_foreverPendingLoginGuid != 0)
+    {
+        sLogger.warning("WorldSocket::Forever: ignoring duplicate CMSG_PLAYER_LOGIN while instance handoff for guidLow={} is pending.", m_foreverPendingLoginGuid);
+        return true;
+    }
+
+    uint32_t randomKey = 0;
+    if (RAND_bytes(reinterpret_cast<unsigned char*>(&randomKey), sizeof(randomKey)) != 1)
+        return false;
+    randomKey &= 0x7FFFFFFFU;
+
+    const uint64_t connectToKey = static_cast<uint64_t>(m_session->GetAccountId()) | (uint64_t(1) << 32U) | (static_cast<uint64_t>(randomKey) << 33U);
+    const uint32_t nativeRealmAddress = (m_foreverRegionId << 24U) | ((m_foreverBattlegroupId & 0xFFU) << 16U) | (m_foreverRealmId & 0xFFFFU);
+    constexpr uint32_t key3 = 0;
+
+    std::array<uint8_t, 4> address{};
+    std::string connectHost = worldConfig.listen.listenHost;
+    if (connectHost.empty() || connectHost == "0.0.0.0")
+    {
+        if (getRemoteIp().rfind("127.", 0) == 0)
+            connectHost = "127.0.0.1";
+        else
+        {
+            sLogger.failure("WorldSocket::Forever: cannot build SMSG_CONNECT_TO because Listen.Host='{}' is not a client-reachable IPv4 address.", worldConfig.listen.listenHost);
+            return false;
+        }
+    }
+
+    if (!parseIpv4Address(connectHost, address))
+    {
+        sLogger.failure("WorldSocket::Forever: SMSG_CONNECT_TO currently requires an IPv4 Listen.Host, got '{}'.", connectHost);
+        return false;
+    }
+
+    ByteBuffer payload;
+    payload << uint32_t(1); // payload count
+    payload << uint32_t(17); // WorldAttempt1
+    payload << uint8_t(1); // instance connection
+    payload << connectToKey;
+    payload << nativeRealmAddress;
+    payload << key3;
+    payload << uint8_t(1); // IPv4
+    payload.append(address.data(), address.size());
+    payload << uint16_t(worldConfig.listen.listenPort);
+    payload << uint8_t(0) << uint8_t(0) << uint8_t(0) << uint8_t(0) << uint8_t(0); // empty BleepToken bit fields
+    payload << uint64_t(0); // token lifespan
+
+    {
+        std::lock_guard lock(sForeverPendingInstanceLoginsLock);
+        sForeverPendingInstanceLogins[connectToKey] = { m_session, this, guidLow, m_foreverClientBuild, m_foreverSessionKey, m_foreverRegionId, m_foreverBattlegroupId, m_foreverRealmId, nativeRealmAddress, key3 };
+    }
+
+    m_foreverConnectToKey = connectToKey;
+    m_foreverPendingLoginGuid = guidLow;
+
+    if (!sendForeverWorldPacket(WorldProtocol::SMSG_CONNECT_TO, payload.contents(), static_cast<uint32_t>(payload.size())))
+    {
+        std::lock_guard lock(sForeverPendingInstanceLoginsLock);
+        sForeverPendingInstanceLogins.erase(connectToKey);
+        return false;
+    }
+
+    sLogger.info("WorldSocket::Forever: sent SMSG_CONNECT_TO opcode=0x{:08X} guidLow={} key=0x{:016X} realm=0x{:08X} address={}:{} serial=17.", WorldProtocol::SMSG_CONNECT_TO, guidLow, connectToKey, nativeRealmAddress, connectHost, worldConfig.listen.listenPort);
     return true;
 }
 
@@ -1223,6 +1340,84 @@ bool WorldSocket::processForeverAuthSession(
     return true;
 }
 
+bool WorldSocket::processForeverAuthContinuedSession(uint32_t opcode, const std::vector<uint8_t>& payload)
+{
+    using namespace AscEmu::Version::Forever;
+
+    constexpr size_t ExpectedSize = sizeof(uint64_t) + 32U + 24U + sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint32_t);
+    if (opcode != WorldProtocol::CMSG_AUTH_CONTINUED_SESSION || payload.size() != ExpectedSize)
+    {
+        sLogger.failure("WorldSocket::Forever: malformed CMSG_AUTH_CONTINUED_SESSION opcode=0x{:08X}, payload={} byte(s).", opcode, payload.size());
+        return false;
+    }
+
+    size_t offset = 0;
+    const uint64_t dosResponse = readUInt64LE(payload.data() + offset);
+    offset += sizeof(uint64_t);
+
+    std::array<uint8_t, 32> localChallenge{};
+    std::memcpy(localChallenge.data(), payload.data() + offset, localChallenge.size());
+    offset += localChallenge.size();
+
+    std::array<uint8_t, 24> receivedDigest{};
+    std::memcpy(receivedDigest.data(), payload.data() + offset, receivedDigest.size());
+    offset += receivedDigest.size();
+
+    const uint64_t connectToKey = readUInt64LE(payload.data() + offset);
+    offset += sizeof(uint64_t);
+    const uint32_t nativeRealmAddress = readUInt32LE(payload.data() + offset);
+    offset += sizeof(uint32_t);
+    const uint32_t key3 = readUInt32LE(payload.data() + offset);
+
+    ForeverPendingInstanceLogin pending;
+    {
+        std::lock_guard lock(sForeverPendingInstanceLoginsLock);
+        const auto itr = sForeverPendingInstanceLogins.find(connectToKey);
+        if (itr == sForeverPendingInstanceLogins.end())
+        {
+            sLogger.failure("WorldSocket::Forever: CMSG_AUTH_CONTINUED_SESSION rejected unknown key=0x{:016X}.", connectToKey);
+            return false;
+        }
+        pending = itr->second;
+    }
+
+    if (pending.session == nullptr || pending.nativeRealmAddress != nativeRealmAddress || pending.key3 != key3)
+    {
+        sLogger.failure("WorldSocket::Forever: CMSG_AUTH_CONTINUED_SESSION key metadata mismatch key=0x{:016X} realm=0x{:08X} key3={}.", connectToKey, nativeRealmAddress, key3);
+        return false;
+    }
+
+    std::array<uint8_t, 64> calculatedDigest{};
+    if (!foreverHmacSha512(pending.sessionKey.data(), pending.sessionKey.size(), { { reinterpret_cast<const uint8_t*>(&connectToKey), sizeof(connectToKey) }, { localChallenge.data(), localChallenge.size() }, { m_foreverServerChallenge.data(), m_foreverServerChallenge.size() }, { ContinuedSessionSeed.data(), ContinuedSessionSeed.size() } }, calculatedDigest) || CRYPTO_memcmp(calculatedDigest.data(), receivedDigest.data(), receivedDigest.size()) != 0)
+    {
+        sLogger.failure("WorldSocket::Forever: CMSG_AUTH_CONTINUED_SESSION digest mismatch key=0x{:016X} account={}.", connectToKey, pending.session->GetAccountId());
+        return false;
+    }
+
+    m_foreverClientBuild = pending.clientBuild;
+    m_clientBuild = pending.clientBuild;
+    m_foreverRegionId = pending.regionId;
+    m_foreverBattlegroupId = pending.battlegroupId;
+    m_foreverRealmId = pending.realmId;
+    m_foreverSessionKey = pending.sessionKey;
+    if (!deriveForeverEncryptionKeyFromSession(m_foreverSessionKey, localChallenge, m_foreverServerChallenge, m_foreverEncryptionKey))
+        return false;
+
+    m_foreverContinuedSession = true;
+    m_foreverConnectToKey = connectToKey;
+    m_foreverPendingLoginGuid = pending.guidLow;
+    m_foreverContinuedWorldSession = pending.session;
+    m_foreverGameAccountId = pending.session->GetAccountId();
+    m_foreverWorldState = ForeverWorldState::AuthSessionObserved;
+
+    if (!sendForeverEnterEncryptedMode())
+        return false;
+
+    m_foreverWorldState = ForeverWorldState::AwaitEncryptionAck;
+    sLogger.info("WorldSocket::Forever: CMSG_AUTH_CONTINUED_SESSION accepted key=0x{:016X} account={} guidLow={} dos_response={}; awaiting encrypted-mode ACK.", connectToKey, pending.session->GetAccountId(), pending.guidLow, dosResponse);
+    return true;
+}
+
 bool WorldSocket::sendForeverEnterEncryptedMode()
 {
     using namespace AscEmu::Version::Forever;
@@ -1306,6 +1501,42 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(
         "AES-256-GCM enabled (send_counter={}, recv_counter={}).",
         m_foreverCryptoSendCounter,
         m_foreverCryptoRecvCounter);
+
+    if (m_foreverContinuedSession)
+    {
+        if (m_foreverContinuedWorldSession == nullptr || m_foreverPendingLoginGuid == 0)
+            return false;
+
+        m_session = m_foreverContinuedWorldSession;
+        m_session->SetForeverInstanceSocket(this);
+        isAuthenticated = true;
+
+        ForeverPendingInstanceLogin pending;
+        {
+            std::lock_guard lock(sForeverPendingInstanceLoginsLock);
+            const auto itr = sForeverPendingInstanceLogins.find(m_foreverConnectToKey);
+            if (itr != sForeverPendingInstanceLogins.end())
+                pending = itr->second;
+        }
+
+        {
+            std::lock_guard lock(sForeverPendingInstanceLoginsLock);
+            sForeverPendingInstanceLogins.erase(m_foreverConnectToKey);
+        }
+
+        if (pending.realmSocket != nullptr)
+        {
+            pending.realmSocket->m_foreverPendingLoginGuid = 0;
+            pending.realmSocket->m_foreverConnectToKey = 0;
+        }
+
+        if (!sendForeverWorldPacket(WorldProtocol::SMSG_RESUME_COMMS, nullptr, 0))
+            return false;
+
+        sLogger.info("WorldSocket::Forever: instance connection attached account={} key=0x{:016X}; SMSG_RESUME_COMMS sent, continuing player login guidLow={}.", m_session->GetAccountId(), m_foreverConnectToKey, m_foreverPendingLoginGuid);
+        m_session->beginPlayerLogin(m_foreverPendingLoginGuid);
+        return true;
+    }
 
     if (m_foreverGameAccountId == 0 || m_foreverGameAccountName.empty())
     {

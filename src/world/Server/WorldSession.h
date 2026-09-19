@@ -168,6 +168,15 @@ public:
         {
             _socket = sock;
         }
+        void SetForeverInstanceSocket(WorldSocket* sock) { _foreverInstanceSocket = sock; }
+        void ClearForeverSocket(WorldSocket* sock)
+        {
+            if (_socket == sock)
+                _socket = nullptr;
+            if (_foreverInstanceSocket == sock)
+                _foreverInstanceSocket = nullptr;
+        }
+        WorldSocket* GetForeverInstanceSocket() const { return _foreverInstanceSocket; }
         void SetPlayer(Player* plr) { _player = plr; }
 
         void SetAccountData(uint32_t index, std::unique_ptr<char[]> data, bool initial, uint32_t sz)
@@ -1011,6 +1020,7 @@ protected:
         friend class Player;
         Player* _player;
         WorldSocket* _socket;
+        WorldSocket* _foreverInstanceSocket;
 
         // Preallocated buffers for movement handlers
         MovementInfo sessionMovementInfo;

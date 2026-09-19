@@ -63,6 +63,7 @@ WorldSession::WorldSession(uint32_t id, std::string name, WorldSocket* sock) :
     m_bIsWLevelSet(false),
     _player(nullptr),
     _socket(sock),
+    _foreverInstanceSocket(nullptr),
     _accountId(id),
     _accountFlags(0),
     _accountName(name),
@@ -107,6 +108,8 @@ WorldSession::~WorldSession()
 
     if (_socket)
         _socket->setSession(nullptr);
+    if (_foreverInstanceSocket && _foreverInstanceSocket != _socket)
+        _foreverInstanceSocket->setSession(nullptr);
 
     if (m_loggingInPlayer)
         m_loggingInPlayer->setSession(nullptr);
@@ -671,18 +674,33 @@ void WorldSession::SendPacket(WorldPacket* packet)
         return;
     }
 
+#if defined(AE_FOREVER)
+    sLogger.info("WorldSession::Forever: blocked legacy TX {} opcode=0x{:04X} payload={} byte(s).", sOpcodeTables.getNameForOpcode(packet->getOpcode()), packet->getOpcode(), packet->size());
+    return;
+#endif
+
     if (_socket && _socket->isConnected())
         _socket->sendPacket(packet);
 }
 
 void WorldSession::OutPacket(uint16_t opcode)
 {
+#if defined(AE_FOREVER)
+    sLogger.info("WorldSession::Forever: blocked legacy TX {} opcode=0x{:04X} payload=0 byte(s).", sOpcodeTables.getNameForOpcode(opcode), opcode);
+    return;
+#endif
+
     if (_socket && _socket->isConnected())
         _socket->outPacket(opcode, 0, nullptr);
 }
 
 void WorldSession::OutPacket(uint16_t opcode, uint16_t len, const void* data)
 {
+#if defined(AE_FOREVER)
+    sLogger.info("WorldSession::Forever: blocked legacy TX {} opcode=0x{:04X} payload={} byte(s).", sOpcodeTables.getNameForOpcode(opcode), opcode, len);
+    return;
+#endif
+
     if (_socket && _socket->isConnected())
         _socket->outPacket(opcode, len, data);
 }
@@ -696,10 +714,10 @@ void WorldSession::QueuePacket(std::unique_ptr<WorldPacket> packet)
 void WorldSession::Disconnect()
 {
     sLogger.info("WORLD: Disconnecting session for account {} (IP: {})", GetAccountId(), _socket ? _socket->getRemoteIp() : "NOIP");
+    if (_foreverInstanceSocket && _foreverInstanceSocket != _socket && _foreverInstanceSocket->isConnected())
+        _foreverInstanceSocket->disconnect();
     if (_socket && _socket->isConnected())
-    {
         _socket->disconnect();
-    }
 }
 
 // MIT

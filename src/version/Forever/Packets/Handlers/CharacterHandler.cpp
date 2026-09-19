@@ -122,9 +122,8 @@ bool WorldSocket::handleForeverPlayerLoginOpcode(AscEmu::Version::Forever::Packe
         return true;
     }
 
-    sLogger.info("WorldSocket::Forever: CMSG_PLAYER_LOGIN guidLow={} realm={} farClip={} unknown={}; handing off to WorldSession login.", guidLow, guid.getModernRealmId(), farClip, unknown);
-    m_session->beginPlayerLogin(guidLow);
-    return true;
+    sLogger.info("WorldSocket::Forever: CMSG_PLAYER_LOGIN guidLow={} realm={} farClip={} unknown={}; starting instance connection handoff.", guidLow, guid.getModernRealmId(), farClip, unknown);
+    return beginForeverInstanceLogin(guidLow);
 }
 
 bool WorldSocket::handleForeverCharCreateOpcode(AscEmu::Version::Forever::Packets::Packet& packet)

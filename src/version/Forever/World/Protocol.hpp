@@ -35,6 +35,9 @@ namespace AscEmu::Version::Forever::WorldProtocol
     // Forever 1.60.1.69893 world opcodes observed in the current protocol work.
     inline constexpr uint32_t SMSG_AUTH_CHALLENGE = 0x004D0000;
     inline constexpr uint32_t CMSG_AUTH_SESSION = 0x00450001;
+    inline constexpr uint32_t CMSG_AUTH_CONTINUED_SESSION = 0x00450003;
+    inline constexpr uint32_t SMSG_RESUME_COMMS = 0x004D0006;
+    inline constexpr uint32_t SMSG_CONNECT_TO = 0x004D0008;
 
     // Observed recurring 8-byte client ping for Forever 1.60.1.69893.
     inline constexpr uint32_t CMSG_PING = 0x00450006;

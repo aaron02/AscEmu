@@ -8,6 +8,7 @@ public:
     uint32_t getForeverBattlegroupId() const { return m_foreverBattlegroupId; }
 
     bool sendForeverPacket(AscEmu::Version::Forever::Opcode opcode, const uint8_t* payload, uint32_t payloadSize);
+    bool beginForeverInstanceLogin(uint32_t guidLow);
 
 protected:
     // Transport/auth.
@@ -15,6 +16,7 @@ protected:
     bool sendForeverAuthChallenge();
     bool processForeverAuthPacket();
     bool processForeverAuthSession(uint32_t opcode, const std::vector<uint8_t>& payload);
+    bool processForeverAuthContinuedSession(uint32_t opcode, const std::vector<uint8_t>& payload);
     bool sendForeverEnterEncryptedMode();
     bool processForeverEnterEncryptedModeAck(uint32_t opcode, const std::vector<uint8_t>& payload);
     bool sendForeverPostAuthBootstrap();
@@ -99,6 +101,10 @@ private:
     bool m_foreverPostCreateEnumRefreshPending{false};
     bool m_foreverPostCreateEnumRefreshArmed{false};
     bool m_foreverHotfixBootstrapSent{false};
+    bool m_foreverContinuedSession{false};
+    uint64_t m_foreverConnectToKey{0};
+    uint32_t m_foreverPendingLoginGuid{0};
+    WorldSession* m_foreverContinuedWorldSession{nullptr};
     bool m_foreverEncryptedHeaderReady{false};
     uint32_t m_foreverEncryptedPacketSize{0};
     std::array<uint8_t, 12> m_foreverEncryptedPacketTag{};

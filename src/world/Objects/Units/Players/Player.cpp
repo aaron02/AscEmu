@@ -2404,16 +2404,25 @@ bool Player::create(CharCreate& charCreateContent)
         return false;
     }
 
-    // check that the account creates only new ones with available races, if we're making some
-#if VERSION_STRING > Classic
-    if (charCreateContent._race >= RACE_BLOODELF && !(m_session->_accountFlags & ACCOUNT_FLAG_XPACK_01))
-#else
-    if (charCreateContent._race >= RACE_TROLL)
-#endif
+#if VERSION_STRING == AE_PROFILE_FOREVER
+    if ((charCreateContent._race == RACE_SKYBORNE_ALLIANCE || charCreateContent._race == RACE_SKYBORNE_HORDE) && !(m_session->_accountFlags & ACCOUNT_FLAG_FOREVER))
     {
         m_session->Disconnect();
         return false;
     }
+#elif VERSION_STRING > Classic
+    if (charCreateContent._race >= RACE_BLOODELF && !(m_session->_accountFlags & ACCOUNT_FLAG_XPACK_01))
+    {
+        m_session->Disconnect();
+        return false;
+    }
+#else
+    if (charCreateContent._race >= RACE_TROLL)
+    {
+        m_session->Disconnect();
+        return false;
+    }
+#endif
 
 #if VERSION_STRING > TBC
     // check that the account can create deathknights, if we're making one
@@ -2437,6 +2446,7 @@ bool Player::create(CharCreate& charCreateContent)
     // set race dbc
     m_dbcRace = sChrRacesStore.lookupEntry(charCreateContent._race);
     m_dbcClass = sChrClassesStore.lookupEntry(charCreateContent._class);
+    
     if (!m_dbcRace || !m_dbcClass)
     {
         // information not found

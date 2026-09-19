@@ -136,6 +136,24 @@ namespace AscEmu::Version::Forever::Packets
         }
     }
 
+    const std::vector<RaceClassAvailability>& getRaceClassAvailability69913()
+    {
+        static const std::vector<RaceClassAvailability> availability =
+        {
+            { 95, { { 3 }, { 4 }, { 1 }, { 8 }, { 11 } } },
+            { 96, { { 3 }, { 4 }, { 7 }, { 1 }, { 11 } } },
+            { 1, { { 1 }, { 2 }, { 4 }, { 5 }, { 8 }, { 9 }, { 3 } } },
+            { 2, { { 1 }, { 3 }, { 4 }, { 7 }, { 9 }, { 8 } } },
+            { 3, { { 1 }, { 2 }, { 3 }, { 5 }, { 4 }, { 7 } } },
+            { 4, { { 1 }, { 3 }, { 4 }, { 5 }, { 11 } } },
+            { 5, { { 1 }, { 4 }, { 5 }, { 8 }, { 9 }, { 2 } } },
+            { 6, { { 1 }, { 3 }, { 7 }, { 11 } } },
+            { 7, { { 1 }, { 4 }, { 8 }, { 9 }, { 5 } } },
+            { 8, { { 1 }, { 4 }, { 3 }, { 5 }, { 7 }, { 8 }, { 9 } } }
+        };
+        return availability;
+    }
+
     ByteBuffer buildCreateCharacterResponse(uint32_t result, uint32_t realmId, uint64_t characterGuid)
     {
         ByteBuffer packet;

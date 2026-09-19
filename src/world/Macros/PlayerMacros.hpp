@@ -37,7 +37,7 @@ This file is released under the MIT license. See README-MIT for more information
     #define DBC_NUM_RACES 27
 #elif defined(AE_FOREVER)
 // Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
-    #define DBC_NUM_RACES 27
+    #define DBC_NUM_RACES 97
 #endif
 
 //////////////////////////////////////////////////////////////////////////////////////////

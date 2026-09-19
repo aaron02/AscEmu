@@ -124,20 +124,26 @@ public:
 
         switch (getAEVersion())
         {
-            case 5875:
+            case Classic:
                 _accountFlags = 0;
                 break;
-            case 8606:
+            case TBC:
                 _accountFlags = ACCOUNT_FLAG_XPACK_01;
                 break;
-            case 12340:
+            case WotLK:
                 _accountFlags = AF_FULL_WOTLK;
                 break;
-            case 15595:
+            case Cata:
                 _accountFlags = AF_FULL_CATA;
                 break;
-            case 18414:
+            case Mop:
                 _accountFlags = AF_FULL_MOP;
+                break;
+            case AE_PROFILE_MIDNIGHT:
+                _accountFlags = AF_FULL_MIDNIGHT;
+                break;
+            case AE_PROFILE_FOREVER:
+                _accountFlags = AF_FULL_FOREVER;
                 break;
         }
     }

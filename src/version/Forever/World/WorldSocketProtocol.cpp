@@ -74,7 +74,12 @@ namespace
         return packet;
     }
 
-    bool foreverSha512(const uint8_t* first, size_t firstSize, const uint8_t* second, size_t secondSize, std::array<uint8_t, 64>& digest)
+    bool foreverSha512(
+        const uint8_t* first,
+        size_t firstSize,
+        const uint8_t* second,
+        size_t secondSize,
+        std::array<uint8_t, 64>& digest)
     {
         EVP_MD_CTX* context = EVP_MD_CTX_new();
         if (context == nullptr)
@@ -97,10 +102,20 @@ namespace
         return success;
     }
 
-    bool calculateForeverAuthDigest(const std::array<uint8_t, 64>& worldAuthKeyData, const std::array<uint8_t, 16>& buildAuthKey, const std::array<uint8_t, 32>& localChallenge, const std::array<uint8_t, 32>& serverChallenge, std::array<uint8_t, 64>& result)
+    bool calculateForeverAuthDigest(
+        const std::array<uint8_t, 64>& worldAuthKeyData,
+        const std::array<uint8_t, 16>& buildAuthKey,
+        const std::array<uint8_t, 32>& localChallenge,
+        const std::array<uint8_t, 32>& serverChallenge,
+        std::array<uint8_t, 64>& result)
     {
         std::array<uint8_t, 64> digestKeyHash{};
-        if (!foreverSha512(worldAuthKeyData.data(), worldAuthKeyData.size(), buildAuthKey.data(), buildAuthKey.size(), digestKeyHash))
+        if (!foreverSha512(
+                worldAuthKeyData.data(),
+                worldAuthKeyData.size(),
+                buildAuthKey.data(),
+                buildAuthKey.size(),
+                digestKeyHash))
         {
             return false;
         }
@@ -108,23 +123,44 @@ namespace
         std::array<uint8_t, 96> hmacInput{};
         size_t offset = 0;
 
-        std::memcpy(hmacInput.data() + offset, localChallenge.data(), localChallenge.size());
+        std::memcpy(
+            hmacInput.data() + offset,
+            localChallenge.data(),
+            localChallenge.size());
         offset += localChallenge.size();
 
-        std::memcpy(hmacInput.data() + offset, serverChallenge.data(), serverChallenge.size());
+        std::memcpy(
+            hmacInput.data() + offset,
+            serverChallenge.data(),
+            serverChallenge.size());
         offset += serverChallenge.size();
 
-        std::memcpy(hmacInput.data() + offset, AscEmu::Version::Forever::AuthCheckSeed.data(), AscEmu::Version::Forever::AuthCheckSeed.size());
+        std::memcpy(
+            hmacInput.data() + offset,
+            AscEmu::Version::Forever::AuthCheckSeed.data(),
+            AscEmu::Version::Forever::AuthCheckSeed.size());
 
         unsigned int digestSize = 0;
-        const unsigned char* calculated = HMAC(EVP_sha512(), digestKeyHash.data(), static_cast<int>(digestKeyHash.size()), hmacInput.data(), hmacInput.size(), result.data(), &digestSize);
+        const unsigned char* calculated = HMAC(
+            EVP_sha512(),
+            digestKeyHash.data(),
+            static_cast<int>(digestKeyHash.size()),
+            hmacInput.data(),
+            hmacInput.size(),
+            result.data(),
+            &digestSize);
 
         return calculated != nullptr && digestSize == result.size();
     }
 
-    bool foreverDigestMatches(const std::array<uint8_t, 64>& calculated, const std::array<uint8_t, 24>& received)
+    bool foreverDigestMatches(
+        const std::array<uint8_t, 64>& calculated,
+        const std::array<uint8_t, 24>& received)
     {
-        return CRYPTO_memcmp(calculated.data(), received.data(), received.size()) == 0;
+        return CRYPTO_memcmp(
+            calculated.data(),
+            received.data(),
+            received.size()) == 0;
     }
 
     bool foreverSha512Parts(const std::vector<std::pair<const uint8_t*, size_t>>& parts, std::array<uint8_t, 64>& digest)
@@ -163,7 +199,8 @@ namespace
         }
 
         unsigned int digestSize = 0;
-        const unsigned char* result = HMAC(EVP_sha512(), key, static_cast<int>(keySize), input.empty() ? nullptr : input.data(), input.size(), digest.data(), &digestSize);
+        const unsigned char* result = HMAC(EVP_sha512(), key, static_cast<int>(keySize),
+            input.empty() ? nullptr : input.data(), input.size(), digest.data(), &digestSize);
         return result != nullptr && digestSize == digest.size();
     }
 
@@ -195,7 +232,12 @@ namespace
             return false;
 
         std::array<uint8_t, 64> sessionSeed{};
-        if (!foreverHmacSha512(keyDataDigest.data(), keyDataDigest.size(), { { serverChallenge.data(), serverChallenge.size() }, { localChallenge.data(), localChallenge.size() }, { AscEmu::Version::Forever::SessionKeySeed.data(), AscEmu::Version::Forever::SessionKeySeed.size() } }, sessionSeed))
+        if (!foreverHmacSha512(keyDataDigest.data(), keyDataDigest.size(),
+            {
+                { serverChallenge.data(), serverChallenge.size() },
+                { localChallenge.data(), localChallenge.size() },
+                { AscEmu::Version::Forever::SessionKeySeed.data(), AscEmu::Version::Forever::SessionKeySeed.size() }
+            }, sessionSeed))
         {
             return false;
         }
@@ -204,7 +246,12 @@ namespace
             return false;
 
         std::array<uint8_t, 64> encryptionDigest{};
-        if (!foreverHmacSha512(sessionKey.data(), sessionKey.size(), { { localChallenge.data(), localChallenge.size() }, { serverChallenge.data(), serverChallenge.size() }, { AscEmu::Version::Forever::EncryptionKeySeed.data(), AscEmu::Version::Forever::EncryptionKeySeed.size() } }, encryptionDigest))
+        if (!foreverHmacSha512(sessionKey.data(), sessionKey.size(),
+            {
+                { localChallenge.data(), localChallenge.size() },
+                { serverChallenge.data(), serverChallenge.size() },
+                { AscEmu::Version::Forever::EncryptionKeySeed.data(), AscEmu::Version::Forever::EncryptionKeySeed.size() }
+            }, encryptionDigest))
         {
             return false;
         }
@@ -263,7 +310,8 @@ namespace
         return true;
     }
 
-    bool ed25519PointAdd(const Ed25519Point& left, const Ed25519Point& right, Ed25519Point& result, const BIGNUM* prime, const BIGNUM* twoD, BN_CTX* context)
+    bool ed25519PointAdd(const Ed25519Point& left, const Ed25519Point& right,
+        Ed25519Point& result, const BIGNUM* prime, const BIGNUM* twoD, BN_CTX* context)
     {
         BN_CTX_start(context);
         BIGNUM* a = BN_CTX_get(context);
@@ -369,7 +417,10 @@ namespace
         if (BN_one(accumulator.y) != 1 || BN_one(accumulator.z) != 1)
             return false;
 
-        if (BN_dec2bn(&addend.x, "15112221349535400772501151409588531511454012693041857206046113283949847762202") == 0 || BN_dec2bn(&addend.y, "46316835694926478169428394003475163141307993866256225615783033603165251855960") == 0 || BN_one(addend.z) != 1 || BN_mod_mul(addend.t, addend.x, addend.y, prime, context) != 1)
+        if (BN_dec2bn(&addend.x, "15112221349535400772501151409588531511454012693041857206046113283949847762202") == 0 ||
+            BN_dec2bn(&addend.y, "46316835694926478169428394003475163141307993866256225615783033603165251855960") == 0 ||
+            BN_one(addend.z) != 1 ||
+            BN_mod_mul(addend.t, addend.x, addend.y, prime, context) != 1)
         {
             return false;
         }
@@ -378,13 +429,15 @@ namespace
         {
             if (BN_is_bit_set(scalar, bit) != 0)
             {
-                if (!ed25519PointAdd(accumulator, addend, temporary, prime, twoD, context) || !copyEd25519Point(accumulator, temporary))
+                if (!ed25519PointAdd(accumulator, addend, temporary, prime, twoD, context) ||
+                    !copyEd25519Point(accumulator, temporary))
                 {
                     return false;
                 }
             }
 
-            if (!ed25519PointDouble(addend, temporary, prime, context) || !copyEd25519Point(addend, temporary))
+            if (!ed25519PointDouble(addend, temporary, prime, context) ||
+                !copyEd25519Point(addend, temporary))
             {
                 return false;
             }
@@ -490,7 +543,14 @@ namespace
         std::array<uint8_t, 64> rDigest{};
         if (success)
         {
-            success = foreverSha512Parts({ { dom2Prefix.data(), dom2Prefix.size() }, { &dom2Flag, sizeof(dom2Flag) }, { &contextLength, sizeof(contextLength) }, { ed25519Context, contextSize }, { privateDigest.data() + 32, 32 }, { message, messageSize } }, rDigest);
+            success = foreverSha512Parts({
+                { dom2Prefix.data(), dom2Prefix.size() },
+                { &dom2Flag, sizeof(dom2Flag) },
+                { &contextLength, sizeof(contextLength) },
+                { ed25519Context, contextSize },
+                { privateDigest.data() + 32, 32 },
+                { message, messageSize }
+            }, rDigest);
         }
 
         if (success)
@@ -509,7 +569,15 @@ namespace
         std::array<uint8_t, 64> kDigest{};
         if (success)
         {
-            success = foreverSha512Parts({ { dom2Prefix.data(), dom2Prefix.size() }, { &dom2Flag, sizeof(dom2Flag) }, { &contextLength, sizeof(contextLength) }, { ed25519Context, contextSize }, { encodedR.data(), encodedR.size() }, { publicKey.data(), publicKey.size() }, { message, messageSize } }, kDigest);
+            success = foreverSha512Parts({
+                { dom2Prefix.data(), dom2Prefix.size() },
+                { &dom2Flag, sizeof(dom2Flag) },
+                { &contextLength, sizeof(contextLength) },
+                { ed25519Context, contextSize },
+                { encodedR.data(), encodedR.size() },
+                { publicKey.data(), publicKey.size() },
+                { message, messageSize }
+            }, kDigest);
         }
 
         if (success)
@@ -547,7 +615,11 @@ namespace
     {
         const uint8_t enabledByte = enabled ? 1U : 0U;
         std::array<uint8_t, 64> toSign{};
-        if (!foreverHmacSha512(encryptionKey.data(), encryptionKey.size(), { { &enabledByte, sizeof(enabledByte) }, { AscEmu::Version::Forever::EnableEncryptionSeed.data(), AscEmu::Version::Forever::EnableEncryptionSeed.size() } }, toSign))
+        if (!foreverHmacSha512(encryptionKey.data(), encryptionKey.size(),
+            {
+                { &enabledByte, sizeof(enabledByte) },
+                { AscEmu::Version::Forever::EnableEncryptionSeed.data(), AscEmu::Version::Forever::EnableEncryptionSeed.size() }
+            }, toSign))
         {
             return false;
         }
@@ -557,7 +629,12 @@ namespace
         // parameters used by newer OpenSSL versions. Implement RFC 8032
         // Ed25519ctx explicitly so the WoW client verifies the signature with
         // its embedded EnterEncryptedMode public key.
-        return ed25519ctxSign(AscEmu::Version::Forever::EnableEncryptionPrivateKey, toSign.data(), toSign.size(), AscEmu::Version::Forever::EnableEncryptionContext.data(), AscEmu::Version::Forever::EnableEncryptionContext.size(), signature);
+        return ed25519ctxSign(
+            AscEmu::Version::Forever::EnableEncryptionPrivateKey,
+            toSign.data(), toSign.size(),
+            AscEmu::Version::Forever::EnableEncryptionContext.data(),
+            AscEmu::Version::Forever::EnableEncryptionContext.size(),
+            signature);
     }
 }
 
@@ -601,17 +678,23 @@ bool WorldSocket::initializeVersionedConnection()
     m_foreverSessionKey.fill(0);
     m_foreverEncryptionKey.fill(0);
 
-    sLogger.info("WorldSocket::Forever: World V2 connection from {}:{}; build={}.", getRemoteIp(), getRemotePort(), m_foreverClientBuild);
+    sLogger.info(
+        "WorldSocket::Forever: World V2 connection from {}:{}; build={}.",
+        getRemoteIp(), getRemotePort(), m_foreverClientBuild);
 
     burstBegin();
-    const bool sent = burstSend(reinterpret_cast<const uint8_t*>(AscEmu::Version::Forever::WorldProtocol::ServerInitializer.data()), static_cast<uint32_t>(AscEmu::Version::Forever::WorldProtocol::ServerInitializer.size()));
+    const bool sent = burstSend(
+        reinterpret_cast<const uint8_t*>(AscEmu::Version::Forever::WorldProtocol::ServerInitializer.data()),
+        static_cast<uint32_t>(AscEmu::Version::Forever::WorldProtocol::ServerInitializer.size()));
     if (sent)
         burstPush();
     burstEnd();
 
     if (!sent)
     {
-        sLogger.failure("WorldSocket::Forever: failed to send World V2 server initializer to {}:{}.", getRemoteIp(), getRemotePort());
+        sLogger.failure(
+            "WorldSocket::Forever: failed to send World V2 server initializer to {}:{}.",
+            getRemoteIp(), getRemotePort());
         disconnect();
     }
 
@@ -632,7 +715,9 @@ bool WorldSocket::processVersionedRead()
         std::array<char, 64> initializer{};
         static_assert(expected.size() < initializer.size());
 
-        if (!readBuffer.Read(reinterpret_cast<uint8_t*>(initializer.data()), static_cast<uint32_t>(expected.size())))
+        if (!readBuffer.Read(
+                reinterpret_cast<uint8_t*>(initializer.data()),
+                static_cast<uint32_t>(expected.size())))
         {
             return true;
         }
@@ -640,25 +725,36 @@ bool WorldSocket::processVersionedRead()
         const std::string_view received(initializer.data(), expected.size());
         if (received != expected)
         {
-            sLogger.failure("WorldSocket::Forever: invalid World V2 client initializer from {}:{}.", getRemoteIp(), getRemotePort());
+            sLogger.failure(
+                "WorldSocket::Forever: invalid World V2 client initializer from {}:{}.",
+                getRemoteIp(), getRemotePort());
             disconnect();
             return true;
         }
 
         m_foreverWorldState = ForeverWorldState::AwaitAuthSession;
-        sLogger.info("WorldSocket::Forever: client initializer accepted from {}:{}.", getRemoteIp(), getRemotePort());
+        sLogger.info(
+            "WorldSocket::Forever: client initializer accepted from {}:{}.",
+            getRemoteIp(), getRemotePort());
 
         if (!sendForeverAuthChallenge())
         {
-            sLogger.failure("WorldSocket::Forever: failed to send SMSG_AUTH_CHALLENGE to {}:{}.", getRemoteIp(), getRemotePort());
+            sLogger.failure(
+                "WorldSocket::Forever: failed to send SMSG_AUTH_CHALLENGE to {}:{}.",
+                getRemoteIp(), getRemotePort());
             disconnect();
             return true;
         }
 
-        sLogger.info("WorldSocket::Forever: sent SMSG_AUTH_CHALLENGE opcode=0x{:08X}, payload={} byte(s).", AscEmu::Version::Forever::WorldProtocol::SMSG_AUTH_CHALLENGE, AscEmu::Version::Forever::WorldProtocol::AuthChallengePayloadSize);
+        sLogger.info(
+            "WorldSocket::Forever: sent SMSG_AUTH_CHALLENGE opcode=0x{:08X}, payload={} byte(s).",
+            AscEmu::Version::Forever::WorldProtocol::SMSG_AUTH_CHALLENGE,
+            AscEmu::Version::Forever::WorldProtocol::AuthChallengePayloadSize);
     }
 
-    if (m_foreverWorldState == ForeverWorldState::AwaitAuthSession || m_foreverWorldState == ForeverWorldState::AuthSessionObserved || m_foreverWorldState == ForeverWorldState::AwaitEncryptionAck)
+    if (m_foreverWorldState == ForeverWorldState::AwaitAuthSession ||
+        m_foreverWorldState == ForeverWorldState::AuthSessionObserved ||
+        m_foreverWorldState == ForeverWorldState::AwaitEncryptionAck)
     {
         while (m_foreverWorldState != ForeverWorldState::Encrypted)
         {
@@ -688,7 +784,9 @@ bool WorldSocket::sendForeverWorldPacket(uint32_t opcode, const uint8_t* payload
 {
     using namespace AscEmu::Version::Forever;
 
-    if (!isConnected() || opcode == 0 || payloadSize > WorldProtocol::MaxPacketSize - sizeof(uint32_t))
+    if (!isConnected() ||
+        opcode == 0 ||
+        payloadSize > WorldProtocol::MaxPacketSize - sizeof(uint32_t))
     {
         return false;
     }
@@ -708,7 +806,9 @@ bool WorldSocket::sendForeverWorldPacket(uint32_t opcode, const uint8_t* payload
         std::array<uint8_t, WorldProtocol::AuthTagSize> tag{};
         if (!encryptForeverPayload(encrypted, tag))
         {
-            sLogger.failure("WorldSocket::Forever: AES-256-GCM encryption failed for opcode=0x{:08X}, counter={}.", opcode, m_foreverCryptoSendCounter);
+            sLogger.failure(
+                "WorldSocket::Forever: AES-256-GCM encryption failed for opcode=0x{:08X}, counter={}.",
+                opcode, m_foreverCryptoSendCounter);
             return false;
         }
 
@@ -733,7 +833,9 @@ bool WorldSocket::sendForeverWorldPacket(uint32_t opcode, const uint8_t* payload
     bool sent = burstSend(header.data(), static_cast<uint32_t>(header.size()));
     if (sent)
     {
-        sent = burstSend(reinterpret_cast<const uint8_t*>(&opcode), static_cast<uint32_t>(sizeof(opcode)));
+        sent = burstSend(
+            reinterpret_cast<const uint8_t*>(&opcode),
+            static_cast<uint32_t>(sizeof(opcode)));
     }
 
     if (sent && payloadSize != 0)
@@ -754,23 +856,41 @@ bool WorldSocket::sendForeverAuthChallenge()
 {
     using namespace AscEmu::Version::Forever;
 
-    if (RAND_bytes(m_foreverServerChallenge.data(), static_cast<int>(m_foreverServerChallenge.size())) != 1 || RAND_bytes(m_foreverDosChallenge.data(), static_cast<int>(m_foreverDosChallenge.size())) != 1)
+    if (RAND_bytes(
+            m_foreverServerChallenge.data(),
+            static_cast<int>(m_foreverServerChallenge.size())) != 1 ||
+        RAND_bytes(
+            m_foreverDosChallenge.data(),
+            static_cast<int>(m_foreverDosChallenge.size())) != 1)
     {
-        sLogger.failure("WorldSocket::Forever: RAND_bytes failed while creating auth challenge.");
+        sLogger.failure(
+            "WorldSocket::Forever: RAND_bytes failed while creating auth challenge.");
         return false;
     }
 
     std::array<uint8_t, WorldProtocol::AuthChallengePayloadSize> payload{};
 
-    std::memcpy(payload.data(), m_foreverDosChallenge.data(), m_foreverDosChallenge.size());
+    std::memcpy(
+        payload.data(),
+        m_foreverDosChallenge.data(),
+        m_foreverDosChallenge.size());
 
-    std::memcpy(payload.data() + m_foreverDosChallenge.size(), m_foreverServerChallenge.data(), m_foreverServerChallenge.size());
+    std::memcpy(
+        payload.data() + m_foreverDosChallenge.size(),
+        m_foreverServerChallenge.data(),
+        m_foreverServerChallenge.size());
 
     payload.back() = 1; // DosZeroBits
 
-    sLogger.info("WorldSocket::Forever: AUTH_CHALLENGE server_challenge={} dos_challenge={}", AscEmu::Version::Forever::bytesToHex(m_foreverServerChallenge.data(), m_foreverServerChallenge.size()), AscEmu::Version::Forever::bytesToHex(m_foreverDosChallenge.data(), m_foreverDosChallenge.size()));
+    sLogger.info(
+        "WorldSocket::Forever: AUTH_CHALLENGE server_challenge={} dos_challenge={}",
+        AscEmu::Version::Forever::bytesToHex(m_foreverServerChallenge.data(), m_foreverServerChallenge.size()),
+        AscEmu::Version::Forever::bytesToHex(m_foreverDosChallenge.data(), m_foreverDosChallenge.size()));
 
-    return sendForeverWorldPacket(WorldProtocol::SMSG_AUTH_CHALLENGE, payload.data(), static_cast<uint32_t>(payload.size()));
+    return sendForeverWorldPacket(
+        WorldProtocol::SMSG_AUTH_CHALLENGE,
+        payload.data(),
+        static_cast<uint32_t>(payload.size()));
 }
 
 bool WorldSocket::processForeverAuthPacket()
@@ -789,7 +909,9 @@ bool WorldSocket::processForeverAuthPacket()
         const uint32_t packetSize = readUInt32LE(header.data());
         if (packetSize < sizeof(uint32_t) || packetSize > WorldProtocol::MaxPacketSize)
         {
-            sLogger.failure("WorldSocket::Forever: invalid World V2 packet size {} from {}:{}.", packetSize, getRemoteIp(), getRemotePort());
+            sLogger.failure(
+                "WorldSocket::Forever: invalid World V2 packet size {} from {}:{}.",
+                packetSize, getRemoteIp(), getRemotePort());
             disconnect();
             m_foreverWorldState = ForeverWorldState::Disabled;
             return false;
@@ -810,7 +932,11 @@ bool WorldSocket::processForeverAuthPacket()
         m_foreverPacketRemaining =
             packetSize - static_cast<uint32_t>(sizeof(uint32_t));
 
-        sLogger.info("WorldSocket::Forever: RX header opcode=0x{:08X}, payload={} byte(s), auth-tag={}.", m_foreverPacketOpcode, m_foreverPacketRemaining, nonZeroAuthTag ? "non-zero" : "zero");
+        sLogger.info(
+            "WorldSocket::Forever: RX header opcode=0x{:08X}, payload={} byte(s), auth-tag={}.",
+            m_foreverPacketOpcode,
+            m_foreverPacketRemaining,
+            nonZeroAuthTag ? "non-zero" : "zero");
     }
 
     if (readBuffer.GetSize() < m_foreverPacketRemaining)
@@ -820,7 +946,8 @@ bool WorldSocket::processForeverAuthPacket()
     const uint32_t payloadSize = m_foreverPacketRemaining;
 
     std::vector<uint8_t> payload(payloadSize);
-    if (payloadSize != 0 && !readBuffer.Read(payload.data(), payloadSize))
+    if (payloadSize != 0 &&
+        !readBuffer.Read(payload.data(), payloadSize))
     {
         return false;
     }
@@ -831,20 +958,28 @@ bool WorldSocket::processForeverAuthPacket()
 
     if (opcode == WorldProtocol::CMSG_AUTH_SESSION)
     {
-        sLogger.info("WorldSocket::Forever: RX CMSG_AUTH_SESSION payload={} byte(s).", payload.size());
+        sLogger.info(
+            "WorldSocket::Forever: RX CMSG_AUTH_SESSION payload={} byte(s).",
+            payload.size());
         return processForeverAuthSession(opcode, payload);
     }
 
     if (opcode == WorldProtocol::CMSG_ENTER_ENCRYPTED_MODE_ACK)
         return processForeverEnterEncryptedModeAck(opcode, payload);
 
-    sLogger.info("WorldSocket::Forever: RX opcode=0x{:08X}, payload={} byte(s), hex=[{}]", opcode, payload.size(), AscEmu::Version::Forever::bytesToHex(payload.data(), payload.size()));
+    sLogger.info(
+        "WorldSocket::Forever: RX opcode=0x{:08X}, payload={} byte(s), hex=[{}]",
+        opcode,
+        payload.size(),
+        AscEmu::Version::Forever::bytesToHex(payload.data(), payload.size()));
 
     if (opcode == WorldProtocol::CMSG_PING)
     {
         if (payload.size() != sizeof(uint64_t))
         {
-            sLogger.warning("WorldSocket::Forever: malformed CMSG_PING payload={} byte(s); expected 8.", payload.size());
+            sLogger.warning(
+                "WorldSocket::Forever: malformed CMSG_PING payload={} byte(s); expected 8.",
+                payload.size());
             return true;
         }
 
@@ -855,11 +990,20 @@ bool WorldSocket::processForeverAuthPacket()
         std::array<uint8_t, sizeof(uint32_t)> pong{};
         std::memcpy(pong.data(), &serial, sizeof(serial));
 
-        sLogger.info("WorldSocket::Forever: CMSG_PING serial={} latency={} raw={} -> SMSG_PONG.", serial, latency, rawPing);
+        sLogger.info(
+            "WorldSocket::Forever: CMSG_PING serial={} latency={} raw={} -> SMSG_PONG.",
+            serial,
+            latency,
+            rawPing);
 
-        if (!sendForeverWorldPacket(WorldProtocol::SMSG_PONG, pong.data(), static_cast<uint32_t>(pong.size())))
+        if (!sendForeverWorldPacket(
+                WorldProtocol::SMSG_PONG,
+                pong.data(),
+                static_cast<uint32_t>(pong.size())))
         {
-            sLogger.failure("WorldSocket::Forever: failed to send SMSG_PONG for serial {}.", serial);
+            sLogger.failure(
+                "WorldSocket::Forever: failed to send SMSG_PONG for serial {}.",
+                serial);
             disconnect();
             m_foreverWorldState = ForeverWorldState::Disabled;
             return false;
@@ -868,18 +1012,29 @@ bool WorldSocket::processForeverAuthPacket()
         return true;
     }
 
-    sLogger.info("WorldSocket::Forever: unhandled pre-auth opcode=0x{:08X}; state={}, build={}.", opcode, static_cast<uint32_t>(m_foreverWorldState), m_foreverClientBuild);
+    sLogger.info(
+        "WorldSocket::Forever: unhandled pre-auth opcode=0x{:08X}; state={}, build={}.",
+        opcode,
+        static_cast<uint32_t>(m_foreverWorldState),
+        m_foreverClientBuild);
 
     return true;
 }
 
-bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<uint8_t>& payload)
+bool WorldSocket::processForeverAuthSession(
+    uint32_t opcode,
+    const std::vector<uint8_t>& payload)
 {
     using namespace AscEmu::Version::Forever;
 
-    if (payload.size() < WorldProtocol::AuthSessionFixedSize + sizeof(uint32_t))
+    if (payload.size() <
+        WorldProtocol::AuthSessionFixedSize + sizeof(uint32_t))
     {
-        sLogger.failure("WorldSocket::Forever: malformed CMSG_AUTH_SESSION 0x{:08X}; " "only {} payload byte(s).", opcode, payload.size());
+        sLogger.failure(
+            "WorldSocket::Forever: malformed CMSG_AUTH_SESSION 0x{:08X}; "
+            "only {} payload byte(s).",
+            opcode,
+            payload.size());
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
@@ -904,11 +1059,17 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
     m_foreverRealmId = realmId;
 
     std::array<uint8_t, 32> localChallenge{};
-    std::memcpy(localChallenge.data(), payload.data() + offset, localChallenge.size());
+    std::memcpy(
+        localChallenge.data(),
+        payload.data() + offset,
+        localChallenge.size());
     offset += localChallenge.size();
 
     std::array<uint8_t, 24> digest{};
-    std::memcpy(digest.data(), payload.data() + offset, digest.size());
+    std::memcpy(
+        digest.data(),
+        payload.data() + offset,
+        digest.size());
     offset += digest.size();
 
     const bool useIPv6 = (payload[offset] & 0x01u) != 0;
@@ -919,22 +1080,43 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
 
     if (ticketSize == 0 || ticketSize > payload.size() - offset)
     {
-        sLogger.failure("WorldSocket::Forever: malformed CMSG_AUTH_SESSION ticket size {} " "(remaining {}).", ticketSize, payload.size() - offset);
+        sLogger.failure(
+            "WorldSocket::Forever: malformed CMSG_AUTH_SESSION ticket size {} "
+            "(remaining {}).",
+            ticketSize,
+            payload.size() - offset);
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
     }
 
-    const std::string realmJoinTicket(reinterpret_cast<const char*>(payload.data() + offset), ticketSize);
+    const std::string realmJoinTicket(
+        reinterpret_cast<const char*>(payload.data() + offset),
+        ticketSize);
 
     offset += ticketSize;
 
-    sLogger.info("WorldSocket::Forever: CMSG_AUTH_SESSION parsed: " "dos_response={}, region={}, battlegroup={}, realm={}, ipv6={}, " "ticket_bytes={}, trailing_bytes={}.", dosResponse, regionId, battlegroupId, realmId, useIPv6 ? "yes" : "no", ticketSize, payload.size() - offset);
+    sLogger.info(
+        "WorldSocket::Forever: CMSG_AUTH_SESSION parsed: "
+        "dos_response={}, region={}, battlegroup={}, realm={}, ipv6={}, "
+        "ticket_bytes={}, trailing_bytes={}.",
+        dosResponse,
+        regionId,
+        battlegroupId,
+        realmId,
+        useIPv6 ? "yes" : "no",
+        ticketSize,
+        payload.size() - offset);
 
     AscEmu::BattlenetComm::PendingWorldSession pending;
-    if (!AscEmu::BattlenetComm::sBattleNetCommClient.getPendingSession(realmJoinTicket, pending, false))
+    if (!AscEmu::BattlenetComm::sBattleNetCommClient.getPendingSession(
+            realmJoinTicket,
+            pending,
+            false))
     {
-        sLogger.failure("WorldSocket::Forever: RealmJoinTicket has no pending " "BattleNetComm world session.");
+        sLogger.failure(
+            "WorldSocket::Forever: RealmJoinTicket has no pending "
+            "BattleNetComm world session.");
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
@@ -950,16 +1132,25 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
     const auto buildAuthKey = AscEmu::Version::Forever::getBuildAuthKey(pending.clientBuild);
     if (!buildAuthKey.has_value())
     {
-        sLogger.failure("WorldSocket::Forever: no build-auth key registered for build {}.", pending.clientBuild);
+        sLogger.failure(
+            "WorldSocket::Forever: no build-auth key registered for build {}.",
+            pending.clientBuild);
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
     }
 
     std::array<uint8_t, 64> calculatedDigest{};
-    if (!calculateForeverAuthDigest(pending.worldAuthKeyData, buildAuthKey.value(), localChallenge, m_foreverServerChallenge, calculatedDigest))
+    if (!calculateForeverAuthDigest(
+            pending.worldAuthKeyData,
+            buildAuthKey.value(),
+            localChallenge,
+            m_foreverServerChallenge,
+            calculatedDigest))
     {
-        sLogger.failure("WorldSocket::Forever: failed to calculate auth digest for build {}.", pending.clientBuild);
+        sLogger.failure(
+            "WorldSocket::Forever: failed to calculate auth digest for build {}.",
+            pending.clientBuild);
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
@@ -967,22 +1158,32 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
 
     if (!foreverDigestMatches(calculatedDigest, digest))
     {
-        sLogger.failure("WorldSocket::Forever: CMSG_AUTH_SESSION digest mismatch for account={} build={}.", pending.accountId, pending.clientBuild);
+        sLogger.failure(
+            "WorldSocket::Forever: CMSG_AUTH_SESSION digest mismatch for account={} build={}.",
+            pending.accountId,
+            pending.clientBuild);
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
     }
 
-    sLogger.info("WorldSocket::Forever: CMSG_AUTH_SESSION digest verified for account={} build={}.", pending.accountId, pending.clientBuild);
+    sLogger.info(
+        "WorldSocket::Forever: CMSG_AUTH_SESSION digest verified for account={} build={}.",
+        pending.accountId,
+        pending.clientBuild);
 
     // Authentication succeeded. Keep session secrets out of normal logs.
 
     // The pending ticket is one-shot. Consume it only after the digest was
     // verified successfully so failed auth attempts cannot burn valid state.
     AscEmu::BattlenetComm::PendingWorldSession consumed;
-    if (!AscEmu::BattlenetComm::sBattleNetCommClient.getPendingSession(realmJoinTicket, consumed, true))
+    if (!AscEmu::BattlenetComm::sBattleNetCommClient.getPendingSession(
+            realmJoinTicket,
+            consumed,
+            true))
     {
-        sLogger.failure("WorldSocket::Forever: verified pending session disappeared before consume.");
+        sLogger.failure(
+            "WorldSocket::Forever: verified pending session disappeared before consume.");
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
@@ -990,9 +1191,15 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
 
     m_foreverWorldState = ForeverWorldState::AuthSessionObserved;
 
-    if (!deriveForeverKeys(pending.worldAuthKeyData, m_foreverServerChallenge, localChallenge, m_foreverSessionKey, m_foreverEncryptionKey))
+    if (!deriveForeverKeys(
+            pending.worldAuthKeyData,
+            m_foreverServerChallenge,
+            localChallenge,
+            m_foreverSessionKey,
+            m_foreverEncryptionKey))
     {
-        sLogger.failure("WorldSocket::Forever: failed to derive World V2 session/encryption keys.");
+        sLogger.failure(
+            "WorldSocket::Forever: failed to derive World V2 session/encryption keys.");
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
@@ -1000,14 +1207,18 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
 
     if (!sendForeverEnterEncryptedMode())
     {
-        sLogger.failure("WorldSocket::Forever: failed to send SMSG_ENTER_ENCRYPTED_MODE.");
+        sLogger.failure(
+            "WorldSocket::Forever: failed to send SMSG_ENTER_ENCRYPTED_MODE.");
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
     }
 
     m_foreverWorldState = ForeverWorldState::AwaitEncryptionAck;
-    sLogger.info("WorldSocket::Forever: CMSG_AUTH_SESSION accepted for build {}; " "SMSG_ENTER_ENCRYPTED_MODE sent, awaiting ACK.", pending.clientBuild);
+    sLogger.info(
+        "WorldSocket::Forever: CMSG_AUTH_SESSION accepted for build {}; "
+        "SMSG_ENTER_ENCRYPTED_MODE sent, awaiting ACK.",
+        pending.clientBuild);
 
     return true;
 }
@@ -1020,9 +1231,13 @@ bool WorldSocket::sendForeverEnterEncryptedMode()
         return false;
 
     std::array<uint8_t, 64> signature{};
-    if (!createForeverEnterEncryptedModeSignature(m_foreverEncryptionKey, true, signature))
+    if (!createForeverEnterEncryptedModeSignature(
+            m_foreverEncryptionKey,
+            true,
+            signature))
     {
-        sLogger.failure("WorldSocket::Forever: Ed25519ctx signing failed for SMSG_ENTER_ENCRYPTED_MODE.");
+        sLogger.failure(
+            "WorldSocket::Forever: Ed25519ctx signing failed for SMSG_ENTER_ENCRYPTED_MODE.");
         return false;
     }
 
@@ -1030,32 +1245,51 @@ bool WorldSocket::sendForeverEnterEncryptedMode()
     const uint32_t regionGroup =
         static_cast<uint32_t>(WorldProtocol::EnterEncryptedModeRegionGroup);
     std::memcpy(payload.data(), &regionGroup, sizeof(regionGroup));
-    std::memcpy(payload.data() + sizeof(regionGroup), signature.data(), signature.size());
+    std::memcpy(
+        payload.data() + sizeof(regionGroup),
+        signature.data(),
+        signature.size());
     payload.back() = 0x80; // Enabled=true, MSB-first bit writer flush.
 
-    const bool sent = sendForeverWorldPacket(WorldProtocol::SMSG_ENTER_ENCRYPTED_MODE, payload.data(), static_cast<uint32_t>(payload.size()));
+    const bool sent = sendForeverWorldPacket(
+        WorldProtocol::SMSG_ENTER_ENCRYPTED_MODE,
+        payload.data(),
+        static_cast<uint32_t>(payload.size()));
 
     if (sent)
     {
-        sLogger.info("WorldSocket::Forever: sent SMSG_ENTER_ENCRYPTED_MODE " "opcode=0x{:08X}, RegionGroup={}, payload={} byte(s).", WorldProtocol::SMSG_ENTER_ENCRYPTED_MODE, WorldProtocol::EnterEncryptedModeRegionGroup, payload.size());
+        sLogger.info(
+            "WorldSocket::Forever: sent SMSG_ENTER_ENCRYPTED_MODE "
+            "opcode=0x{:08X}, RegionGroup={}, payload={} byte(s).",
+            WorldProtocol::SMSG_ENTER_ENCRYPTED_MODE,
+            WorldProtocol::EnterEncryptedModeRegionGroup,
+            payload.size());
     }
 
     return sent;
 }
 
-bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std::vector<uint8_t>& payload)
+bool WorldSocket::processForeverEnterEncryptedModeAck(
+    uint32_t opcode,
+    const std::vector<uint8_t>& payload)
 {
     using namespace AscEmu::Version::Forever;
 
     if (m_foreverWorldState != ForeverWorldState::AwaitEncryptionAck)
     {
-        sLogger.failure("WorldSocket::Forever: unexpected encrypted-mode ACK 0x{:08X} while state={}.", opcode, static_cast<uint32_t>(m_foreverWorldState));
+        sLogger.failure(
+            "WorldSocket::Forever: unexpected encrypted-mode ACK 0x{:08X} while state={}.",
+            opcode,
+            static_cast<uint32_t>(m_foreverWorldState));
         return false;
     }
 
     if (opcode != WorldProtocol::CMSG_ENTER_ENCRYPTED_MODE_ACK || !payload.empty())
     {
-        sLogger.failure("WorldSocket::Forever: malformed encrypted-mode ACK opcode=0x{:08X}, payload={}.", opcode, payload.size());
+        sLogger.failure(
+            "WorldSocket::Forever: malformed encrypted-mode ACK opcode=0x{:08X}, payload={}.",
+            opcode,
+            payload.size());
         return false;
     }
 
@@ -1067,11 +1301,19 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std
     m_foreverEncryptedOpcode.fill(0);
     m_foreverWorldState = ForeverWorldState::Encrypted;
 
-    sLogger.info("WorldSocket::Forever: CMSG_ENTER_ENCRYPTED_MODE_ACK accepted; " "AES-256-GCM enabled (send_counter={}, recv_counter={}).", m_foreverCryptoSendCounter, m_foreverCryptoRecvCounter);
+    sLogger.info(
+        "WorldSocket::Forever: CMSG_ENTER_ENCRYPTED_MODE_ACK accepted; "
+        "AES-256-GCM enabled (send_counter={}, recv_counter={}).",
+        m_foreverCryptoSendCounter,
+        m_foreverCryptoRecvCounter);
 
     if (m_foreverGameAccountId == 0 || m_foreverGameAccountName.empty())
     {
-        sLogger.failure("WorldSocket::Forever: cannot create WorldSession after encryption ACK: battlenet_account={}, game_account={}, name='{}'.", m_foreverBattleNetAccountId, m_foreverGameAccountId, m_foreverGameAccountName);
+        sLogger.failure(
+            "WorldSocket::Forever: cannot create WorldSession after encryption ACK: battlenet_account={}, game_account={}, name='{}'.",
+            m_foreverBattleNetAccountId,
+            m_foreverGameAccountId,
+            m_foreverGameAccountName);
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
@@ -1079,7 +1321,8 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std
 
     if (m_session != nullptr)
     {
-        sLogger.failure("WorldSocket::Forever: socket already owns a WorldSession before Forever handoff.");
+        sLogger.failure(
+            "WorldSocket::Forever: socket already owns a WorldSession before Forever handoff.");
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;
@@ -1087,23 +1330,29 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std
 
     if (WorldSession* existing = sWorld.getSessionByAccountId(m_foreverGameAccountId))
     {
-        sLogger.info("WorldSocket::Forever: replacing existing WorldSession for WoW game account {}.", m_foreverGameAccountId);
+        sLogger.info(
+            "WorldSocket::Forever: replacing existing WorldSession for WoW game account {}.",
+            m_foreverGameAccountId);
         existing->Disconnect();
     }
 
-    auto sessionHolder = std::make_unique<WorldSession>(m_foreverGameAccountId, m_foreverGameAccountName, this);
+    auto sessionHolder = std::make_unique<WorldSession>(
+        m_foreverGameAccountId,
+        m_foreverGameAccountName,
+        this);
 
     m_session = sessionHolder.get();
     m_session->SetClientBuild(m_foreverClientBuild);
     m_session->LoadSecurity("");
-    m_session->SetAccountFlags(AF_FULL_MOP);
+    m_session->SetAccountFlags(AF_FULL_FOREVER);
     m_session->m_lastPing = static_cast<uint32_t>(UNIXTIME);
     m_session->_latency = m_latency;
     m_session->SetGlobalUpdateOwner();
 
     if (!sendForeverPostAuthBootstrap())
     {
-        sLogger.failure("WorldSocket::Forever: failed to send post-auth bootstrap after encrypted-mode ACK.");
+        sLogger.failure(
+            "WorldSocket::Forever: failed to send post-auth bootstrap after encrypted-mode ACK.");
         m_session = nullptr;
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
@@ -1114,7 +1363,12 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std
     sWorld.addSession(std::move(sessionHolder), false);
     isAuthenticated = true;
 
-    sLogger.info("WorldSocket::Forever: WorldSession handoff complete for battlenet_account={} game_account={} name='{}' build={}; modern encrypted session is active.", m_foreverBattleNetAccountId, m_foreverGameAccountId, m_foreverGameAccountName, m_foreverClientBuild);
+    sLogger.info(
+        "WorldSocket::Forever: WorldSession handoff complete for battlenet_account={} game_account={} name='{}' build={}; modern encrypted session is active.",
+        m_foreverBattleNetAccountId,
+        m_foreverGameAccountId,
+        m_foreverGameAccountName,
+        m_foreverClientBuild);
 
     return true;
 }
@@ -1166,11 +1420,21 @@ bool WorldSocket::sendForeverPostAuthBootstrap()
         const uint64_t counterBefore = m_foreverCryptoSendCounter;
         if (!sendForeverWorldPacket(packet.opcode, packet.data, packet.size))
         {
-            sLogger.failure("WorldSocket::Forever: failed to send {} opcode=0x{:08X}, payload={} byte(s).", packet.name, packet.opcode, packet.size);
+            sLogger.failure(
+                "WorldSocket::Forever: failed to send {} opcode=0x{:08X}, payload={} byte(s).",
+                packet.name,
+                packet.opcode,
+                packet.size);
             return false;
         }
 
-        sLogger.info("WorldSocket::Forever: sent encrypted {} opcode=0x{:08X}, payload={} byte(s), crypto_counter={} -> {}.", packet.name, packet.opcode, packet.size, counterBefore, m_foreverCryptoSendCounter);
+        sLogger.info(
+            "WorldSocket::Forever: sent encrypted {} opcode=0x{:08X}, payload={} byte(s), crypto_counter={} -> {}.",
+            packet.name,
+            packet.opcode,
+            packet.size,
+            counterBefore,
+            m_foreverCryptoSendCounter);
     }
 
     // Match the official 69893 pre-enum glue sequence, while using the same
@@ -1185,39 +1449,75 @@ bool WorldSocket::sendForeverPostAuthBootstrap()
         const uint64_t counterBefore = m_foreverCryptoSendCounter;
         if (!sendForeverWorldPacket(opcode, data, size))
         {
-            sLogger.failure("WorldSocket::Forever: failed to send {} opcode=0x{:08X}, payload={} byte(s).", name, opcode, size);
+            sLogger.failure(
+                "WorldSocket::Forever: failed to send {} opcode=0x{:08X}, payload={} byte(s).",
+                name,
+                opcode,
+                size);
             return false;
         }
 
-        sLogger.info("WorldSocket::Forever: sent encrypted {} opcode=0x{:08X}, payload={} byte(s), crypto_counter={} -> {}.", name, opcode, size, counterBefore, m_foreverCryptoSendCounter);
+        sLogger.info(
+            "WorldSocket::Forever: sent encrypted {} opcode=0x{:08X}, payload={} byte(s), crypto_counter={} -> {}.",
+            name,
+            opcode,
+            size,
+            counterBefore,
+            m_foreverCryptoSendCounter);
         return true;
     };
 
     if (!sendGluePacket(WorldProtocol::SMSG_GLUE_BOOTSTRAP_EMPTY, nullptr, 0, "SMSG_GLUE_BOOTSTRAP_EMPTY"))
         return false;
 
-    if (!sendGluePacket(WorldProtocol::SMSG_GLUE_BOOTSTRAP_STATE, glueState4602CB.data(), static_cast<uint32_t>(glueState4602CB.size()), "SMSG_GLUE_BOOTSTRAP_STATE"))
+    if (!sendGluePacket(
+            WorldProtocol::SMSG_GLUE_BOOTSTRAP_STATE,
+            glueState4602CB.data(),
+            static_cast<uint32_t>(glueState4602CB.size()),
+            "SMSG_GLUE_BOOTSTRAP_STATE"))
         return false;
 
     ByteBuffer accountDataTimes = buildForeverAccountDataTimes();
-    if (!sendGluePacket(WorldProtocol::SMSG_ACCOUNT_DATA_TIMES, accountDataTimes.contents(), static_cast<uint32_t>(accountDataTimes.size()), "SMSG_ACCOUNT_DATA_TIMES"))
+    if (!sendGluePacket(
+            WorldProtocol::SMSG_ACCOUNT_DATA_TIMES,
+            accountDataTimes.contents(),
+            static_cast<uint32_t>(accountDataTimes.size()),
+            "SMSG_ACCOUNT_DATA_TIMES"))
         return false;
 
-    if (!sendGluePacket(WorldProtocol::SMSG_FEATURE_SYSTEM_STATUS_GLUE_SCREEN, PostAuthBootstrap::FeatureStatus460064.data(), static_cast<uint32_t>(PostAuthBootstrap::FeatureStatus460064.size()), "SMSG_FEATURE_SYSTEM_STATUS_GLUE_SCREEN"))
+    if (!sendGluePacket(
+            WorldProtocol::SMSG_FEATURE_SYSTEM_STATUS_GLUE_SCREEN,
+            PostAuthBootstrap::FeatureStatus460064.data(),
+            static_cast<uint32_t>(PostAuthBootstrap::FeatureStatus460064.size()),
+            "SMSG_FEATURE_SYSTEM_STATUS_GLUE_SCREEN"))
         return false;
 
-    if (!sendGluePacket(WorldProtocol::SMSG_POST_AUTH_CONFIG, PostAuthBootstrap::Config460371.data(), static_cast<uint32_t>(PostAuthBootstrap::Config460371.size()), "SMSG_POST_AUTH_CONFIG"))
+    if (!sendGluePacket(
+            WorldProtocol::SMSG_POST_AUTH_CONFIG,
+            PostAuthBootstrap::Config460371.data(),
+            static_cast<uint32_t>(PostAuthBootstrap::Config460371.size()),
+            "SMSG_POST_AUTH_CONFIG"))
         return false;
 
-    if (!sendGluePacket(WorldProtocol::SMSG_TUTORIAL_FLAGS, tutorialFlags460268.data(), static_cast<uint32_t>(tutorialFlags460268.size()), "SMSG_TUTORIAL_FLAGS"))
+    if (!sendGluePacket(
+            WorldProtocol::SMSG_TUTORIAL_FLAGS,
+            tutorialFlags460268.data(),
+            static_cast<uint32_t>(tutorialFlags460268.size()),
+            "SMSG_TUTORIAL_FLAGS"))
         return false;
 
-    sLogger.info("WorldSocket::Forever: 69893 post-auth/bootstrap sent with Midnight-core glue serializers " "(AuthResponse unix_time={}, AccountDataTimes pre-enum, TutorialFlags pre-enum); " "waiting for first encrypted client glue request.", authResponseUnixTime);
+    sLogger.info(
+        "WorldSocket::Forever: 69893 post-auth/bootstrap sent with Midnight-core glue serializers "
+        "(AuthResponse unix_time={}, AccountDataTimes pre-enum, TutorialFlags pre-enum); "
+        "waiting for first encrypted client glue request.",
+        authResponseUnixTime);
 
     return true;
 }
 
-bool WorldSocket::encryptForeverPayload(std::vector<uint8_t>& data, std::array<uint8_t, 12>& tag)
+bool WorldSocket::encryptForeverPayload(
+    std::vector<uint8_t>& data,
+    std::array<uint8_t, 12>& tag)
 {
     using namespace AscEmu::Version::Forever;
 
@@ -1226,7 +1526,10 @@ bool WorldSocket::encryptForeverPayload(std::vector<uint8_t>& data, std::array<u
 
     std::array<uint8_t, 12> iv{};
     std::memcpy(iv.data(), &m_foreverCryptoSendCounter, sizeof(m_foreverCryptoSendCounter));
-    std::memcpy(iv.data() + sizeof(m_foreverCryptoSendCounter), &WorldProtocol::ServerIvMagic, sizeof(WorldProtocol::ServerIvMagic));
+    std::memcpy(
+        iv.data() + sizeof(m_foreverCryptoSendCounter),
+        &WorldProtocol::ServerIvMagic,
+        sizeof(WorldProtocol::ServerIvMagic));
 
     EVP_CIPHER_CTX* context = EVP_CIPHER_CTX_new();
     if (context == nullptr)
@@ -1255,7 +1558,9 @@ bool WorldSocket::encryptForeverPayload(std::vector<uint8_t>& data, std::array<u
     return success;
 }
 
-bool WorldSocket::decryptForeverPayload(std::vector<uint8_t>& data, const std::array<uint8_t, 12>& tag)
+bool WorldSocket::decryptForeverPayload(
+    std::vector<uint8_t>& data,
+    const std::array<uint8_t, 12>& tag)
 {
     using namespace AscEmu::Version::Forever;
 
@@ -1264,7 +1569,10 @@ bool WorldSocket::decryptForeverPayload(std::vector<uint8_t>& data, const std::a
 
     std::array<uint8_t, 12> iv{};
     std::memcpy(iv.data(), &m_foreverCryptoRecvCounter, sizeof(m_foreverCryptoRecvCounter));
-    std::memcpy(iv.data() + sizeof(m_foreverCryptoRecvCounter), &WorldProtocol::ClientIvMagic, sizeof(WorldProtocol::ClientIvMagic));
+    std::memcpy(
+        iv.data() + sizeof(m_foreverCryptoRecvCounter),
+        &WorldProtocol::ClientIvMagic,
+        sizeof(WorldProtocol::ClientIvMagic));
 
     EVP_CIPHER_CTX* context = EVP_CIPHER_CTX_new();
     if (context == nullptr)
@@ -1314,15 +1622,23 @@ bool WorldSocket::processForeverEncryptedPacket()
         const uint32_t packetSize = readUInt32LE(header.data());
         if (packetSize < sizeof(uint32_t) || packetSize > WorldProtocol::MaxPacketSize)
         {
-            sLogger.failure("WorldSocket::Forever: invalid encrypted packet size {}.", packetSize);
+            sLogger.failure(
+                "WorldSocket::Forever: invalid encrypted packet size {}.",
+                packetSize);
             disconnect();
             m_foreverWorldState = ForeverWorldState::Disabled;
             return false;
         }
 
         m_foreverEncryptedPacketSize = packetSize;
-        std::memcpy(m_foreverEncryptedPacketTag.data(), header.data() + sizeof(uint32_t), m_foreverEncryptedPacketTag.size());
-        std::memcpy(m_foreverEncryptedOpcode.data(), header.data() + WorldProtocol::ServerHeaderSize, m_foreverEncryptedOpcode.size());
+        std::memcpy(
+            m_foreverEncryptedPacketTag.data(),
+            header.data() + sizeof(uint32_t),
+            m_foreverEncryptedPacketTag.size());
+        std::memcpy(
+            m_foreverEncryptedOpcode.data(),
+            header.data() + WorldProtocol::ServerHeaderSize,
+            m_foreverEncryptedOpcode.size());
         m_foreverPacketRemaining = packetSize - static_cast<uint32_t>(sizeof(uint32_t));
         m_foreverEncryptedHeaderReady = true;
     }
@@ -1331,9 +1647,15 @@ bool WorldSocket::processForeverEncryptedPacket()
         return false;
 
     std::vector<uint8_t> encrypted(m_foreverEncryptedPacketSize);
-    std::memcpy(encrypted.data(), m_foreverEncryptedOpcode.data(), m_foreverEncryptedOpcode.size());
+    std::memcpy(
+        encrypted.data(),
+        m_foreverEncryptedOpcode.data(),
+        m_foreverEncryptedOpcode.size());
 
-    if (m_foreverPacketRemaining != 0 && !readBuffer.Read(encrypted.data() + sizeof(uint32_t), m_foreverPacketRemaining))
+    if (m_foreverPacketRemaining != 0 &&
+        !readBuffer.Read(
+            encrypted.data() + sizeof(uint32_t),
+            m_foreverPacketRemaining))
     {
         return false;
     }
@@ -1349,7 +1671,9 @@ bool WorldSocket::processForeverEncryptedPacket()
 
     if (!decryptForeverPayload(encrypted, tag))
     {
-        sLogger.failure("WorldSocket::Forever: AES-256-GCM authentication failed at recv counter {}.", counter);
+        sLogger.failure(
+            "WorldSocket::Forever: AES-256-GCM authentication failed at recv counter {}.",
+            counter);
         disconnect();
         m_foreverWorldState = ForeverWorldState::Disabled;
         return false;

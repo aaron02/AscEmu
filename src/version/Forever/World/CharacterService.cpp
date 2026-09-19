@@ -52,34 +52,8 @@ namespace
         return result != nullptr;
     }
 
-    std::vector<AscEmu::Version::Forever::Packets::RaceClassAvailability> loadForeverRaceClassAvailability()
-    {
-        std::vector<AscEmu::Version::Forever::Packets::RaceClassAvailability> availability;
-        auto result = WorldDatabase.query("SELECT DISTINCT pi.race, pi.class FROM playercreateinfo pi WHERE pi.build=(SELECT MAX(build) FROM playercreateinfo buildspecific WHERE buildspecific.race=pi.race AND buildspecific.class=pi.class AND buildspecific.build <= %u) ORDER BY pi.race, pi.class", VERSION_STRING);
-        if (result == nullptr)
-            return availability;
 
-        do
-        {
-            Field* fields = result->fetch();
-            const uint8_t raceId = fields[0].asUint8();
-            const uint8_t classId = fields[1].asUint8();
-            auto race = std::find_if(availability.begin(), availability.end(), [raceId](const auto& entry) { return entry.raceId == raceId; });
-            if (race == availability.end())
-            {
-                AscEmu::Version::Forever::Packets::RaceClassAvailability entry;
-                entry.raceId = raceId;
-                availability.emplace_back(std::move(entry));
-                race = availability.end() - 1;
-            }
-            race->classes.push_back({ classId });
-        }
-        while (result->nextRow());
-
-        return availability;
-    }
 }
-
 
 bool WorldSocket::sendForeverEmptyCharacterList()
 {
@@ -87,24 +61,20 @@ bool WorldSocket::sendForeverEmptyCharacterList()
 
     const uint64_t counterBefore = m_foreverCryptoSendCounter;
 
-    // Midnight-style split: AccountDataTimes/TutorialFlags are bootstrap state,
-    // not part of each enum reply. The enum request itself gets the character
-    // list followed by the empty account-item collection.
-    if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ENUM_CHARACTERS_RESULT, CharacterSelectBootstrap::EmptyCharacterList.data(), static_cast<uint32_t>(CharacterSelectBootstrap::EmptyCharacterList.size())))
+    if (!sendForeverPacket(Opcode::SMSG_ENUM_CHARACTERS_RESULT, CharacterSelectBootstrap::EmptyCharacterList.data(), static_cast<uint32_t>(CharacterSelectBootstrap::EmptyCharacterList.size())))
     {
         sLogger.failure("WorldSocket::Forever: failed to send SMSG_ENUM_CHARACTERS_RESULT.");
         return false;
     }
 
     ByteBuffer collection = buildForeverEmptyAccountItemCollectionData();
-    if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ACCOUNT_ITEM_COLLECTION_DATA, collection.contents(), static_cast<uint32_t>(collection.size())))
+    if (!sendForeverPacket(Opcode::SMSG_ACCOUNT_ITEM_COLLECTION_DATA, collection.contents(), static_cast<uint32_t>(collection.size())))
     {
         sLogger.failure("WorldSocket::Forever: failed to send SMSG_ACCOUNT_ITEM_COLLECTION_DATA.");
         return false;
     }
 
-    sLogger.info("WorldSocket::Forever: sent request-driven empty character enum Midnight-style: " "enum={} ({} byte(s)), collection={}; crypto_counter={} -> {}.", "SMSG_ENUM_CHARACTERS_RESULT", CharacterSelectBootstrap::EmptyCharacterList.size(), "SMSG_ACCOUNT_ITEM_COLLECTION_DATA", counterBefore, m_foreverCryptoSendCounter);
-
+    sLogger.info("WorldSocket::Forever: sent request-driven empty character enum: enum={} byte(s), collection={} byte(s), crypto_counter={} -> {}.", CharacterSelectBootstrap::EmptyCharacterList.size(), collection.size(), counterBefore, m_foreverCryptoSendCounter);
     return true;
 }
 
@@ -420,7 +390,7 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
     }
 
     const uint32_t virtualRealmAddress = ((m_foreverRegionId & 0xFFU) << 24U) | ((m_foreverBattlegroupId & 0xFFU) << 16U) | (m_foreverRealmId & 0xFFFFU);
-    const auto raceClassAvailability = loadForeverRaceClassAvailability();
+    const auto& raceClassAvailability = AscEmu::Version::Forever::Packets::getRaceClassAvailability69913();
     ByteBuffer wire = AscEmu::Version::Forever::Packets::buildCharacterEnumResponse(virtualRealmAddress, m_foreverRealmId, characters, raceClassAvailability);
 
     for (size_t index = 0; index < characters.size(); ++index)

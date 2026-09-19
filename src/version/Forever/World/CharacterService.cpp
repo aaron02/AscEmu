@@ -10,7 +10,6 @@ This file is released under the MIT license. See README-MIT for more information
 #include "version/Forever/Defines/ObjectGuid.hpp"
 #include "version/Forever/Opcodes.hpp"
 #include "version/Forever/Packets/CharacterPackets.hpp"
-#include "version/Forever/World/CharacterEnumReference69913.hpp"
 #include "version/Forever/World/CharacterSelectBootstrap.hpp"
 #include "version/Forever/World/ProtocolUtils.hpp"
 #include "world/Server/WorldSession.h"
@@ -23,8 +22,6 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Utilities/Strings.hpp"
 
 #include <algorithm>
-#include <array>
-#include <cstring>
 #include <ctime>
 #include <memory>
 #include <string>
@@ -55,29 +52,32 @@ namespace
         return result != nullptr;
     }
 
-    struct CharacterEnumLayout69913
+    std::vector<AscEmu::Version::Forever::Packets::RaceClassAvailability> loadForeverRaceClassAvailability()
     {
-        static constexpr size_t HeaderSize = 34U;
-        static constexpr size_t CharacterSize = 701U;
-        static constexpr size_t GuidSize = 8U;
-        static constexpr size_t CustomizationOffset = 580U;
-        static constexpr size_t ReferenceCustomizationCount = 10U;
-        static constexpr size_t CustomizationSize = 8U;
-        static constexpr size_t NameBitsAbsolute = 702U;
-        static constexpr size_t NameAbsolute = 704U;
-        static constexpr size_t ReferenceFirstNameLength = 4U;
-        static constexpr size_t ReferenceLastNameLength = 4U;
-        static constexpr uint8_t NameFlags = 0x0CU;
-        static constexpr size_t CharacterStart = HeaderSize;
-        static constexpr size_t CharacterEnd = CharacterStart + CharacterSize;
-        static constexpr size_t ReferenceNameLength = ReferenceFirstNameLength + ReferenceLastNameLength;
-        static constexpr size_t TailAfterName = NameAbsolute + ReferenceNameLength;
+        std::vector<AscEmu::Version::Forever::Packets::RaceClassAvailability> availability;
+        auto result = WorldDatabase.query("SELECT DISTINCT pi.race, pi.class FROM playercreateinfo pi WHERE pi.build=(SELECT MAX(build) FROM playercreateinfo buildspecific WHERE buildspecific.race=pi.race AND buildspecific.class=pi.class AND buildspecific.build <= %u) ORDER BY pi.race, pi.class", VERSION_STRING);
+        if (result == nullptr)
+            return availability;
 
-        static constexpr bool isValid(size_t referenceSize)
+        do
         {
-            return referenceSize >= CharacterEnd && TailAfterName <= CharacterEnd && CharacterStart + GuidSize + CustomizationOffset + ReferenceCustomizationCount * CustomizationSize == NameBitsAbsolute;
+            Field* fields = result->fetch();
+            const uint8_t raceId = fields[0].asUint8();
+            const uint8_t classId = fields[1].asUint8();
+            auto race = std::find_if(availability.begin(), availability.end(), [raceId](const auto& entry) { return entry.raceId == raceId; });
+            if (race == availability.end())
+            {
+                AscEmu::Version::Forever::Packets::RaceClassAvailability entry;
+                entry.raceId = raceId;
+                availability.emplace_back(std::move(entry));
+                race = availability.end() - 1;
+            }
+            race->classes.push_back({ classId });
         }
-    };
+        while (result->nextRow());
+
+        return availability;
+    }
 }
 
 
@@ -312,24 +312,6 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
         return false;
     }
 
-    struct DbCharacter
-    {
-        uint64_t guid{0};
-        uint8_t level{0};
-        uint8_t race{0};
-        uint8_t charClass{0};
-        uint8_t gender{0};
-        std::string firstName;
-        std::string lastName;
-        float x{0.0f};
-        float y{0.0f};
-        float z{0.0f};
-        int32_t mapId{0};
-        int32_t zoneId{0};
-        uint16_t orderPosition{0};
-        std::vector<AscEmu::Version::Forever::Packets::CharacterCustomizationChoice> customizations;
-    };
-
     const uint32_t accountId = m_session->GetAccountId();
 
     // Seed missing order rows for existing characters before reading the enum.
@@ -361,7 +343,7 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
         while (missingOrder->nextRow());
     }
 
-    auto result = CharacterDatabase.query("SELECT c.guid, c.level, c.race, c.class, c.gender, c.name, " "c.positionX, c.positionY, c.positionZ, c.mapId, c.zoneId, " "COALESCE(o.listPosition, 65535) " "FROM characters c " "LEFT JOIN character_list_order o ON o.acct=c.acct AND o.guid=c.guid " "WHERE c.acct=%u " "ORDER BY COALESCE(o.listPosition, 65535), c.guid " "LIMIT 10", accountId);
+    auto result = CharacterDatabase.query("SELECT c.guid, c.level, c.race, c.class, c.gender, c.name, " "c.positionX, c.positionY, c.positionZ, c.mapId, c.zoneId " "FROM characters c " "LEFT JOIN character_list_order o ON o.acct=c.acct AND o.guid=c.guid " "WHERE c.acct=%u " "ORDER BY COALESCE(o.listPosition, 65535), c.guid " "LIMIT 10", accountId);
 
     if (result == nullptr)
     {
@@ -369,14 +351,14 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
         return sendForeverEmptyCharacterList();
     }
 
-    std::vector<DbCharacter> characters;
+    std::vector<AscEmu::Version::Forever::Packets::CharacterEnumEntry> characters;
     characters.reserve(10);
 
     do
     {
         Field* fields = result->fetch();
 
-        DbCharacter character;
+        AscEmu::Version::Forever::Packets::CharacterEnumEntry character;
         character.guid = fields[0].asUint64();
         character.level = fields[1].asUint8();
         character.race = fields[2].asUint8();
@@ -410,7 +392,6 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
         character.z = fields[8].asFloat();
         character.mapId = fields[9].asInt32();
         character.zoneId = fields[10].asInt32();
-        character.orderPosition = fields[11].asUint16();
 
         characters.emplace_back(std::move(character));
     }
@@ -425,7 +406,7 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
             Field* customizationFields = customizationResult->fetch();
             const uint64_t guid = customizationFields[0].asUint64();
 
-            auto characterIt = std::find_if(characters.begin(), characters.end(), [guid](const DbCharacter& character) { return character.guid == guid; });
+            auto characterIt = std::find_if(characters.begin(), characters.end(), [guid](const auto& character) { return character.guid == guid; });
 
             if (characterIt == characters.end())
                 continue;
@@ -438,125 +419,18 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
         while (customizationResult->nextRow());
     }
 
-    // Proven 69913 CharacterInfo reference accepted by the 69893 client:
-    //
-    //   34-byte enum header
-    //   701-byte CharacterInfo
-    //   396-byte race/class availability tail
-    //
-    // The reference character uses an 8-byte packed GUID and "Test"/"Hims".
-    // The two bytes directly before "TestHims" are:
-    //   0x10 0x4C = 000100 000100 1100
-    //               first=4 last=4 flags=0xC
-    //
-    // This confirms Forever has two 6-bit name lengths plus four existing
-    // CharacterInfo flags. Rebuild those 16 bits for every DB character.
-    const auto& reference = CharacterEnumReference69913::OneCharacterEnum460018;
-    if (!CharacterEnumLayout69913::isValid(reference.size()))
+    const uint32_t virtualRealmAddress = ((m_foreverRegionId & 0xFFU) << 24U) | ((m_foreverBattlegroupId & 0xFFU) << 16U) | (m_foreverRealmId & 0xFFFFU);
+    const auto raceClassAvailability = loadForeverRaceClassAvailability();
+    ByteBuffer wire = AscEmu::Version::Forever::Packets::buildCharacterEnumResponse(virtualRealmAddress, m_foreverRealmId, characters, raceClassAvailability);
+
+    for (size_t index = 0; index < characters.size(); ++index)
     {
-        sLogger.failure("WorldSocket::Forever: invalid CharacterInfo reference layout; reference_size={}.", reference.size());
-        return false;
+        const auto& character = characters[index];
+        const std::vector<uint8_t> packedGuid = ObjectGuid::createPlayer(m_foreverRealmId, character.guid).pack();
+        sLogger.info("WorldSocket::Forever: enum character #{} guid={} first='{}' last='{}' race={} class={} gender={} level={} map={} zone={} customizations={} packed_guid={} byte(s).", index + 1U, character.guid, character.firstName, character.lastName, character.race, character.charClass, character.gender, character.level, character.mapId, character.zoneId, character.customizations.size(), packedGuid.size());
     }
 
-    std::vector<uint8_t> wire;
-    wire.reserve(reference.size() + characters.size() * 704U);
-
-    // Start with the accepted one-character header, then patch only the
-    // character count and MaxCharacterLevel.
-    wire.insert(wire.end(), reference.begin(), reference.begin() + CharacterEnumLayout69913::HeaderSize);
-
-    const uint32_t characterCount = static_cast<uint32_t>(characters.size());
-    std::memcpy(wire.data() + 6U, &characterCount, sizeof(characterCount));
-
-    int32_t maxCharacterLevel = 1;
-    for (const DbCharacter& character : characters)
-        maxCharacterLevel = std::max<int32_t>(maxCharacterLevel, static_cast<int32_t>(character.level));
-    std::memcpy(wire.data() + 10U, &maxCharacterLevel, sizeof(maxCharacterLevel));
-
-    const uint32_t virtualRealmAddress =
-        ((m_foreverRegionId & 0xFFU) << 24U) |
-        ((m_foreverBattlegroupId & 0xFFU) << 16U) |
-        (m_foreverRealmId & 0xFFFFU);
-
-    uint16_t listPosition = 0;
-    for (const DbCharacter& character : characters)
-    {
-        const std::vector<uint8_t> packedGuid =
-            ObjectGuid::createPlayer(m_foreverRealmId, character.guid).pack();
-        wire.insert(wire.end(), packedGuid.begin(), packedGuid.end());
-
-        // Copy only the fixed CharacterInfo body. The reference contains ten
-        // appearance customizations after this point; those must never be
-        // cloned to every character.
-        std::vector<uint8_t> prefix(reference.begin() + CharacterEnumLayout69913::CharacterStart + CharacterEnumLayout69913::GuidSize, reference.begin() + CharacterEnumLayout69913::CharacterStart + CharacterEnumLayout69913::GuidSize + CharacterEnumLayout69913::CustomizationOffset);
-
-        auto patch = [&](size_t offset, const auto& value)
-        {
-            std::memcpy(prefix.data() + offset, &value, sizeof(value));
-        };
-
-        patch(0U, virtualRealmAddress);
-        // Official Forever 69913 two-character capture has this field set
-        // to zero for both CharacterInfo records. Visible ordering is carried
-        // separately in account-data type 16, not by this field.
-        const uint16_t foreverListPosition = 0;
-        patch(4U, foreverListPosition);
-        prefix[6U] = character.race;
-        prefix[7U] = character.gender;
-        prefix[8U] = character.charClass;
-        const uint32_t customizationCount = static_cast<uint32_t>(character.customizations.size());
-        patch(11U, customizationCount);
-        prefix[15U] = character.level;
-        patch(16U, character.mapId);
-        patch(20U, character.zoneId);
-        patch(24U, character.x);
-        patch(28U, character.y);
-        patch(32U, character.z);
-
-        const uint64_t guildClubMemberId =
-            character.guid |
-            (static_cast<uint64_t>(m_foreverRealmId & 0x0FFFU) << 48U);
-        patch(36U, guildClubMemberId);
-
-        wire.insert(wire.end(), prefix.begin(), prefix.end());
-
-        for (const auto& customization : character.customizations)
-        {
-            const uint8_t* optionBytes = reinterpret_cast<const uint8_t*>(&customization.optionId);
-            wire.insert(wire.end(), optionBytes, optionBytes + sizeof(customization.optionId));
-
-            const uint8_t* choiceBytes = reinterpret_cast<const uint8_t*>(&customization.choiceId);
-            wire.insert(wire.end(), choiceBytes, choiceBytes + sizeof(customization.choiceId));
-        }
-
-        const uint16_t firstLength =
-            static_cast<uint16_t>(character.firstName.size());
-        const uint16_t lastLength =
-            static_cast<uint16_t>(character.lastName.size());
-
-        // MSB-first: [firstName:6][lastName:6][flags:4].
-        const uint16_t nameBits =
-            static_cast<uint16_t>((firstLength << 10U) | (lastLength << 4U) | CharacterEnumLayout69913::NameFlags);
-
-        wire.push_back(static_cast<uint8_t>((nameBits >> 8U) & 0xFFU));
-        wire.push_back(static_cast<uint8_t>(nameBits & 0xFFU));
-
-        wire.insert(wire.end(), character.firstName.begin(), character.firstName.end());
-        wire.insert(wire.end(), character.lastName.begin(), character.lastName.end());
-
-        // Preserve the proven post-name CharacterInfo fields.
-        wire.insert(wire.end(), reference.begin() + CharacterEnumLayout69913::TailAfterName, reference.begin() + CharacterEnumLayout69913::CharacterEnd);
-
-        sLogger.info("WorldSocket::Forever: enum character #{} guid={} first='{}' last='{}' race={} class={} gender={} level={} map={} zone={} customizations={} packed_guid={} byte(s).", static_cast<uint32_t>(listPosition) + 1U, character.guid, character.firstName, character.lastName, character.race, character.charClass, character.gender, character.level, character.mapId, character.zoneId, character.customizations.size(), packedGuid.size());
-
-        ++listPosition;
-    }
-
-    // Race/class availability is account-independent; preserve the accepted
-    // reference tail after the single reference CharacterInfo.
-    wire.insert(wire.end(), reference.begin() + CharacterEnumLayout69913::CharacterEnd, reference.end());
-
-    if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ENUM_CHARACTERS_RESULT, wire.data(), static_cast<uint32_t>(wire.size())))
+    if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ENUM_CHARACTERS_RESULT, wire.contents(), static_cast<uint32_t>(wire.size())))
         return false;
 
     // Official Forever sends 0x00460019 immediately after a non-empty
@@ -565,7 +439,7 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
     ByteBuffer characterListState;
     characterListState << static_cast<uint32_t>(characters.size());
 
-    for (const DbCharacter& character : characters)
+    for (const AscEmu::Version::Forever::Packets::CharacterEnumEntry& character : characters)
     {
         characterListState << uint8_t(0);
 
@@ -588,7 +462,7 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
             return false;
     }
 
-    sLogger.info("WorldSocket::Forever: sent DB-backed character enum account={} characters={} max_level={} payload={} byte(s), collection={}.", accountId, characters.size(), maxCharacterLevel, wire.size(), includeCollection ? "yes" : "no");
+    sLogger.info("WorldSocket::Forever: sent DB-backed character enum account={} characters={} payload={} byte(s), races={} collection={}.", accountId, characters.size(), wire.size(), raceClassAvailability.size(), includeCollection ? "yes" : "no");
 
     return true;
 }

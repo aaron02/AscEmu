@@ -145,4 +145,136 @@ namespace AscEmu::Version::Forever::Packets
         packet.append(packedGuid.data(), packedGuid.size());
         return packet;
     }
+
+    ByteBuffer buildCharacterEnumResponse(uint32_t virtualRealmAddress, uint32_t realmId, const std::vector<CharacterEnumEntry>& characters, const std::vector<RaceClassAvailability>& raceClassAvailability)
+    {
+        constexpr uint32_t ClassDisableMask69913 = 0x7FFFFA20U;
+        constexpr uint32_t CharacterFlags2_69913 = 0x00000004U;
+        constexpr uint32_t CharacterFlags4_69913 = 0x00040120U;
+        constexpr int32_t CharacterSaveVersion69913 = 76;
+        constexpr uint32_t CharacterInfoUnknown69913 = 2U;
+        constexpr uint8_t CharacterNameFlags69913 = 0x0CU;
+
+        ByteBuffer packet;
+
+        packet.writeBit(1); // Success
+        packet.writeBit(1); // 69913 glue flag
+        packet.writeBit(0);
+        packet.writeBit(0);
+        packet.writeBit(1); // 69913 glue flag
+        packet.writeBit(0);
+        packet.writeBit(0);
+        packet.writeBit(0);
+        packet.writeBit(1); // ClassDisableMask present
+        packet.writeBit(0); // ForceCharacterListSort
+        packet.flushBits();
+
+        packet << uint32_t(0); // RegionwideCharacters
+        packet << uint32_t(characters.size());
+
+        int32_t maxCharacterLevel = 1;
+        for (const CharacterEnumEntry& character : characters)
+            maxCharacterLevel = std::max<int32_t>(maxCharacterLevel, character.level);
+
+        packet << maxCharacterLevel;
+        packet << uint32_t(raceClassAvailability.size());
+        packet << uint32_t(0); // UnlockedConditionalAppearances
+        packet << uint32_t(0); // RaceLimitDisables
+        packet << uint32_t(0); // WarbandGroups
+        packet << ClassDisableMask69913;
+
+        for (const CharacterEnumEntry& character : characters)
+        {
+            const std::vector<uint8_t> packedGuid = ObjectGuid::createPlayer(realmId, character.guid).pack();
+            packet.append(packedGuid.data(), packedGuid.size());
+            packet << virtualRealmAddress;
+            packet << uint16_t(0); // 69913 carries visible ordering in account-data type 16
+            packet << character.race << character.gender << character.charClass;
+            packet << int16_t(0); // SpecID
+            packet << uint32_t(character.customizations.size());
+            packet << character.level;
+            packet << character.mapId << character.zoneId;
+            packet << character.x << character.y << character.z;
+            packet << (character.guid | (static_cast<uint64_t>(realmId & 0x0FFFU) << 48U));
+
+            const std::vector<uint8_t> emptyGuildGuid = ObjectGuid::empty().pack();
+            packet.append(emptyGuildGuid.data(), emptyGuildGuid.size());
+
+            packet << uint32_t(0);
+            packet << CharacterFlags2_69913;
+            packet << uint32_t(0);
+            packet << CharacterFlags4_69913;
+            packet << uint8_t(0); // CantLoginReason
+            packet << uint32_t(0) << uint32_t(0) << uint32_t(0); // Pet
+
+            for (uint8_t slot = 0; slot < 19U; ++slot)
+            {
+                packet << uint32_t(0) << uint32_t(0);
+                packet << uint8_t(0) << uint8_t(0);
+                packet << uint32_t(0) << uint32_t(0);
+                packet << int32_t(0) << uint8_t(0);
+            }
+
+            packet << CharacterSaveVersion69913;
+            packet << uint64_t(0); // CreateTime
+            packet << uint64_t(0); // LastActiveTime
+            packet << int32_t(0); // LastLoginVersion
+            for (uint8_t i = 0; i < 5U; ++i)
+                packet << int32_t(-1);
+            packet << uint32_t(0) << uint32_t(0); // ProfessionIds
+            packet << int32_t(0); // TimerunningSeasonID
+            packet << uint32_t(0); // OverrideSelectScreenFileDataID
+            packet << uint32_t(0); // RealmQueue
+            packet << CharacterInfoUnknown69913;
+
+            for (const CharacterCustomizationChoice& customization : character.customizations)
+                packet << customization.optionId << customization.choiceId;
+
+            const uint32_t firstNameLength = static_cast<uint32_t>(std::min<size_t>(character.firstName.size(), 63U));
+            const uint32_t lastNameLength = static_cast<uint32_t>(std::min<size_t>(character.lastName.size(), 63U));
+            packet.writeBits(firstNameLength, 6);
+            packet.writeBits(lastNameLength, 6);
+            packet.writeBits(CharacterNameFlags69913, 4);
+            packet.flushBits();
+            if (firstNameLength != 0U)
+                packet.append(reinterpret_cast<const uint8_t*>(character.firstName.data()), firstNameLength);
+            if (lastNameLength != 0U)
+                packet.append(reinterpret_cast<const uint8_t*>(character.lastName.data()), lastNameLength);
+
+            packet.writeBit(0); // BoostInProgress
+            packet.writeBit(0); // RpeAvailable
+            packet.flushBits();
+            packet << uint32_t(0); // RestrictionFlags
+            packet << uint32_t(0); // MailSenders count
+            packet << uint32_t(0); // MailSenderTypes count
+            packet << uint32_t(0); // NoRpeReason
+            packet << uint8_t(0) << uint8_t(0) << uint8_t(0) << uint8_t(0xFF) << uint8_t(0) << uint8_t(0); // 69913 restriction tail
+        }
+
+        for (const RaceClassAvailability& race : raceClassAvailability)
+        {
+            packet << int8_t(race.raceId);
+            packet << uint32_t(race.classes.size());
+            for (const ClassAvailability& charClass : race.classes)
+            {
+                packet << int8_t(charClass.classId);
+                packet << uint32_t(0); // AchievementID
+                packet.writeBit(1); // HasExpansion
+                packet.writeBit(1); // HasUnlockedAchievement
+                packet.writeBit(1); // HasEntitlement
+                packet.flushBits();
+            }
+
+            packet.writeBit(1); // HasUnlockedLicense
+            packet.writeBit(0); // HasUnlockedAchievement
+            packet.writeBit(0); // HasHeritageArmorUnlockAchievement
+            packet.writeBit(1); // HasEntitlement
+            packet.writeBit(0); // HideRaceOnClient
+            packet.writeBit(0); // FactionBalanceDisabled
+            packet.writeBit(0); // DoesNotHaveAvailableClasses
+            packet.flushBits();
+        }
+
+        return packet;
+    }
 }

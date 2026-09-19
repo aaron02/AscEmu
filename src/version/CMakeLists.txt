@@ -3,7 +3,7 @@
 if (ASCEMU_VERSION STREQUAL "Midnight")
     # Midnight is fully self-contained in version_client, including World/,
     # packet handlers and profile-local BattleNetComm code.
-    file(GLOB_RECURSE MIDNIGHT_VERSION_SRCS
+    file(GLOB_RECURSE MIDNIGHT_VERSION_SRCS CONFIGURE_DEPENDS
         Midnight/*.cpp
         Midnight/*.h
         Midnight/*.hpp
@@ -20,7 +20,7 @@ if (ASCEMU_VERSION STREQUAL "Midnight")
 elseif (ASCEMU_VERSION STREQUAL "Forever")
     # Forever is fully self-contained in version_client, including World/,
     # WorldSocket, VersionAdapter and its own BattleNetComm implementation.
-    file(GLOB_RECURSE FOREVER_VERSION_SRCS
+    file(GLOB_RECURSE FOREVER_VERSION_SRCS CONFIGURE_DEPENDS
         Forever/*.cpp
         Forever/*.h
         Forever/*.hpp

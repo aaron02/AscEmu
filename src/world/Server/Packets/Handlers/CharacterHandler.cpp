@@ -56,6 +56,7 @@ This file is released under the MIT license. See README-MIT for more information
 #if defined(AE_FOREVER)
 #include "version/Forever/Opcodes.hpp"
 #include "version/Forever/World/InWorldBootstrap.hpp"
+#include "version/Forever/World/ObjectUpdate.hpp"
 #include "version/Forever/World/PostAuthBootstrap.hpp"
 #include "WoWGuid.hpp"
 #endif
@@ -977,7 +978,15 @@ void WorldSession::fullLoginForever(Player* player)
         return;
     }
 
-    sLogger.info("WorldSession::Forever: server-side player login complete for {} ({}) map={} instance={} position=({}, {}, {}, {}); sent verified 69913 world transition prefix through LOGIN_VERIFY_WORLD and LOGIN_SET_TIME_SPEED.", player->getName(), player->getGuidLow(), player->GetMapId(), player->GetInstanceID(), player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation());
+    const std::vector<uint8_t> selfUpdate = AscEmu::Version::Forever::ObjectUpdate::buildTemporary69913SelfCreatePacket(static_cast<uint16_t>(player->GetMapId()), packedPlayerGuid, player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation());
+    if (selfUpdate.empty() || !instanceSocket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_UPDATE_OBJECT, selfUpdate.data(), static_cast<uint32_t>(selfUpdate.size())))
+    {
+        sLogger.failure("WorldSession::Forever: failed to send temporary 69913 self SMSG_UPDATE_OBJECT for {} ({}).", player->getName(), player->getGuidLow());
+        Disconnect();
+        return;
+    }
+
+    sLogger.info("WorldSession::Forever: server-side player login complete for {} ({}) map={} instance={} position=({}, {}, {}, {}); sent verified 69913 transition and temporary self CreateObject2 payload={} byte(s).", player->getName(), player->getGuidLow(), player->GetMapId(), player->GetInstanceID(), player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation(), selfUpdate.size());
 }
 #endif
 

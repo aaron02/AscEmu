@@ -16,10 +16,11 @@ namespace AscEmu::Version::Forever
         bool supported;
     };
 
-    // No public Forever client build has been pinned yet. Do not copy Midnight
-    // opcodes or auth constants here: add an exact profile once the client is
-    // available and verified.
-    inline constexpr BuildProfile ActiveBuild{0U, "Forever", false};
+    // Verified Forever beta client profile. Protocol constants and opcodes stay
+    // separate from Midnight and must be filled only from Forever observations.
+    inline constexpr BuildProfile ActiveBuild{69893U, "Forever 1.60.1", true};
+    inline constexpr uint32_t Build = ActiveBuild.build;
+
     inline constexpr bool supportsBuild(uint32_t build)
     {
         return ActiveBuild.supported && build == ActiveBuild.build;

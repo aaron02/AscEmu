@@ -50,6 +50,9 @@ namespace AscEmu::Battlenet
         bool handleRealmListTicketRequest(uint32_t token, const std::string& commandName, const uint8_t* payload, size_t payloadSize);
         bool handleRealmListRequest(uint32_t token, const std::string& commandName);
         bool handleRealmJoinRequest(uint32_t token, const uint8_t* payload, size_t payloadSize);
+        bool handleFetchBleepProxiesRequest(uint32_t token, const std::string& commandName);
+        bool handleSuperDistrictListRequest(uint32_t token, const std::string& commandName);
+        bool handleLastCharPlayedRequest(uint32_t token, const std::string& commandName);
         bool sendRpcRequest(uint32_t serviceHash, uint32_t methodId, uint32_t token, const std::vector<uint8_t>& payload);
         bool sendRpcResponse(uint32_t token, const std::vector<uint8_t>& payload);
         bool writeTlsPlainText(const uint8_t* data, size_t size);

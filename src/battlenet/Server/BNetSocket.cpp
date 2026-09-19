@@ -305,6 +305,188 @@ namespace AscEmu::Battlenet
             return out.str();
         }
 
+        std::string makeCompactHex(const uint8_t* data, size_t size, size_t maxBytes = MAX_DIAGNOSTIC_DUMP_SIZE)
+        {
+            if (data == nullptr || size == 0)
+                return "<empty>";
+
+            const size_t dumpSize = std::min(size, maxBytes);
+            std::ostringstream out;
+            out << std::hex << std::uppercase << std::setfill('0');
+            for (size_t index = 0; index < dumpSize; ++index)
+            {
+                if (index != 0)
+                    out << ' ';
+                out << std::setw(2) << static_cast<unsigned>(data[index]);
+            }
+
+            if (dumpSize < size)
+                out << " ... (" << std::dec << (size - dumpSize) << " more byte(s))";
+
+            return out.str();
+        }
+
+        std::string makePrintableDiagnostic(const uint8_t* data, size_t size, size_t maxBytes = 256u)
+        {
+            if (data == nullptr || size == 0)
+                return "<empty>";
+
+            const size_t textSize = std::min(size, maxBytes);
+            bool printable = true;
+            for (size_t index = 0; index < textSize; ++index)
+            {
+                const unsigned char c = data[index];
+                if (std::isprint(c) == 0 && std::isspace(c) == 0)
+                {
+                    printable = false;
+                    break;
+                }
+            }
+
+            if (!printable)
+                return makeCompactHex(data, size, maxBytes);
+
+            std::string text(reinterpret_cast<const char*>(data), textSize);
+            if (textSize < size)
+                text += "...";
+            return '"' + jsonEscape(text) + '"';
+        }
+
+        std::string describeGameUtilitiesAttributes(const uint8_t* payload, size_t payloadSize)
+        {
+            if (payload == nullptr || payloadSize == 0)
+                return "<none>";
+
+            std::ostringstream out;
+            const uint8_t* cursor = payload;
+            const uint8_t* const end = payload + payloadSize;
+            size_t attributeIndex = 0;
+
+            while (cursor < end)
+            {
+                uint64_t key = 0;
+                if (!readVarInt(cursor, end, key))
+                {
+                    out << " [parse-error: outer tag]";
+                    break;
+                }
+
+                const uint32_t fieldNumber = static_cast<uint32_t>(key >> 3);
+                const uint32_t wireType = static_cast<uint32_t>(key & 0x07u);
+                if (fieldNumber != 1u || wireType != 2u)
+                {
+                    if (!skipProtobufField(wireType, cursor, end))
+                    {
+                        out << " [parse-error: outer field " << fieldNumber << ']';
+                        break;
+                    }
+                    continue;
+                }
+
+                const uint8_t* attributeData = nullptr;
+                size_t attributeSize = 0;
+                if (!readLengthDelimited(cursor, end, attributeData, attributeSize))
+                {
+                    out << " [parse-error: attribute length]";
+                    break;
+                }
+
+                std::string name;
+                const uint8_t* variantData = nullptr;
+                size_t variantSize = 0;
+                const uint8_t* attributeCursor = attributeData;
+                const uint8_t* const attributeEnd = attributeData + attributeSize;
+
+                while (attributeCursor < attributeEnd)
+                {
+                    uint64_t attributeKey = 0;
+                    if (!readVarInt(attributeCursor, attributeEnd, attributeKey))
+                        break;
+
+                    const uint32_t attributeField = static_cast<uint32_t>(attributeKey >> 3);
+                    const uint32_t attributeWire = static_cast<uint32_t>(attributeKey & 0x07u);
+                    if (attributeField == 1u && attributeWire == 2u)
+                    {
+                        const uint8_t* data = nullptr;
+                        size_t size = 0;
+                        if (!readLengthDelimited(attributeCursor, attributeEnd, data, size))
+                            break;
+                        name.assign(reinterpret_cast<const char*>(data), size);
+                    }
+                    else if (attributeField == 2u && attributeWire == 2u)
+                    {
+                        if (!readLengthDelimited(attributeCursor, attributeEnd, variantData, variantSize))
+                            break;
+                    }
+                    else if (!skipProtobufField(attributeWire, attributeCursor, attributeEnd))
+                    {
+                        break;
+                    }
+                }
+
+                if (attributeIndex++ != 0)
+                    out << " | ";
+                out << '#' << attributeIndex << " name='" << (name.empty() ? "<unnamed>" : name) << "'";
+
+                if (variantData == nullptr)
+                {
+                    out << " value=<missing>";
+                    continue;
+                }
+
+                const uint8_t* variantCursor = variantData;
+                const uint8_t* const variantEnd = variantData + variantSize;
+                bool wroteValue = false;
+                while (variantCursor < variantEnd)
+                {
+                    uint64_t variantKey = 0;
+                    if (!readVarInt(variantCursor, variantEnd, variantKey))
+                        break;
+
+                    const uint32_t variantField = static_cast<uint32_t>(variantKey >> 3);
+                    const uint32_t variantWire = static_cast<uint32_t>(variantKey & 0x07u);
+
+                    if (variantWire == 0u)
+                    {
+                        uint64_t value = 0;
+                        if (!readVarInt(variantCursor, variantEnd, value))
+                            break;
+                        out << (wroteValue ? ", " : " value=")
+                            << (variantField == 6u ? "uint" : "varint")
+                            << "(field " << variantField << ")=" << value;
+                        wroteValue = true;
+                        continue;
+                    }
+
+                    if (variantWire == 2u)
+                    {
+                        const uint8_t* data = nullptr;
+                        size_t size = 0;
+                        if (!readLengthDelimited(variantCursor, variantEnd, data, size))
+                            break;
+
+                        const char* typeName = variantField == 4u ? "string" : (variantField == 5u ? "blob" : "bytes");
+                        out << (wroteValue ? ", " : " value=") << typeName << "(field " << variantField << ", " << size << "B)="
+                            << makePrintableDiagnostic(data, size);
+                        wroteValue = true;
+                        continue;
+                    }
+
+                    out << (wroteValue ? ", " : " value=") << "field " << variantField << "/wire " << variantWire;
+                    wroteValue = true;
+                    if (!skipProtobufField(variantWire, variantCursor, variantEnd))
+                        break;
+                }
+
+                if (!wroteValue)
+                    out << " value=<empty-variant>";
+            }
+
+            if (attributeIndex == 0)
+                return "<none>";
+            return out.str();
+        }
+
         std::vector<uint8_t> compressGameUtilitiesJson(const std::string& json)
         {
             // Blizzard's realm-list JSON blobs start with a little-endian uint32
@@ -349,6 +531,37 @@ namespace AscEmu::Battlenet
             appendMessageField(response, 1, attribute);
         }
 
+        void appendGameUtilitiesUInt64Attribute(
+            std::vector<uint8_t>& response,
+            const std::string& name,
+            uint64_t value)
+        {
+            // bgs.protocol.Variant field 2 = unsigned/integer value.
+            std::vector<uint8_t> variant;
+            appendVarInt(variant, (static_cast<uint64_t>(2) << 3) | 0u);
+            appendVarInt(variant, value);
+
+            std::vector<uint8_t> attribute;
+            appendStringField(attribute, 1, name);
+            appendMessageField(attribute, 2, variant);
+            appendMessageField(response, 1, attribute);
+        }
+
+        void appendGameUtilitiesStringAttribute(
+            std::vector<uint8_t>& response,
+            const std::string& name,
+            const std::string& value)
+        {
+            // bgs.protocol.Variant field 4 = string.
+            std::vector<uint8_t> variant;
+            appendStringField(variant, 4, value);
+
+            std::vector<uint8_t> attribute;
+            appendStringField(attribute, 1, name);
+            appendMessageField(attribute, 2, variant);
+            appendMessageField(response, 1, attribute);
+        }
+
         bool commandMatches(std::string_view command, std::string_view semanticPrefix)
         {
             return command.size() >= semanticPrefix.size() &&
@@ -370,6 +583,7 @@ namespace AscEmu::Battlenet
                 case 69795u: return { 2u, 5u, 6u };
                 case 69585u: return { 5u, 5u, 4u };
                 case 69814u: return { 12u, 1u, 0u };
+                case 69893u: return { 1u, 60u, 1u };
                 default:     return { 0u, 0u, 0u };
             }
         }
@@ -379,6 +593,48 @@ namespace AscEmu::Battlenet
             return (static_cast<uint32_t>(region) << 24) |
                    (static_cast<uint32_t>(site) << 16) |
                    static_cast<uint32_t>(realmId);
+        }
+
+        struct ForeverSuperDistrictProfile
+        {
+            uint32_t build = 0;
+            uint32_t collectionId = 0;
+            uint32_t superDistrictSetId = 0;
+            uint32_t normalAvailableSuperDistrictId = 0;
+            uint32_t pvpAvailableSuperDistrictId = 0;
+            uint32_t currentCfgContentSetId = 0;
+            bool contentSetIdKnown = false;
+        };
+
+        ForeverSuperDistrictProfile getForeverSuperDistrictProfile(uint32_t clientBuild)
+        {
+            // Build 69893 client-side DB2 relationship discovered from the
+            // extracted Forever tables.  These values are diagnostic metadata
+            // only; they are NOT serialized as invented Battle.net fields.
+            //
+            // SuperDistrictSetCollection 1 -> SuperDistrictSet 36
+            // SuperDistrictSet 36 includes AvailableSuperDistrict 2 (PvP) and
+            // 3 (Normal).  The exact ContentSet selector that activates this
+            // collection is still unknown, so keep the currently transmitted
+            // cfgContentSetID at 0 and log that fact explicitly.
+            if (clientBuild == 69893u)
+                return { 69893u, 1u, 36u, 3u, 2u, 0u, false };
+
+            return {};
+        }
+
+        uint32_t getRealmCfgTimezonesId(uint32_t clientBuild)
+        {
+            // Forever 1.60.1.69893 test value.
+            //
+            // The official Camelot capture confirmed the sub-region "70-1-70",
+            // but it did not expose cfgTimezonesID in clear text.  Keep this
+            // isolated by build while testing the client-side SuperDistrict
+            // mapping used by the play-style picker.
+            if (clientBuild == 69893u)
+                return 1u;
+
+            return 1u;
         }
 
         bool readGameUtilitiesBlobAttribute(
@@ -622,12 +878,14 @@ namespace AscEmu::Battlenet
         }
 
         std::vector<uint8_t> makeRealmJoinResponse(
+            uint32_t clientBuild,
             const std::string& gameAccountName,
             uint32_t realmAddress,
             const std::string& worldHost,
             uint32_t worldPort,
             std::string& realmJoinTicket,
-            std::array<uint8_t, 32>& joinSecret)
+            std::array<uint8_t, 32>& joinSecret,
+            uint32_t& localRealmId)
         {
             if (gameAccountName.empty() || worldHost.empty() || worldPort == 0u || worldPort > 65535u)
                 return {};
@@ -635,20 +893,48 @@ namespace AscEmu::Battlenet
             const uint8_t region = static_cast<uint8_t>((realmAddress >> 24) & 0xFFu);
             const uint8_t site = static_cast<uint8_t>((realmAddress >> 16) & 0xFFu);
             const uint16_t realmId = static_cast<uint16_t>(realmAddress & 0xFFFFu);
-            if (region != Protocol::WoW::EuropeRegion || site != 1u || realmId == 0u)
+
+            // Forever/Camelot does not use the legacy Battle.net region byte here.
+            // The beta capture selects Normal with realm address 0x46010002:
+            //   region = 70, site = 1, realm = 2.
+            const bool validRegion =
+                region == Protocol::WoW::EuropeRegion ||
+                (clientBuild == 69893u && region == 70u);
+
+            if (!validRegion || site != 1u || realmId == 0u)
                 return {};
 
             if (!sBNetLogonSQL)
                 return {};
 
-            auto realmResult = sBNetLogonSQL->query(
-                "SELECT id, status FROM realms WHERE id = %u LIMIT 1",
-                static_cast<uint32_t>(realmId));
+            localRealmId = 0u;
+
+            // The low 16 bits of the Camelot address are part of Blizzard's
+            // external realm address (Normal currently arrives as 0x46010002).
+            // They are not AscEmu's local realms.id.  Route Forever joins to the
+            // first enabled local realm instead of requiring realms.id == 2.
+            std::unique_ptr<QueryResult> realmResult;
+            if (clientBuild == 69893u && region == 70u)
+            {
+                realmResult = sBNetLogonSQL->query(
+                    "SELECT id, status FROM realms WHERE status <> 0 ORDER BY id LIMIT 1");
+            }
+            else
+            {
+                realmResult = sBNetLogonSQL->query(
+                    "SELECT id, status FROM realms WHERE id = %u LIMIT 1",
+                    static_cast<uint32_t>(realmId));
+            }
+
             if (!realmResult)
                 return {};
 
             Field* realmFields = realmResult->fetch();
             if (realmFields == nullptr || realmFields[1].asUint8() == 0u)
+                return {};
+
+            localRealmId = realmFields[0].asUint32();
+            if (localRealmId == 0u)
                 return {};
 
             std::ostringstream serverAddressesJson;
@@ -719,6 +1005,21 @@ namespace AscEmu::Battlenet
                 }
             }
 
+            const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(clientBuild);
+            if (foreverProfile.build != 0u)
+            {
+                sLogger.info(
+                    "BNet: Forever profile -> build={}, collection={}, superDistrictSet={}, playstyles=[{}:PvP,{}:Normal], cfgTimezonesID={}, cfgContentSetID(current)={}, contentSetKnown={}",
+                    foreverProfile.build,
+                    foreverProfile.collectionId,
+                    foreverProfile.superDistrictSetId,
+                    foreverProfile.pvpAvailableSuperDistrictId,
+                    foreverProfile.normalAvailableSuperDistrictId,
+                    getRealmCfgTimezonesId(clientBuild),
+                    foreverProfile.currentCfgContentSetId,
+                    foreverProfile.contentSetIdKnown ? "yes" : "no");
+            }
+
             std::ostringstream realmJson;
             realmJson << "JSONRealmListUpdates:{\"updates\":[";
 
@@ -743,7 +1044,7 @@ namespace AscEmu::Battlenet
                 realmJson
                     << "{\"update\":{" 
                     << "\"wowRealmAddress\":" << address << ','
-                    << "\"cfgTimezonesID\":1,"
+                    << "\"cfgTimezonesID\":" << getRealmCfgTimezonesId(clientBuild) << ','
                     << "\"populationState\":" << (online ? 1u : 0u) << ','
                     << "\"cfgCategoriesID\":1,"
                     << "\"version\":{" 
@@ -756,7 +1057,9 @@ namespace AscEmu::Battlenet
                     << "\"flags\":" << flags << ','
                     << "\"name\":\"" << jsonEscape(name) << "\","
                     << "\"cfgConfigsID\":1,"
-                    << "\"cfgLanguagesID\":1"
+                    << "\"cfgLanguagesID\":1,"
+                    << "\"cfgContentSetID\":" << (foreverProfile.build != 0u ? foreverProfile.currentCfgContentSetId : 0u) << ','
+                    << "\"useBleepChance\":0.0"
                     << "},\"deleting\":false}";
             }
             realmJson << "]}";
@@ -2038,6 +2341,22 @@ namespace AscEmu::Battlenet
     {
         const std::string commandName = findCommandName(payload, payloadSize);
 
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG RX method={}, token={}, command='{}', payload={} byte(s), hex=[{}]",
+            m_connectionId,
+            methodId,
+            token,
+            commandName.empty() ? std::string("<unnamed>") : commandName,
+            payloadSize,
+            makeCompactHex(payload, payloadSize)
+        );
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG ATTR token={}: {}",
+            m_connectionId,
+            token,
+            describeGameUtilitiesAttributes(payload, payloadSize)
+        );
+
         if (methodId == Protocol::GameUtilitiesService::GetAllValuesForAttribute)
             return handleGameUtilitiesGetAllValues(token, commandName, payload, payloadSize);
 
@@ -2056,12 +2375,26 @@ namespace AscEmu::Battlenet
         if (commandMatches(commandName, Protocol::GameUtilitiesCommands::RealmListTicketPrefix))
             return handleRealmListTicketRequest(token, commandName, payload, payloadSize);
 
+        if (commandMatches(commandName, Protocol::GameUtilitiesCommands::FetchBleepProxiesPrefix))
+            return handleFetchBleepProxiesRequest(token, commandName);
+
+        if (commandMatches(commandName, Protocol::GameUtilitiesCommands::SuperDistrictListPrefix))
+            return handleSuperDistrictListRequest(token, commandName);
+
+        if (commandMatches(commandName, Protocol::GameUtilitiesCommands::LastCharPlayedPrefix))
+            return handleLastCharPlayedRequest(token, commandName);
+
         sLogger.debug(
             "BNet: connection #{} GameUtilitiesService.ProcessClientRequest unhandled command='{}', token={}, payload={} byte(s); replying NoData",
             m_connectionId,
             commandName.empty() ? std::string("<unnamed>") : commandName,
             token,
             payloadSize
+        );
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG TX token={}, response=0 byte(s), hex=[<empty>]",
+            m_connectionId,
+            token
         );
         return sendRpcResponse(token, std::vector<uint8_t>{});
     }
@@ -2074,18 +2407,29 @@ namespace AscEmu::Battlenet
     {
         if (commandMatches(attributeName, Protocol::GameUtilitiesCommands::RealmListPrefix))
         {
-            // WoW realm subregions use the form "<region>-<site>-0".
-            // Region 2 is the authenticated EU game-account region. Site 1 is
-            // the current AscEmu realm-site identifier.
-            static const std::vector<std::string> subRegions{ "2-1-0" };
+            // Forever/Camelot 1.60.1.69893 uses "70-1-70" for the realm-list
+            // command variant/subregion. Keep the legacy value for other builds.
+            const std::string_view subRegion = (m_clientBuild == 69893u)
+                ? std::string_view{ "70-1-70" }
+                : std::string_view{ "2-1-0" };
+
+            const std::vector<std::string> subRegions{ std::string(subRegion) };
             const std::vector<uint8_t> response = makeGameUtilitiesStringVariantList(subRegions);
 
             sLogger.debug(
-                "BNet: connection #{} GameUtilitiesService.GetAllValuesForAttribute -> token={}, key='{}', subregion='2-1-0', response={} byte(s)",
+                "BNet: connection #{} GameUtilitiesService.GetAllValuesForAttribute -> token={}, key='{}', subregion='{}', response={} byte(s)",
                 m_connectionId,
                 token,
                 attributeName,
+                subRegion,
                 response.size()
+            );
+            sLogger.info(
+                "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
+                m_connectionId,
+                token,
+                response.size(),
+                makeCompactHex(response.data(), response.size())
             );
             return sendRpcResponse(token, response);
         }
@@ -2097,8 +2441,247 @@ namespace AscEmu::Battlenet
             token,
             payloadSize
         );
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG TX token={}, response=0 byte(s), hex=[<empty>]",
+            m_connectionId,
+            token
+        );
         return sendRpcResponse(token, std::vector<uint8_t>{});
     }
+
+
+    bool BNetSocket::handleFetchBleepProxiesRequest(uint32_t token, const std::string& commandName)
+    {
+        // Camelot/Forever asks for Bleep proxy discovery during the login flow.
+        // A private server does not need Blizzard's Bleep relay service, but the
+        // client expects a syntactically valid JSON list instead of an empty RPC.
+        const std::vector<uint8_t> blob =
+            compressGameUtilitiesJson("JSONBleepProxyList:{\"proxies\":[]}");
+
+        std::vector<uint8_t> response;
+        if (!blob.empty())
+            appendGameUtilitiesBlobAttribute(response, "Param_BleepProxyList", blob);
+
+        sLogger.info(
+            "BNet: connection #{} FetchBleepProxies -> token={}, command='{}', proxies=0, response={} byte(s)",
+            m_connectionId, token, commandName, response.size());
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
+            m_connectionId, token, response.size(),
+            response.empty() ? std::string("<empty>") : makeCompactHex(response.data(), response.size()));
+
+        return sendRpcResponse(token, response);
+    }
+
+    bool BNetSocket::handleSuperDistrictListRequest(uint32_t token, const std::string& commandName)
+    {
+        std::ostringstream json;
+        size_t advertisedCount = 0;
+
+        if (m_clientBuild == 69893u)
+        {
+            // Forever/Camelot 1.60.1.69893 sniff-based compatibility test.
+            // The play-style selector expects SuperDistrict IDs here; realm
+            // address/cfg metadata is carried later by RealmList entries.
+            json
+                << "JSONSuperDistrictList:{\"superDistricts\":["
+                << "{\"superDistrictID\":2,\"disallowLogin\":false},"
+                << "{\"superDistrictID\":1,\"disallowLogin\":false},"
+                << "{\"superDistrictID\":5,\"disallowLogin\":false}"
+                << "]}";
+            advertisedCount = 3u;
+        }
+        else
+        {
+            struct SuperDistrictRealm
+            {
+                uint32_t id = 0;
+                uint8_t status = 0;
+            };
+
+            std::vector<SuperDistrictRealm> realms;
+            if (sBNetLogonSQL)
+            {
+                if (auto result = sBNetLogonSQL->query("SELECT id, status FROM realms ORDER BY id"))
+                {
+                    do
+                    {
+                        Field* fields = result->fetch();
+                        if (!fields)
+                            continue;
+
+                        realms.push_back({ fields[0].asUint32(), fields[1].asUint8() });
+                    } while (result->nextRow());
+                }
+            }
+
+            json << "JSONSuperDistrictList:{\"superDistricts\":[";
+
+            bool first = true;
+            for (const SuperDistrictRealm& realm : realms)
+            {
+                if (realm.status == 0u)
+                    continue;
+
+                if (!first)
+                    json << ',';
+                first = false;
+
+                const uint32_t address = makeRealmAddress(
+                    static_cast<uint8_t>(Protocol::WoW::EuropeRegion),
+                    1u,
+                    static_cast<uint16_t>(realm.id));
+
+                json
+                    << "{\"wowRealmAddress\":" << address << ','
+                    << "\"useBleepChance\":0.0,"
+                    << "\"cfgTimezonesID\":" << getRealmCfgTimezonesId(m_clientBuild) << '}';
+
+                ++advertisedCount;
+            }
+
+            json << "]}";
+        }
+
+        const std::vector<uint8_t> blob = compressGameUtilitiesJson(json.str());
+
+        std::vector<uint8_t> response;
+        if (!blob.empty())
+            appendGameUtilitiesBlobAttribute(response, "Param_SuperDistrictList", blob);
+
+        const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(m_clientBuild);
+        if (foreverProfile.build != 0u)
+        {
+            sLogger.info(
+                "BNet: connection #{} Forever SuperDistrict mapping -> collection={}, set={}, playstyles=[{}:PvP,{}:Normal], cfgContentSetID(current)={}, contentSetKnown={}",
+                m_connectionId,
+                foreverProfile.collectionId,
+                foreverProfile.superDistrictSetId,
+                foreverProfile.pvpAvailableSuperDistrictId,
+                foreverProfile.normalAvailableSuperDistrictId,
+                foreverProfile.currentCfgContentSetId,
+                foreverProfile.contentSetIdKnown ? "yes" : "no");
+        }
+
+        if (m_clientBuild == 69893u)
+        {
+            sLogger.info(
+                "BNet: connection #{} SuperDistrictList -> token={}, command='{}', build={}, schema=ForeverSuperDistrictID, superDistricts={}, json='{}', response={} byte(s)",
+                m_connectionId, token, commandName, m_clientBuild, advertisedCount, json.str(), response.size());
+        }
+        else
+        {
+            sLogger.info(
+                "BNet: connection #{} SuperDistrictList -> token={}, command='{}', build={}, cfgTimezonesID={}, superDistricts={}, json='{}', response={} byte(s)",
+                m_connectionId, token, commandName, m_clientBuild, getRealmCfgTimezonesId(m_clientBuild), advertisedCount, json.str(), response.size());
+        }
+
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
+            m_connectionId, token, response.size(),
+            response.empty() ? std::string("<empty>") : makeCompactHex(response.data(), response.size()));
+
+        return sendRpcResponse(token, response);
+    }
+
+    bool BNetSocket::handleLastCharPlayedRequest(uint32_t token, const std::string& commandName)
+    {
+        const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(m_clientBuild);
+        if (foreverProfile.build != 0u)
+        {
+            sLogger.info(
+                "BNet: connection #{} LastCharPlayed Forever context -> collection={}, set={}, playstyles=[{}:PvP,{}:Normal], cfgContentSetID(current)={}, contentSetKnown={}",
+                m_connectionId,
+                foreverProfile.collectionId,
+                foreverProfile.superDistrictSetId,
+                foreverProfile.pvpAvailableSuperDistrictId,
+                foreverProfile.normalAvailableSuperDistrictId,
+                foreverProfile.currentCfgContentSetId,
+                foreverProfile.contentSetIdKnown ? "yes" : "no");
+        }
+
+        if (m_clientBuild == 69893u)
+        {
+            // Forever/Camelot 1.60.1.69893:
+            //
+            // The official beta service returns a non-empty LastCharPlayed
+            // response even for an account without characters.  After Normal
+            // is selected the client requests ContentSetID 137 and expects a
+            // RealmEntry/LastPlayedTime/UtilityInfo context before continuing
+            // to RealmListRequest.
+            //
+            // Values below mirror the observed Classic Beta PvE context.
+            const std::string realmEntryJson =
+                "JamJSONRealmEntry:{"
+                "\"wowRealmAddress\":1174470658,"
+                "\"useBleepChance\":0.0,"
+                "\"cfgTimezonesID\":1,"
+                "\"populationState\":2,"
+                "\"cfgCategoriesID\":26,"
+                "\"version\":{"
+                    "\"versionMajor\":1,"
+                    "\"versionBuild\":69800,"
+                    "\"versionMinor\":60,"
+                    "\"versionRevision\":1"
+                "},"
+                "\"cfgRealmsID\":4618,"
+                "\"gameServiceRegionId\":98,"
+                "\"flags\":0,"
+                "\"name\":\"Classic Beta PvE\","
+                "\"cfgConfigsID\":1,"
+                "\"cfgContentSetID\":137,"
+                "\"cfgLanguagesID\":1,"
+                "\"superDistrictID\":2"
+                "}";
+
+            const std::string utilityInfoJson =
+                "JSONUtilityInfo:{"
+                "\"realmPermissions\":3,"
+                "\"loginLicenses\":[0]"
+                "}";
+
+            const std::vector<uint8_t> realmEntry = compressGameUtilitiesJson(realmEntryJson);
+            const std::vector<uint8_t> utilityInfo = compressGameUtilitiesJson(utilityInfoJson);
+
+            std::vector<uint8_t> response;
+            if (!realmEntry.empty())
+                appendGameUtilitiesBlobAttribute(response, "Param_RealmEntry", realmEntry);
+
+            // Exact no-character shape observed in the Forever beta capture:
+            //   Param_CharacterName = ""
+            //   Param_CharacterGUID = blob { 0x00, 0x00 }
+            //   Param_LastPlayedTime = 1
+            appendGameUtilitiesStringAttribute(response, "Param_CharacterName", "");
+
+            const std::vector<uint8_t> emptyCharacterGuid{ 0x00u, 0x00u };
+            appendGameUtilitiesBlobAttribute(response, "Param_CharacterGUID", emptyCharacterGuid);
+
+            appendGameUtilitiesUInt64Attribute(response, "Param_LastPlayedTime", 1u);
+
+            if (!utilityInfo.empty())
+                appendGameUtilitiesBlobAttribute(response, "Param_UtilityInfo", utilityInfo);
+
+            sLogger.info(
+                "BNet: connection #{} LastCharPlayed -> token={}, command='{}', build=69893, exact beta no-character shape, realm='Classic Beta PvE', cfgContentSetID=137, superDistrictID=2, characterName=<empty>, characterGuid=0000, lastPlayedTime=1, response={} byte(s)",
+                m_connectionId, token, commandName, response.size());
+            sLogger.info(
+                "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
+                m_connectionId, token, response.size(),
+                response.empty() ? std::string("<empty>") : makeCompactHex(response.data(), response.size()));
+
+            return sendRpcResponse(token, response);
+        }
+
+        sLogger.info(
+            "BNet: connection #{} LastCharPlayed -> token={}, command='{}', no cached last-played character; response=0 byte(s)",
+            m_connectionId, token, commandName);
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG TX token={}, response=0 byte(s), hex=[<empty>]",
+            m_connectionId, token);
+
+        return sendRpcResponse(token, std::vector<uint8_t>{});
+    }
+
 
     bool BNetSocket::handleRealmJoinRequest(
         uint32_t token,
@@ -2141,13 +2724,16 @@ namespace AscEmu::Battlenet
 
         std::string realmJoinTicket;
         std::array<uint8_t, 32> joinSecret{};
+        uint32_t localRealmId = 0u;
         const std::vector<uint8_t> response = makeRealmJoinResponse(
+            m_clientBuild,
             m_selectedGameAccountName,
             realmAddress,
             bnetConfig.world.host,
             bnetConfig.world.port,
             realmJoinTicket,
-            joinSecret);
+            joinSecret,
+            localRealmId);
 
         bool sessionQueued = false;
         if (!response.empty())
@@ -2155,7 +2741,7 @@ namespace AscEmu::Battlenet
             PendingWorldSession pending;
             pending.accountId = m_battleNetAccountId;
             pending.gameAccountId = m_selectedGameAccountId;
-            pending.realmId = realmId;
+            pending.realmId = localRealmId;
             pending.clientBuild = m_clientBuild;
             pending.region = region;
             pending.expiresAt = static_cast<uint64_t>(UNIXTIME) + 60u;
@@ -2168,13 +2754,14 @@ namespace AscEmu::Battlenet
         }
 
         sLogger.debug(
-            "BNet: connection #{} RealmJoin -> token={}, realm_address=0x{:08X} (region={}, site={}, realm={}), world={}:{}, game_account='{}', pending_session={}, response={} byte(s)",
+            "BNet: connection #{} RealmJoin -> token={}, realm_address=0x{:08X} (region={}, site={}, external_realm={}), local_realm={}, world={}:{}, game_account='{}', pending_session={}, response={} byte(s)",
             m_connectionId,
             token,
             realmAddress,
             region,
             site,
             realmId,
+            localRealmId,
             bnetConfig.world.host,
             bnetConfig.world.port,
             m_selectedGameAccountName,
@@ -2191,13 +2778,21 @@ namespace AscEmu::Battlenet
         if (!sessionQueued)
         {
             sLogger.failure(
-                "BNet: connection #{} cannot complete RealmJoin: realm {} has no authenticated BattleNetComm world connection",
+                "BNet: connection #{} cannot complete RealmJoin: local realm {} (external realm {}) has no authenticated BattleNetComm world connection",
                 m_connectionId,
+                localRealmId,
                 realmId
             );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
+            m_connectionId,
+            token,
+            response.size(),
+            makeCompactHex(response.data(), response.size())
+        );
         return sendRpcResponse(token, response);
     }
 
@@ -2230,6 +2825,13 @@ namespace AscEmu::Battlenet
         if (response.empty())
             sLogger.failure("BNet: connection #{} failed to build RealmList response", m_connectionId);
 
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
+            m_connectionId,
+            token,
+            response.size(),
+            makeCompactHex(response.data(), response.size())
+        );
         return sendRpcResponse(token, response);
     }
 
@@ -2300,6 +2902,13 @@ namespace AscEmu::Battlenet
             m_selectedGameAccountId,
             m_selectedGameAccountName,
             response.size()
+        );
+        sLogger.info(
+            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
+            m_connectionId,
+            token,
+            response.size(),
+            makeCompactHex(response.data(), response.size())
         );
         return sendRpcResponse(token, response);
     }

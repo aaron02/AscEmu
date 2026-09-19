@@ -5,7 +5,15 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "VersionAdapter.hpp"
 
-#if !AE_HAS_WORLD_V2_PROFILE
+#ifndef AE_WORLD_PROFILE_MIDNIGHT
+#define AE_WORLD_PROFILE_MIDNIGHT 0
+#endif
+
+#ifndef AE_WORLD_PROFILE_FOREVER
+#define AE_WORLD_PROFILE_FOREVER 0
+#endif
+
+#if !AE_WORLD_PROFILE_MIDNIGHT && !AE_WORLD_PROFILE_FOREVER
 namespace AscEmu::VersionAdapter
 {
     void startWorldServices(AscEmu::Threading::AEThreadPool&)

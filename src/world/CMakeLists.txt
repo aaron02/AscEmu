@@ -94,34 +94,31 @@ if (AE_USES_BATTLENET)
     target_compile_definitions(${EXECUTABLE_NAME} PRIVATE AE_BUILD_BATTLENET=1)
 
     if (ASCEMU_VERSION STREQUAL "Midnight")
-        # World adapters are part of the world executable, not version_client.
-        # This keeps the protocol library independent from WorldSession/WorldSocket
-        # and avoids a reverse dependency from version -> world.
-        file(GLOB_RECURSE MIDNIGHT_WORLD_FILES
-            ${CMAKE_SOURCE_DIR}/src/version/Midnight/World/*.cpp
-            ${CMAKE_SOURCE_DIR}/src/version/Midnight/World/*.h
-            ${CMAKE_SOURCE_DIR}/src/version/Midnight/World/*.hpp
-            ${CMAKE_SOURCE_DIR}/src/version/Midnight/World/*.inc
+        # Midnight implementation is compiled by version_client.
+        target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
+            AE_HAS_WORLD_V2_PROFILE=1
+            AE_WORLD_PROFILE_MIDNIGHT=1
+            AE_WORLD_PROFILE_FOREVER=0
         )
-        file(GLOB MIDNIGHT_HANDLER_FILES
-            ${CMAKE_SOURCE_DIR}/src/version/Midnight/Packets/Handlers/*.cpp
-            ${CMAKE_SOURCE_DIR}/src/version/Midnight/Packets/Handlers/*.h
-            ${CMAKE_SOURCE_DIR}/src/version/Midnight/Packets/Handlers/*.hpp
+    elseif (ASCEMU_VERSION STREQUAL "Forever")
+        # Forever implementation is compiled by version_client.
+        target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
+            AE_HAS_WORLD_V2_PROFILE=1
+            AE_WORLD_PROFILE_MIDNIGHT=0
+            AE_WORLD_PROFILE_FOREVER=1
         )
-
-        target_sources(${EXECUTABLE_NAME} PRIVATE
-            ${MIDNIGHT_WORLD_FILES}
-            ${MIDNIGHT_HANDLER_FILES}
-        )
-        target_compile_definitions(${EXECUTABLE_NAME} PRIVATE AE_HAS_WORLD_V2_PROFILE=1)
     else ()
-        # Battle.net is part of the Forever topology, but its World protocol
-        # profile must remain disabled until an exact client build is known.
-        target_compile_definitions(${EXECUTABLE_NAME} PRIVATE AE_HAS_WORLD_V2_PROFILE=0)
+        target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
+            AE_HAS_WORLD_V2_PROFILE=0
+            AE_WORLD_PROFILE_MIDNIGHT=0
+            AE_WORLD_PROFILE_FOREVER=0
+        )
     endif ()
 else ()
     target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
         AE_BUILD_BATTLENET=0
         AE_HAS_WORLD_V2_PROFILE=0
+        AE_WORLD_PROFILE_MIDNIGHT=0
+        AE_WORLD_PROFILE_FOREVER=0
     )
 endif ()

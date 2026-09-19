@@ -285,6 +285,9 @@ namespace AscEmu::Battlenet::Protocol
         constexpr std::string_view RealmListTicketPrefix = "Command_RealmListTicketRequest_v1_";
         constexpr std::string_view RealmListPrefix = "Command_RealmListRequest_v1_";
         constexpr std::string_view RealmJoinPrefix = "Command_RealmJoinRequest_v1_";
+        constexpr std::string_view LastCharPlayedPrefix = "Command_LastCharPlayedRequest_v1_";
+        constexpr std::string_view FetchBleepProxiesPrefix = "Command_FetchBleepProxiesRequest_v1_";
+        constexpr std::string_view SuperDistrictListPrefix = "Command_SuperDistrictListRequest_v1_";
 
     }
 

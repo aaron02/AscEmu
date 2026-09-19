@@ -19,9 +19,18 @@ This file is released under the MIT license. See README-MIT for more information
 class SocketHandler;
 class WorldSession;
 
-#if AE_HAS_WORLD_V2_PROFILE
+#if AE_WORLD_PROFILE_MIDNIGHT
 namespace AscEmu::Version::Midnight
 {
+    class OpcodeHandlerRegistry;
+    namespace Packets { class Packet; }
+}
+#endif
+
+#if AE_WORLD_PROFILE_FOREVER
+namespace AscEmu::Version::Forever
+{
+    enum class Opcode : uint16_t;
     class OpcodeHandlerRegistry;
     namespace Packets { class Packet; }
 }
@@ -148,7 +157,9 @@ private:
 
     WorldSession* m_session{nullptr};
 
-#if AE_HAS_WORLD_V2_PROFILE
+#if AE_WORLD_PROFILE_MIDNIGHT
 #include "version/Midnight/World/WorldSocketMidnight.inc"
+#elif AE_WORLD_PROFILE_FOREVER
+#include "version/Forever/World/WorldSocketForever.inc"
 #endif
 };

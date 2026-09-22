@@ -1057,7 +1057,7 @@ protected:
         bool LoggingOut; // Player requesting to be logged out
 
         uint32_t _latency;
-#if VERSION_STRING < Cata
+#if VERSION_STRING != Cata
         uint32_t client_build;
 #else
         uint16_t client_build;

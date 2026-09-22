@@ -8,6 +8,7 @@
 #include "world/Server/World.h"
 #include "world/Storage/VersionDataBridge.hpp"
 #include "world/Objects/Units/Creatures/CreatureDefines.hpp"
+#include "Objects/Units/Players/Player.hpp"
 #include "shared/WoWGuid.hpp"
 #include "Logging/Logger.hpp"
 
@@ -250,5 +251,29 @@ bool WorldSocket::handleForeverListInventoryOpcode(AscEmu::Version::Forever::Pac
     sLogger.info("WorldSocket::Forever: CMSG_LIST_INVENTORY target entry={} counter={} modernLow=0x{:016X} modernHigh=0x{:016X} -> legacyGuid=0x{:016X}.", modernGuid.getModernEntry(), modernGuid.getModernCounter(), modernGuid.getModernLow(), modernGuid.getModernHigh(), legacyGuid);
 
     m_session->handleListInventoryGuid(legacyGuid);
+    return true;
+}
+
+bool WorldSocket::handleForeverSetSelectionOpcode(AscEmu::Version::Forever::Packets::Packet& packet)
+{
+    if (m_session == nullptr || m_session->GetPlayer() == nullptr)
+        return false;
+
+    WoWGuid modernGuid;
+    std::size_t consumed = 0;
+    if (!WoWGuid::unpackModern(packet.contents(), packet.size(), modernGuid, consumed) || consumed != packet.size())
+    {
+        sLogger.warning("WorldSocket::Forever: malformed CMSG_SET_SELECTION payload={} consumed={}.", packet.size(), consumed);
+        return true;
+    }
+
+    Player* const player = m_session->GetPlayer();
+    const uint64_t legacyGuid = modernGuid.toLegacyRaw();
+    player->setTargetGuid(legacyGuid);
+
+    if (player->getComboPoints())
+        player->updateComboPoints();
+
+    sLogger.debug("WorldSocket::Forever: CMSG_SET_SELECTION target=0x{:016X} type={} entry={} counter={}.", legacyGuid, static_cast<uint32_t>(modernGuid.getModernHighType()), modernGuid.getModernEntry(), modernGuid.getModernCounter());
     return true;
 }

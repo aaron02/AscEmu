@@ -1311,7 +1311,14 @@ void Unit::setFaction(uint32_t factionId)
 }
 
 #if VERSION_STRING >= WotLK
-uint32_t Unit::getVirtualItemSlotId(uint8_t slot) const { return unitData()->virtual_item_slot_display[slot]; }
+uint32_t Unit::getVirtualItemSlotId(uint8_t slot) const
+{
+#if defined(AE_FOREVER)
+    if (slot < m_foreverUnitFields.virtualItems.size())
+        return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.virtualItems[slot].itemId));
+#endif
+    return unitData()->virtual_item_slot_display[slot];
+}
 #else
 uint32_t Unit::getVirtualItemDisplayId(uint8_t slot) const { return unitData()->virtual_item_slot_display[slot]; }
 #endif
@@ -1340,6 +1347,10 @@ void Unit::setVirtualItemSlotId(uint8_t slot, uint32_t item_id)
     if (item_id == 0)
     {
         write(unitData()->virtual_item_slot_display[slot], 0U);
+#if defined(AE_FOREVER)
+        if (slot < m_foreverUnitFields.virtualItems.size())
+            m_foreverUnitFields.virtualItems[slot] = {};
+#endif
 #if VERSION_STRING < WotLK
         setVirtualItemInfo(slot, 0);
 #endif
@@ -1367,6 +1378,14 @@ void Unit::setVirtualItemSlotId(uint8_t slot, uint32_t item_id)
         dynamic_cast<Creature*>(this)->toggleDualwield(isProperOffhandWeapon(itemDbc->Class, itemDbc->SubClass));
 
     write(unitData()->virtual_item_slot_display[slot], item_id);
+#if defined(AE_FOREVER)
+    if (slot < m_foreverUnitFields.virtualItems.size())
+    {
+        // Base ItemID is known in the 69913 VisibleItem create record.
+        // Additional appearance/transmog members stay zero until verified.
+        m_foreverUnitFields.virtualItems[slot].itemId = static_cast<int32_t>(item_id);
+    }
+#endif
 #else
     unit_virtual_item_info virtualItemInfo{};
 
@@ -1635,8 +1654,27 @@ void Unit::setAuraApplication(Aura const* aur)
 }
 #endif
 
-uint32_t Unit::getAuraState() const { return unitData()->aura_state; }
-void Unit::setAuraState(uint32_t state) { write(unitData()->aura_state, state); }
+uint32_t Unit::getAuraState() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.auraState69913;
+#else
+    return unitData()->aura_state;
+#endif
+}
+
+void Unit::setAuraState(uint32_t state)
+{
+    write(unitData()->aura_state, state);
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.auraState69913 == state)
+        return;
+
+    m_foreverUnitFields.auraState69913 = state;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::AuraStateBit);
+    updateObject();
+#endif
+}
 void Unit::addAuraState(uint32_t state) { setAuraState(getAuraState() | state); }
 void Unit::removeAuraState(uint32_t state) { setAuraState(getAuraState() & ~state); }
 
@@ -2042,17 +2080,69 @@ void Unit::setAnimationFlags(uint8_t animationFlags)
 #endif
 //bytes_1 end
 
-uint32_t Unit::getPetNumber() const { return unitData()->pet_number; }
-void Unit::setPetNumber(uint32_t number) { write(unitData()->pet_number, number); }
+uint32_t Unit::getPetNumber() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.petNumber;
+#else
+    return unitData()->pet_number;
+#endif
+}
+void Unit::setPetNumber(uint32_t number)
+{
+    write(unitData()->pet_number, number);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.petNumber = number;
+#endif
+}
 
-uint32_t Unit::getPetNameTimestamp() const { return unitData()->pet_name_timestamp; }
-void Unit::setPetNameTimestamp(uint32_t timestamp) { write(unitData()->pet_name_timestamp, timestamp); }
+uint32_t Unit::getPetNameTimestamp() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.petNameTimestamp;
+#else
+    return unitData()->pet_name_timestamp;
+#endif
+}
+void Unit::setPetNameTimestamp(uint32_t timestamp)
+{
+    write(unitData()->pet_name_timestamp, timestamp);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.petNameTimestamp = timestamp;
+#endif
+}
 
-uint32_t Unit::getPetExperience() const { return unitData()->pet_experience; }
-void Unit::setPetExperience(uint32_t experience) { write(unitData()->pet_experience, experience); }
+uint32_t Unit::getPetExperience() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.petExperience;
+#else
+    return unitData()->pet_experience;
+#endif
+}
+void Unit::setPetExperience(uint32_t experience)
+{
+    write(unitData()->pet_experience, experience);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.petExperience = experience;
+#endif
+}
 
-uint32_t Unit::getPetNextLevelExperience() const { return unitData()->pet_next_level_experience; }
-void Unit::setPetNextLevelExperience(uint32_t experience) { write(unitData()->pet_next_level_experience, experience); }
+uint32_t Unit::getPetNextLevelExperience() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.petNextLevelExperience;
+#else
+    return unitData()->pet_next_level_experience;
+#endif
+}
+void Unit::setPetNextLevelExperience(uint32_t experience)
+{
+    write(unitData()->pet_next_level_experience, experience);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.petNextLevelExperience = experience;
+#endif
+}
 
 #if VERSION_STRING < Mop
 uint32_t Unit::getDynamicFlags() const { return unitData()->dynamic_flags; }
@@ -2062,8 +2152,21 @@ void Unit::removeDynamicFlags(uint32_t dynamicFlags) { setDynamicFlags(getDynami
 bool Unit::hasDynamicFlags(uint32_t dynamicFlags) const { return (getDynamicFlags() & dynamicFlags) != 0; }
 #endif
 
-float Unit::getModCastSpeed() const { return unitData()->mod_cast_speed; }
-void Unit::setModCastSpeed(float modifier) { write(unitData()->mod_cast_speed, modifier); }
+float Unit::getModCastSpeed() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.modCastingSpeed;
+#else
+    return unitData()->mod_cast_speed;
+#endif
+}
+void Unit::setModCastSpeed(float modifier)
+{
+    write(unitData()->mod_cast_speed, modifier);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.modCastingSpeed = modifier;
+#endif
+}
 void Unit::modModCastSpeed(float modifier)
 {
     float currentMod = getModCastSpeed();
@@ -2092,29 +2195,11 @@ uint64_t Unit::getNpcFlags() const
 
 void Unit::setNpcFlags(uint64_t npcFlags)
 {
-#if defined(AE_FOREVER)
-    const uint32_t low = static_cast<uint32_t>(npcFlags);
-    const uint32_t high = static_cast<uint32_t>(npcFlags >> 32);
-
-    bool changed = false;
-    if (m_foreverUnitFields.npcFlags != low)
-    {
-        m_foreverUnitFields.npcFlags = low;
-        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::NpcFlagsBit);
-        changed = true;
-    }
-
-    if (m_foreverUnitFields.npcFlags2 != high)
-    {
-        m_foreverUnitFields.npcFlags2 = high;
-        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::NpcFlags2Bit);
-        changed = true;
-    }
-
-    if (changed)
-        updateObject();
-#else
     write(unitData()->npc_flags, npcFlags);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.npcFlags = static_cast<uint32_t>(npcFlags);
+    m_foreverUnitFields.npcFlags2 = static_cast<uint32_t>(npcFlags >> 32);
+    // Standalone 69913 ChangeMask bits for these two fields are not capture-verified.
 #endif
 }
 
@@ -2403,16 +2488,40 @@ void Unit::setShapeShiftForm(uint8_t shapeShiftForm)
 //bytes_2 end
 
 uint32_t Unit::getAttackPower() const { return unitData()->attack_power; }
-void Unit::setAttackPower(uint32_t value) { write(unitData()->attack_power, value); }
+void Unit::setAttackPower(uint32_t value)
+{
+    write(unitData()->attack_power, value);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.attackPower69913 = static_cast<int32_t>(value);
+#endif
+}
 
 int32_t Unit::getRangedAttackPower() const { return unitData()->ranged_attack_power; }
-void Unit::setRangedAttackPower(int32_t power) { write(unitData()->ranged_attack_power, power); }
+void Unit::setRangedAttackPower(int32_t power)
+{
+    write(unitData()->ranged_attack_power, power);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.rangedAttackPower69913 = power;
+#endif
+}
 
 float Unit::getMinRangedDamage() const { return unitData()->minimum_ranged_damage; }
-void Unit::setMinRangedDamage(float damage) { write(unitData()->minimum_ranged_damage, damage); }
+void Unit::setMinRangedDamage(float damage)
+{
+    write(unitData()->minimum_ranged_damage, damage);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.minRangedDamage69913 = damage;
+#endif
+}
 
 float Unit::getMaxRangedDamage() const { return unitData()->maximum_ranged_ddamage; }
-void Unit::setMaxRangedDamage(float damage) { write(unitData()->maximum_ranged_ddamage, damage); }
+void Unit::setMaxRangedDamage(float damage)
+{
+    write(unitData()->maximum_ranged_ddamage, damage);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.maxRangedDamage69913 = damage;
+#endif
+}
 
 uint32_t Unit::getPowerCostModifier(uint16_t school) const { return unitData()->power_cost_modifier[school]; }
 void Unit::setPowerCostModifier(uint16_t school, uint32_t modifier) { write(unitData()->power_cost_modifier[school], modifier); }
@@ -2467,7 +2576,13 @@ void Unit::modAttackPowerMods(int32_t modifier)
 }
 
 float Unit::getAttackPowerMultiplier() const { return unitData()->attack_power_multiplier; }
-void Unit::setAttackPowerMultiplier(float multiplier) { write(unitData()->attack_power_multiplier, multiplier); }
+void Unit::setAttackPowerMultiplier(float multiplier)
+{
+    write(unitData()->attack_power_multiplier, multiplier);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.attackPowerMultiplier69913 = multiplier;
+#endif
+}
 void Unit::modAttackPowerMultiplier(float multiplier)
 {
     float currentMultiplier = getAttackPowerMultiplier();
@@ -2506,7 +2621,13 @@ void Unit::modRangedAttackPowerMods(int32_t modifier)
 }
 
 float Unit::getRangedAttackPowerMultiplier() const { return unitData()->ranged_attack_power_multiplier; }
-void Unit::setRangedAttackPowerMultiplier(float multiplier) { write(unitData()->ranged_attack_power_multiplier, multiplier); }
+void Unit::setRangedAttackPowerMultiplier(float multiplier)
+{
+    write(unitData()->ranged_attack_power_multiplier, multiplier);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.rangedAttackPowerMultiplier69913 = multiplier;
+#endif
+}
 void Unit::modRangedAttackPowerMultiplier(float multiplier)
 {
     float currentMultiplier = getRangedAttackPowerMultiplier();

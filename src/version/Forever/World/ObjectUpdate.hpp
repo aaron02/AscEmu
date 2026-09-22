@@ -40,7 +40,8 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         std::span<const uint8_t> packedGuid,
         float x, float y, float z, float orientation, uint32_t movementTimeMs,
         Fields::ObjectData const& objectFields,
-        Fields::UnitData const& unitFields);
+        Fields::UnitData const& unitFields,
+        uint32_t vendorDataFlags69913 = 0);
 
     std::vector<uint8_t> buildUpdateObjectPacket69913(
         uint16_t mapId, uint32_t updateCount, std::span<const uint8_t> updateBlocks);

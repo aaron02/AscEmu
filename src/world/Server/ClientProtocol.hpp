@@ -14,6 +14,12 @@ This file is released under the MIT license. See README-MIT for more information
 #include <string_view>
 
 namespace WoW {
+    enum class ProtocolFlavor : uint8_t
+    {
+        Legacy,
+        Forever
+    };
+
     enum class Expansion : uint8_t
     {
         _Classic = 0,
@@ -41,6 +47,8 @@ namespace WoW {
     struct ClientProtocol
     {
         Expansion expansion{Expansion::Unknown};
+        ProtocolFlavor flavor{ProtocolFlavor::Legacy};
+        uint32_t realmId{0};
 
         /*[[nodiscard]] constexpr int32_t versionId() const noexcept
         {
@@ -61,6 +69,7 @@ namespace WoW {
         [[nodiscard]] bool isWotlk() const { return expansion == WoW::Expansion::_WotLK; }
         [[nodiscard]] bool isCata() const { return expansion == WoW::Expansion::_Cata; }
         [[nodiscard]] bool isMop() const { return expansion == WoW::Expansion::_Mop; }
+        [[nodiscard]] bool isForever() const { return flavor == ProtocolFlavor::Forever; }
         [[nodiscard]] bool isLegacy() const { return isClassic() || isTbc(); }
     };
 

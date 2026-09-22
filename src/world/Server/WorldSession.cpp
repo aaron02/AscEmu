@@ -674,10 +674,6 @@ void WorldSession::SendPacket(WorldPacket* packet)
         return;
     }
 
-#if defined(AE_FOREVER)
-    return;
-#endif
-
     if (_socket && _socket->isConnected())
         _socket->sendPacket(packet);
 }

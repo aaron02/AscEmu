@@ -57,6 +57,7 @@ class WoWGuid;
 class Query;
 class QueryResult;
 
+
 // Worldsocket related
 #define WORLDSOCKET_TIMEOUT 120
 #define PLAYER_LOGOUT_DELAY (20 * 1000) // 20 seconds should be more than enough.
@@ -267,6 +268,7 @@ public:
             managedPacket.setClientProtocol(_socket->getClientProtocol());
             return managedPacket.serialise();
         }
+
 
         template <typename TPacket>
         void sendManagedPacket(TPacket& managedPacket)
@@ -623,6 +625,7 @@ protected:
         void handleBuyItemInSlotOpcode(WorldPacket& recvPacket);
         void handleBuyItemOpcode(WorldPacket& recvPacket);
         void handleListInventoryOpcode(WorldPacket& recvPacket);
+        void handleListInventoryGuid(uint64_t guid);
         void handleAutoStoreBagItemOpcode(WorldPacket& recvPacket);
         void handleReadItemOpcode(WorldPacket& recvPacket);
         void handleRepairItemOpcode(WorldPacket& recvPacket);

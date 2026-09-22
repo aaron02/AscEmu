@@ -325,6 +325,12 @@ void WorldSocket::setClientProtocolByBuild(uint32_t build)
 // packet sending SERVER->CLIENT
 void WorldSocket::outPacket(uint32_t opcode, size_t len, const void* data)
 {
+    if (m_protocol.isForever())
+    {
+        sLogger.warning("WorldSocket::Forever: blocked legacy outPacket opcode=0x{:04X} payload={}.", opcode, len);
+        return;
+    }
+
     if ((len + 10) > WORLDSOCKET_SENDBUF_SIZE)
     {
         sLogger.failure("WARNING: Tried to send a packet of {} bytes (which is too large) to a socket. Opcode was: {} (0x{:03X})",
@@ -348,6 +354,12 @@ void WorldSocket::outPacket(uint32_t opcode, size_t len, const void* data)
 
 uint8_t WorldSocket::_outPacket(uint32_t opcode, size_t len, const void* data)
 {
+    if (m_protocol.isForever())
+    {
+        sLogger.warning("WorldSocket::Forever: blocked legacy _outPacket opcode=0x{:04X} payload={}.", opcode, len);
+        return OUTPACKET_RESULT_SUCCESS;
+    }
+
     if (!isConnected())
         return OUTPACKET_RESULT_NOT_CONNECTED;
 

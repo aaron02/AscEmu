@@ -358,10 +358,12 @@ namespace AscEmu::Version::Forever::Fields
 
     struct UnitData
     {
-        static inline constexpr std::size_t ChangeMaskSize = 228;
+        // Retail 1.60.1.69913 UnitData uses a 230-bit mask.
+        // The previous AscEmu table was stale by two bits from Race onward because
+        // BattlePetAttachedToDecorGUID/BattlePetDecorHouseGUID were present in the
+        // create structure but missing from the dirty-bit numbering.
+        static inline constexpr std::size_t ChangeMaskSize = 230;
         static inline constexpr std::size_t DisplayIdBit = 6;
-        // UnitData create wire order starts with DisplayID, NpcFlags and NpcFlags2.
-        // These are the corresponding update-field bits in the same block.
         static inline constexpr std::size_t NpcFlagsBit = 7;
         static inline constexpr std::size_t NpcFlags2Bit = 8;
         static inline constexpr std::size_t CharmBit = 14;
@@ -374,46 +376,89 @@ namespace AscEmu::Version::Forever::Fields
         static inline constexpr std::size_t LookAtControllerTargetBit = 21;
         static inline constexpr std::size_t TargetBit = 22;
         static inline constexpr std::size_t BattlePetCompanionGuidBit = 23;
-        static inline constexpr std::size_t RaceBit = 28;
-        static inline constexpr std::size_t ClassIdBit = 29;
-        static inline constexpr std::size_t PlayerClassIdBit = 30;
-        static inline constexpr std::size_t SexBit = 31;
-        static inline constexpr std::size_t DisplayPowerBit = 34;
-        static inline constexpr std::size_t HealthBit = 36;
-        static inline constexpr std::size_t MaxHealthBit = 37;
-        static inline constexpr std::size_t LevelBit = 38;
-        static inline constexpr std::size_t EffectiveLevelBit = 39;
-        static inline constexpr std::size_t FactionTemplateBit = 45;
-        // Verified against ordinary 1.60.1.69913 creature CreateObject blocks.
-        // Wire order after VirtualItems is UnitFlags, UnitFlags2, UnitFlags3,
-        // one still-unidentified uint32, then AuraState.
-        static inline constexpr std::size_t FlagsBit = 46;
-        static inline constexpr std::size_t Flags2Bit = 47;
-        static inline constexpr std::size_t Flags3Bit = 48;
-        static inline constexpr std::size_t UnknownAfterFlags3Bit = 49;
-        static inline constexpr std::size_t AuraStateBit = 50;
-        static inline constexpr std::size_t RangedAttackRoundBaseTimeBit = 51;
-        static inline constexpr std::size_t BoundingRadiusBit = 52;
-        static inline constexpr std::size_t CombatReachBit = 53;
-        static inline constexpr std::size_t NativeDisplayIdBit = 57;
-        static inline constexpr std::size_t MountDisplayIdBit = 59;
-        static inline constexpr std::size_t MinDamageBit = 61;
-        static inline constexpr std::size_t MaxDamageBit = 62;
-        static inline constexpr std::size_t MinOffHandDamageBit = 63;
-        static inline constexpr std::size_t MaxOffHandDamageBit = 65;
-        static inline constexpr std::size_t BaseManaBit = 83;
-        static inline constexpr std::size_t BaseHealthBit = 84;
-        static inline constexpr std::size_t PowerGroupBit = 137;
-        static inline constexpr std::size_t PowerFirstBit = 138;
-        static inline constexpr std::size_t MaxPowerFirstBit = 148;
-        static inline constexpr std::size_t AttackRoundBaseTimeGroupBit = 182;
-        static inline constexpr std::size_t AttackRoundBaseTimeFirstBit = 183;
-        static inline constexpr std::size_t StatsGroupBit = 185;
-        static inline constexpr std::size_t StatsFirstBit = 186;
-        static inline constexpr std::size_t StatPosBuffFirstBit = 191;
-        static inline constexpr std::size_t StatNegBuffFirstBit = 196;
-        static inline constexpr std::size_t ResistancesGroupBit = 206;
-        static inline constexpr std::size_t ResistancesFirstBit = 207;
+        static inline constexpr std::size_t BattlePetDbIdBit = 24;
+        static inline constexpr std::size_t BattlePetAttachedToDecorGuidBit = 25;
+        static inline constexpr std::size_t BattlePetDecorHouseGuidBit = 26;
+        static inline constexpr std::size_t ChannelDataBit = 27;
+        static inline constexpr std::size_t SpellEmpowerStageBit = 28;
+        static inline constexpr std::size_t SummonedByHomeRealmBit = 29;
+        static inline constexpr std::size_t RaceBit = 30;
+        static inline constexpr std::size_t ClassIdBit = 31;
+        static inline constexpr std::size_t PlayerClassIdBit = 33;
+        static inline constexpr std::size_t SexBit = 34;
+        static inline constexpr std::size_t CreatureTypeBit = 35;
+        static inline constexpr std::size_t DisplayPowerBit = 36;
+        static inline constexpr std::size_t OverrideDisplayPowerBit = 37;
+        static inline constexpr std::size_t HealthBit = 38;
+        static inline constexpr std::size_t MaxHealthBit = 39;
+        static inline constexpr std::size_t LevelBit = 40;
+        static inline constexpr std::size_t EffectiveLevelBit = 41;
+        static inline constexpr std::size_t ContentTuningBit = 42;
+        static inline constexpr std::size_t ScalingLevelMinBit = 43;
+        static inline constexpr std::size_t ScalingLevelMaxBit = 44;
+        static inline constexpr std::size_t ScalingLevelDeltaBit = 45;
+        static inline constexpr std::size_t ScalingFactionGroupBit = 46;
+        static inline constexpr std::size_t FactionTemplateBit = 47;
+        static inline constexpr std::size_t FlagsBit = 48;
+        static inline constexpr std::size_t Flags2Bit = 49;
+        static inline constexpr std::size_t Flags3Bit = 50;
+        static inline constexpr std::size_t Flags4Bit = 51;
+        static inline constexpr std::size_t AuraStateBit = 52;
+        static inline constexpr std::size_t RangedAttackRoundBaseTimeBit = 53;
+        static inline constexpr std::size_t BoundingRadiusBit = 54;
+        static inline constexpr std::size_t CombatReachBit = 55;
+        static inline constexpr std::size_t DisplayScaleBit = 56;
+        static inline constexpr std::size_t CreatureFamilyBit = 57;
+        static inline constexpr std::size_t OverrideCreatureTypeBit = 58;
+        static inline constexpr std::size_t NativeDisplayIdBit = 59;
+        static inline constexpr std::size_t NativeXDisplayScaleBit = 60;
+        static inline constexpr std::size_t MountDisplayIdBit = 61;
+        static inline constexpr std::size_t CosmeticMountDisplayIdBit = 62;
+        static inline constexpr std::size_t MinDamageBit = 63;
+        static inline constexpr std::size_t MaxDamageBit = 65;
+        static inline constexpr std::size_t MinOffHandDamageBit = 66;
+        static inline constexpr std::size_t MaxOffHandDamageBit = 67;
+        static inline constexpr std::size_t StandStateBit = 68;
+        static inline constexpr std::size_t PetTalentPointsBit = 69;
+        static inline constexpr std::size_t VisFlagsBit = 70;
+        static inline constexpr std::size_t AnimTierBit = 71;
+        static inline constexpr std::size_t PetNumberBit = 72;
+        static inline constexpr std::size_t PetNameTimestampBit = 73;
+        static inline constexpr std::size_t PetExperienceBit = 74;
+        static inline constexpr std::size_t PetNextLevelExperienceBit = 75;
+        static inline constexpr std::size_t ModCastingSpeedBit = 76;
+        static inline constexpr std::size_t ModCastingSpeedNegBit = 77;
+        static inline constexpr std::size_t ModSpellHasteBit = 78;
+        static inline constexpr std::size_t ModHasteBit = 79;
+        static inline constexpr std::size_t ModRangedHasteBit = 80;
+        static inline constexpr std::size_t ModHasteRegenBit = 81;
+        static inline constexpr std::size_t ModTimeRateBit = 82;
+        static inline constexpr std::size_t CreatedBySpellBit = 83;
+        static inline constexpr std::size_t EmoteStateBit = 84;
+        static inline constexpr std::size_t BaseManaBit = 85;
+        static inline constexpr std::size_t BaseHealthBit = 86;
+        static inline constexpr std::size_t SheatheStateBit = 87;
+        static inline constexpr std::size_t PvpFlagsBit = 88;
+        static inline constexpr std::size_t PetFlagsBit = 89;
+        static inline constexpr std::size_t ShapeshiftFormBit = 90;
+
+        // The 69913 differential updates observed in the new retail sniff line up
+        // with the modern 230-bit grouping (for example bits 48/49/52/90 and
+        // the 148..150 power island). Keep the complete array groups aligned.
+        static inline constexpr std::size_t PowerGroupBit = 139;
+        static inline constexpr std::size_t PowerFirstBit = 140;
+        static inline constexpr std::size_t MaxPowerFirstBit = 150;
+        static inline constexpr std::size_t AttackRoundBaseTimeGroupBit = 184;
+        static inline constexpr std::size_t AttackRoundBaseTimeFirstBit = 185;
+        static inline constexpr std::size_t StatsGroupBit = 187;
+        static inline constexpr std::size_t StatsFirstBit = 188;
+        static inline constexpr std::size_t StatPosBuffFirstBit = 193;
+        static inline constexpr std::size_t StatNegBuffFirstBit = 198;
+        static inline constexpr std::size_t StatSupportBuffFirstBit = 203;
+        static inline constexpr std::size_t ResistancesGroupBit = 208;
+        static inline constexpr std::size_t ResistancesFirstBit = 209;
+        static inline constexpr std::size_t BonusResistanceModsFirstBit = 216;
+        static inline constexpr std::size_t ManaCostModifierFirstBit = 223;
 
         std::bitset<ChangeMaskSize> changes{};
 
@@ -486,7 +531,7 @@ namespace AscEmu::Version::Forever::Fields
         uint32_t unitFlags69913 = 0;
         uint32_t unitFlags2_69913 = 0;
         uint32_t unitFlags3_69913 = 0;
-        uint32_t unknownU32AfterUnitFlags3_69913 = 0;
+        uint32_t flags4_69913 = 0;
         uint32_t auraState69913 = 0;
         std::array<uint32_t, 2> attackRoundBaseTime{};
         uint32_t rangedAttackRoundBaseTime = 0;
@@ -525,9 +570,9 @@ namespace AscEmu::Version::Forever::Fields
         float modHaste = 1.0f;
         float modRangedHaste = 1.0f;
         float modHasteRegen = 1.0f;
-        float unknownFloatAfterPet6_69913 = 1.0f;
-        int32_t unknownI32AfterPet0_69913 = 0;
-        int32_t unknownI32AfterPet1_69913 = 0;
+        float modTimeRate69913 = 1.0f;
+        int32_t createdBySpell69913 = 0;
+        int32_t emoteState69913 = 0;
 
         uint32_t unknownBeforeStats69913 = 0;
         // Verified against the 1.60.1.69913 self-create capture. The five
@@ -535,11 +580,11 @@ namespace AscEmu::Version::Forever::Fields
         std::array<int32_t, 5> stats69913{};
         std::array<int32_t, 5> statPosBuff69913{};
         std::array<int32_t, 5> statNegBuff69913{};
-        std::array<int32_t, 5> unknownI32Array3_69913{};
+        std::array<int32_t, 5> statSupportBuff69913{};
         // Resistance[0] is physical armor, followed by the six magic schools.
         std::array<int32_t, 7> resistances69913{};
-        std::array<int32_t, 7> unknownI32Array5_69913{};
-        std::array<int32_t, 7> unknownI32Array6_69913{};
+        std::array<int32_t, 7> bonusResistanceMods69913{};
+        std::array<int32_t, 7> manaCostModifier69913{};
 
         int32_t baseMana = 0;
         int32_t baseHealth = 0;
@@ -551,51 +596,51 @@ namespace AscEmu::Version::Forever::Fields
         uint8_t petFlags = 0;
         uint8_t shapeshiftForm = 0;
 
-        int32_t unknownI32OwnerCombat0_69913 = 0;
-        int32_t unknownI32OwnerCombat1_69913 = 0;
-        int32_t unknownI32OwnerCombat2_69913 = 0;
-        float unknownFloatOwnerCombat0_69913 = 0.0f;
-        int32_t unknownI32OwnerCombat3_69913 = 0;
+        int32_t attackPower69913 = 0;
+        int32_t attackPowerModPos69913 = 0;
+        int32_t attackPowerModNeg69913 = 0;
+        float attackPowerMultiplier69913 = 0.0f;
+        int32_t attackPowerModSupport69913 = 0;
         uint32_t unknownBeforeRangedAttackPower69913A = 0;
         uint32_t unknownBeforeRangedAttackPower69913B = 0;
-        int32_t unknownI32OwnerCombat4_69913 = 0;
-        int32_t unknownI32OwnerCombat5_69913 = 0;
-        int32_t unknownI32OwnerCombat6_69913 = 0;
-        float unknownFloatOwnerCombat1_69913 = 0.0f;
-        int32_t unknownI32OwnerCombat7_69913 = 0;
-        int32_t unknownI32OwnerCombat8_69913 = 0;
-        int32_t unknownI32OwnerCombat9_69913 = 0;
-        int32_t unknownI32OwnerCombat10_69913 = 0;
-        int32_t unknownI32OwnerCombat11_69913 = 0;
-        float unknownFloatOwnerCombat2_69913 = 0.0f;
-        float unknownFloatOwnerCombat3_69913 = 0.0f;
-        float unknownFloatOwnerCombat4_69913 = 0.0f;
-        float unknownFloatOwnerCombat5_69913 = 0.0f;
+        int32_t rangedAttackPower69913 = 0;
+        int32_t rangedAttackPowerModPos69913 = 0;
+        int32_t rangedAttackPowerModNeg69913 = 0;
+        float rangedAttackPowerMultiplier69913 = 0.0f;
+        int32_t rangedAttackPowerModSupport69913 = 0;
+        int32_t mainHandWeaponAttackPower69913 = 0;
+        int32_t offHandWeaponAttackPower69913 = 0;
+        int32_t rangedWeaponAttackPower69913 = 0;
+        int32_t setAttackSpeedAura69913 = 0;
+        float lifesteal69913 = 0.0f;
+        float minRangedDamage69913 = 0.0f;
+        float maxRangedDamage69913 = 0.0f;
+        float manaCostMultiplier69913 = 0.0f;
 
-        float unknownFloatAfterOwnerCombat0_69913 = 1.0f;
-        float unknownFloatAfterOwnerCombat1_69913 = 1.0f;
-        int32_t unknownI32AfterOwnerCombat0_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat1_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat2_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat3_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat4_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat5_69913 = 0;
-        uint32_t unknownU32AfterOwnerCombat0_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat6_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat7_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat8_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat9_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat10_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat11_69913 = 0;
-        int32_t unknownI32AfterOwnerCombat12_69913 = 0;
+        float maxHealthModifier69913 = 1.0f;
+        float hoverHeight69913 = 1.0f;
+        int32_t minItemLevelCutoff69913 = 0;
+        int32_t minItemLevel69913 = 0;
+        int32_t maxItemLevel69913 = 0;
+        int32_t azeriteItemLevel69913 = 0;
+        int32_t wildBattlePetLevel69913 = 0;
+        int32_t battlePetCompanionExperience69913 = 0;
+        uint32_t battlePetCompanionNameTimestamp69913 = 0;
+        int32_t interactSpellId69913 = 0;
+        int32_t scaleDuration69913 = 0;
+        int32_t looksLikeMountId69913 = 0;
+        int32_t looksLikeCreatureId69913 = 0;
+        int32_t lookAtControllerId69913 = 0;
+        int32_t perksVendorItemId69913 = 0;
+        int32_t taxiNodesId69913 = 0;
         WoWGuid unknownGuid0_69913;
 
-        int32_t unknownI32AfterGuid0_69913 = 0;
-        float unknownFloatAfterGuid0_69913 = 0.0f;
-        int32_t unknownI32AfterGuid1_69913 = 0;
-        int32_t unknownI32AfterGuid2_69913 = 0;
-        int32_t unknownI32AfterGuid3_69913 = 0;
-        uint32_t unknownU32AfterGuid0_69913 = 0;
+        int32_t flightCapabilityId69913 = 0;
+        float glideEventSpeedDivisor69913 = 0.0f;
+        int32_t driveCapabilityId69913 = 0;
+        int32_t maxHealthModifierFlatNeg69913 = 0;
+        int32_t maxHealthModifierFlatPos69913 = 0;
+        uint32_t silencedSchoolMask69913 = 0;
         uint32_t unknownBeforeCurrentAreaId69913 = 0;
         uint32_t currentAreaId = 0;
         float nameplateDistanceMod = 0.0f;
@@ -616,8 +661,74 @@ namespace AscEmu::Version::Forever::Fields
     struct PlayerData
     {
         static inline constexpr std::size_t ChangeMaskSize = 326;
-        // These positions are retained from the pre-cleanup runtime dirty-mask mapping.
-        // Their Forever 69913 semantics are not proofed yet, so keep neutral names.
+
+        // PlayerData uses the same 326-bit modern mask layout as the reference
+        // 12.x structure. These names only describe dirty-mask positions; the
+        // 69913 CREATE payload remains capture-driven below.
+        static inline constexpr std::size_t HasQuestSessionBit = 1;
+        static inline constexpr std::size_t HasLevelLinkBit = 2;
+        static inline constexpr std::size_t CustomizationsBit = 3;
+        static inline constexpr std::size_t RandomCustomizationsBit = 4;
+        static inline constexpr std::size_t QuestSessionQuestLogBit = 5;
+        static inline constexpr std::size_t ArenaCooldownsBit = 6;
+        static inline constexpr std::size_t PetNamesBit = 7;
+        static inline constexpr std::size_t VisualItemReplacementsBit = 8;
+        static inline constexpr std::size_t DuelArbiterBit = 9;
+        static inline constexpr std::size_t WowAccountBit = 10;
+        static inline constexpr std::size_t BnetAccountBit = 11;
+        static inline constexpr std::size_t GuildClubMemberIdBit = 12;
+        static inline constexpr std::size_t LootTargetGuidBit = 13;
+        static inline constexpr std::size_t PlayerFlagsBit = 14;
+        static inline constexpr std::size_t PlayerFlagsExBit = 15;
+        static inline constexpr std::size_t GuildRankBit = 16;
+        static inline constexpr std::size_t GuildDeleteDateBit = 17;
+        static inline constexpr std::size_t GuildLevelBit = 18;
+        static inline constexpr std::size_t NativeSexBit = 19;
+        static inline constexpr std::size_t InebriationBit = 20;
+        static inline constexpr std::size_t PvpTitleBit = 21;
+        static inline constexpr std::size_t ArenaFactionBit = 22;
+        static inline constexpr std::size_t DuelTeamBit = 23;
+        static inline constexpr std::size_t GuildTimeStampBit = 24;
+        static inline constexpr std::size_t QuestLogQuestIdToIndexBit = 25;
+        static inline constexpr std::size_t PlayerTitleBit = 26;
+        static inline constexpr std::size_t FakeInebriationBit = 27;
+        static inline constexpr std::size_t VirtualPlayerRealmBit = 28;
+        static inline constexpr std::size_t CurrentSpecBit = 29;
+        static inline constexpr std::size_t CombatTraitSubTreeBit = 30;
+        static inline constexpr std::size_t TaxiMountAnimKitBit = 31;
+        static inline constexpr std::size_t BattlePetBreedQualityBit = 33;
+        static inline constexpr std::size_t HonorBit = 34;
+        static inline constexpr std::size_t LogoutTimeBit = 35;
+        static inline constexpr std::size_t NameBit = 36;
+        static inline constexpr std::size_t OfferedAdventureQuestBit = 37;
+        static inline constexpr std::size_t OfferedScriptedQuestBit = 38;
+        static inline constexpr std::size_t CurrentBattlePetSpeciesBit = 39;
+        static inline constexpr std::size_t CtrOptionsBit = 40;
+        static inline constexpr std::size_t CovenantIdBit = 41;
+        static inline constexpr std::size_t SoulbindIdBit = 42;
+        static inline constexpr std::size_t DungeonScoreBit = 43;
+        static inline constexpr std::size_t LeaverInfoBit = 44;
+        static inline constexpr std::size_t SpectateTargetBit = 45;
+        static inline constexpr std::size_t WorldLootSwapSlotBit = 46;
+        static inline constexpr std::size_t DeclinedNamesBit = 47;
+        static inline constexpr std::size_t PersonalTabardBit = 48;
+        static inline constexpr std::size_t NpcAsPlayerInfoBit = 49;
+        static inline constexpr std::size_t PartyTypeGroupBit = 50;
+        static inline constexpr std::size_t PartyTypeFirstBit = 51;
+        static inline constexpr std::size_t QuestLogGroupBit = 53;
+        static inline constexpr std::size_t QuestLogFirstBit = 54;
+        static inline constexpr std::size_t VisibleItemsGroupBit = 229;
+        static inline constexpr std::size_t VisibleItemsFirstBit = 230;
+        static inline constexpr std::size_t AvgItemLevelGroupBit = 249;
+        static inline constexpr std::size_t AvgItemLevelFirstBit = 250;
+        static inline constexpr std::size_t ForcedReactionsGroupBit = 256;
+        static inline constexpr std::size_t ForcedReactionsFirstBit = 257;
+        static inline constexpr std::size_t VisibleEquipableSpellsGroupBit = 289;
+        static inline constexpr std::size_t VisibleEquipableSpellsFirstBit = 290;
+        static inline constexpr std::size_t PlunderstormItemDisplayIdGroupBit = 306;
+        static inline constexpr std::size_t PlunderstormItemDisplayIdFirstBit = 307;
+
+        // Legacy aliases kept while existing runtime setters are migrated.
         static inline constexpr std::size_t UnknownChangeBit3_69913 = 3;
         static inline constexpr std::size_t UnknownChangeBit9_69913 = 9;
         static inline constexpr std::size_t UnknownChangeBit14_69913 = 14;

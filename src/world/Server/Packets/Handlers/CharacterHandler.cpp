@@ -949,7 +949,7 @@ void WorldSession::fullLoginForever(Player* player)
 
         unitFields.race = player->getRace();
         unitFields.classId = player->getClass();
-        unitFields.playerClassId = player->getClass();
+        unitFields.playerClassId = 0; // Retail 69913 self-create: separate PlayerClassId slot is zero.
         unitFields.sex = player->getGender();
         unitFields.displayPower = static_cast<uint8_t>(player->getPowerType());
         unitFields.health = player->getHealth();
@@ -959,6 +959,7 @@ void WorldSession::fullLoginForever(Player* player)
         unitFields.factionTemplate = static_cast<int32_t>(player->getFactionTemplate());
         unitFields.unitFlags69913 = player->getUnitFlags();
         unitFields.unitFlags2_69913 = player->getUnitFlags2();
+        unitFields.unitFlags3_69913 = 0x00000020U; // Stable across sampled 69913 player self-creates.
         unitFields.boundingRadius = player->getBoundingRadius();
         unitFields.combatReach = player->getCombatReach();
 
@@ -990,6 +991,16 @@ void WorldSession::fullLoginForever(Player* player)
         unitFields.minDamage69913 = player->getMinDamage();
         unitFields.maxDamage69913 = player->getMaxDamage();
 
+        // Owner-visible combat fields now have capture-verified semantics.
+        // The new Rogue retail capture reports AP=26, RangedAP=27 and
+        // Min/MaxRangedDamage=4.857143/6.857143 (UI rounds to 4-7).
+        unitFields.attackPower69913 = static_cast<int32_t>(player->getAttackPower());
+        unitFields.attackPowerMultiplier69913 = player->getAttackPowerMultiplier();
+        unitFields.rangedAttackPower69913 = player->getRangedAttackPower();
+        unitFields.rangedAttackPowerMultiplier69913 = player->getRangedAttackPowerMultiplier();
+        unitFields.minRangedDamage69913 = player->getMinRangedDamage();
+        unitFields.maxRangedDamage69913 = player->getMaxRangedDamage();
+
         // Forever 69913 UnitData protocol defaults verified from the working
         // self-create capture. These are sentinel/default values, not copied
         // character stats.
@@ -997,9 +1008,8 @@ void WorldSession::fullLoginForever(Player* player)
         unitFields.creatureType = 7;               // Player units are humanoid.
         unitFields.effectiveLevel = 0;              // No effective-level override.
         unitFields.petNextLevelExperience = 0x7FFFFFFF;
-        unitFields.unknownI32AfterOwnerCombat10_69913 = -1;
-        unitFields.unknownFloatAfterGuid0_69913 = 1.0f;
-        unitFields.unknownFloatAfterOwnerCombat0_69913 = 0.0f;
+        unitFields.glideEventSpeedDivisor69913 = 1.0f;
+        unitFields.maxHealthModifier69913 = 0.0f;
 
         // Forever 69913 inserts an owner-visible extension immediately before
         // NameplateAttachToGUID. The capture contains a 15-byte unresolved prefix,

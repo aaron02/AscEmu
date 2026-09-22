@@ -688,6 +688,8 @@ bool WorldSocket::initializeVersionedConnection()
 
     WoW::ClientProtocol protocol;
     protocol.expansion = WoW::Expansion::Unknown;
+    protocol.flavor = WoW::ProtocolFlavor::Forever;
+    protocol.realmId = m_foreverRealmId;
     setClientProtocol(protocol);
 
     m_foreverClientBuild = AscEmu::Version::Forever::Build;
@@ -1174,6 +1176,7 @@ bool WorldSocket::processForeverAuthSession(
     m_foreverRegionId = regionId;
     m_foreverBattlegroupId = battlegroupId;
     m_foreverRealmId = realmId;
+    m_protocol.realmId = realmId;
 
     std::array<uint8_t, 32> localChallenge{};
     std::memcpy(
@@ -1399,6 +1402,7 @@ bool WorldSocket::processForeverAuthContinuedSession(uint32_t opcode, const std:
     m_foreverRegionId = pending.regionId;
     m_foreverBattlegroupId = pending.battlegroupId;
     m_foreverRealmId = pending.realmId;
+    m_protocol.realmId = pending.realmId;
     m_foreverSessionKey = pending.sessionKey;
     if (!deriveForeverEncryptionKeyFromSession(m_foreverSessionKey, localChallenge, m_foreverServerChallenge, m_foreverEncryptionKey))
         return false;
@@ -1946,8 +1950,26 @@ bool WorldSocket::setVersionedClientProtocolByBuild(uint32_t build)
     return true;
 }
 
-bool WorldSocket::sendVersionedPacket(WorldPacket*)
+bool WorldSocket::sendVersionedPacket(WorldPacket* packet)
 {
-    // Legacy WorldPacket framing must never leak onto the Forever V2 socket.
-    return m_foreverWorldState != ForeverWorldState::Disabled;
+    if (m_foreverWorldState == ForeverWorldState::Disabled)
+        return false;
+
+    if (packet == nullptr)
+        return true;
+
+    if (m_foreverWorldState == ForeverWorldState::Encrypted)
+    {
+        switch (packet->getOpcode())
+        {
+            case SMSG_LIST_INVENTORY:
+                return sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_VENDOR_INVENTORY, packet->contents(), static_cast<uint32_t>(packet->size()));
+            default:
+                sLogger.debug("WorldSocket::Forever: blocked unmapped managed packet opcode={} payload={}.", packet->getOpcode(), packet->size());
+                return true;
+        }
+    }
+
+    sLogger.debug("WorldSocket::Forever: blocked managed packet opcode={} while Forever socket state is not encrypted.", packet->getOpcode());
+    return true;
 }

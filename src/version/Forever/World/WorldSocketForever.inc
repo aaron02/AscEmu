@@ -42,6 +42,7 @@ protected:
     bool handleForeverDbQueryBulkOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverHotfixRequestOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverQueryCreatureOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
+    bool handleForeverListInventoryOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverPingOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverSocialContractOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverSocialContractAcceptOpcode(AscEmu::Version::Forever::Packets::Packet& packet);

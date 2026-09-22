@@ -8,6 +8,7 @@
 #include "world/Server/World.h"
 #include "world/Storage/VersionDataBridge.hpp"
 #include "world/Objects/Units/Creatures/CreatureDefines.hpp"
+#include "shared/WoWGuid.hpp"
 #include "Logging/Logger.hpp"
 
 #include <array>
@@ -219,4 +220,35 @@ bool WorldSocket::handleForeverQueryCreatureOpcode(AscEmu::Version::Forever::Pac
         response.size());
 
     return sendForeverPacket(Opcode::SMSG_QUERY_CREATURE_RESPONSE, response.contents(), static_cast<uint32_t>(response.size()));
+}
+
+bool WorldSocket::handleForeverListInventoryOpcode(AscEmu::Version::Forever::Packets::Packet& packet)
+{
+    WoWGuid modernGuid;
+    std::size_t consumed = 0;
+
+    if (!WoWGuid::unpackModern(packet.contents(), packet.size(), modernGuid, consumed) || consumed != packet.size())
+    {
+        sLogger.warning("WorldSocket::Forever: malformed CMSG_LIST_INVENTORY payload={} byte(s), consumed={}.", packet.size(), consumed);
+        return true;
+    }
+
+    if (modernGuid.getModernHighType() != ModernHighGuid::Creature && modernGuid.getModernHighType() != ModernHighGuid::Vehicle)
+    {
+        sLogger.warning("WorldSocket::Forever: CMSG_LIST_INVENTORY target has unexpected modern high type={} entry={} counter={}.", static_cast<uint32_t>(modernGuid.getModernHighType()), modernGuid.getModernEntry(), modernGuid.getModernCounter());
+        return true;
+    }
+
+    if (m_session == nullptr)
+    {
+        sLogger.warning("WorldSocket::Forever: CMSG_LIST_INVENTORY received without an attached WorldSession.");
+        return false;
+    }
+
+    const uint64_t legacyGuid = modernGuid.toLegacyRaw();
+
+    sLogger.info("WorldSocket::Forever: CMSG_LIST_INVENTORY target entry={} counter={} modernLow=0x{:016X} modernHigh=0x{:016X} -> legacyGuid=0x{:016X}.", modernGuid.getModernEntry(), modernGuid.getModernCounter(), modernGuid.getModernLow(), modernGuid.getModernHigh(), legacyGuid);
+
+    m_session->handleListInventoryGuid(legacyGuid);
+    return true;
 }

@@ -2037,10 +2037,12 @@ void WorldSession::handleListInventoryOpcode(WorldPacket& recvPacket)
     if (!parsePacket(recvPacket, srlPacket))
         return;
 
-    WoWGuid wowGuid;
-    wowGuid.init(srlPacket.guid);
+    handleListInventoryGuid(srlPacket.guid.getRawGuid());
+}
 
-    Creature* unit = _player->getWorldMapCreature(wowGuid.getRawGuid());
+void WorldSession::handleListInventoryGuid(uint64_t guid)
+{
+    Creature* unit = _player->getWorldMapCreature(guid);
     if (unit == nullptr)
         return;
 
@@ -2132,7 +2134,7 @@ void WorldSession::sendInventoryList(Creature* unit)
             break;
     }
 
-    SmsgListInventory managedPacket(unit->getGuid(), static_cast<uint32_t>(unit->GetSellItemCount()), unit->isArmorer(), std::move(items));
+    SmsgListInventory managedPacket(unit->getGuid(), static_cast<uint16_t>(unit->GetMapId()), static_cast<uint32_t>(unit->GetSellItemCount()), unit->isArmorer(), std::move(items));
     sendManagedPacket(managedPacket);
 
     sLogger.debug("Sent SMSG_LIST_INVENTORY");

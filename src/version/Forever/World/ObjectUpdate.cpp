@@ -54,6 +54,13 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         constexpr uint8_t FRAGMENT_CGOBJECT_69913 = 0x03U;
         constexpr uint8_t FRAGMENT_PLAYER_HOUSE_INFO_69913 = 0x21U;
         constexpr uint8_t FRAGMENT_PLAYER_INITIATIVE_69913 = 0x26U;
+
+        // Retail Forever 1.60.1.69913 vendor creatures carry fragment 0x12
+        // in addition to CGObject + Tag_Unit. Godric Rothgar was the controlled
+        // runtime proof: without 0x12 right-click produced no interaction CMSG;
+        // with 0x12 the client started sending the interaction request.
+        constexpr uint8_t FRAGMENT_VENDOR_69913 = 0x12U;
+
         constexpr uint8_t FRAGMENT_TAG_UNIT_69913 = 0xCCU;
         constexpr uint8_t FRAGMENT_TAG_PLAYER_69913 = 0xCDU;
         constexpr uint8_t FRAGMENT_END_69913 = 0xFFU;
@@ -330,8 +337,8 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         for (Fields::VisibleItem const& value : fields.virtualItems)
             writeVisibleItemCreate(data, value);
         // 1.60.1.69913 verified from retail creature creates:
-        // UnitFlags, UnitFlags2, UnitFlags3, unknown uint32, AuraState.
-        data << fields.unitFlags69913 << fields.unitFlags2_69913 << fields.unitFlags3_69913 << fields.unknownU32AfterUnitFlags3_69913 << fields.auraState69913;
+        // UnitFlags, UnitFlags2, UnitFlags3, Flags4, AuraState.
+        data << fields.unitFlags69913 << fields.unitFlags2_69913 << fields.unitFlags3_69913 << fields.flags4_69913 << fields.auraState69913;
 
         for (uint32_t value : fields.attackRoundBaseTime)
             data << value;
@@ -345,21 +352,21 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data << fields.minDamage69913 << fields.maxDamage69913 << fields.minOffHandDamage69913 << fields.maxOffHandDamage69913;
 
         data << fields.standState << fields.petTalentPoints << fields.visFlags << fields.animTier << fields.petNumber << fields.petNameTimestamp << fields.petExperience << fields.unknownAfterPetExperience69913 << fields.petNextLevelExperience;
-        data << fields.modCastingSpeed << fields.modCastingSpeedNeg << fields.modSpellHaste << fields.modHaste << fields.modRangedHaste << fields.modHasteRegen << fields.unknownFloatAfterPet6_69913;
-        data << fields.unknownI32AfterPet0_69913 << fields.unknownI32AfterPet1_69913;
+        data << fields.modCastingSpeed << fields.modCastingSpeedNeg << fields.modSpellHaste << fields.modHaste << fields.modRangedHaste << fields.modHasteRegen << fields.modTimeRate69913;
+        data << fields.createdBySpell69913 << fields.emoteState69913;
 
         if (ownerVisible)
         {
             data << fields.unknownBeforeStats69913;
 
             for (std::size_t i = 0; i < fields.stats69913.size(); ++i)
-                data << fields.stats69913[i] << fields.statPosBuff69913[i] << fields.statNegBuff69913[i] << fields.unknownI32Array3_69913[i];
+                data << fields.stats69913[i] << fields.statPosBuff69913[i] << fields.statNegBuff69913[i] << fields.statSupportBuff69913[i];
 
             for (int32_t value : fields.resistances69913)
                 data << value;
 
-            for (std::size_t i = 0; i < fields.unknownI32Array5_69913.size(); ++i)
-                data << fields.unknownI32Array5_69913[i] << fields.unknownI32Array6_69913[i];
+            for (std::size_t i = 0; i < fields.bonusResistanceMods69913.size(); ++i)
+                data << fields.bonusResistanceMods69913[i] << fields.manaCostModifier69913[i];
         }
 
         data << fields.baseMana;
@@ -370,17 +377,17 @@ namespace AscEmu::Version::Forever::ObjectUpdate
 
         if (ownerVisible)
         {
-            data << fields.unknownI32OwnerCombat0_69913 << fields.unknownI32OwnerCombat1_69913 << fields.unknownI32OwnerCombat2_69913 << fields.unknownFloatOwnerCombat0_69913 << fields.unknownI32OwnerCombat3_69913;
+            data << fields.attackPower69913 << fields.attackPowerModPos69913 << fields.attackPowerModNeg69913 << fields.attackPowerMultiplier69913 << fields.attackPowerModSupport69913;
             data << fields.unknownBeforeRangedAttackPower69913A << fields.unknownBeforeRangedAttackPower69913B;
-            data << fields.unknownI32OwnerCombat4_69913 << fields.unknownI32OwnerCombat5_69913 << fields.unknownI32OwnerCombat6_69913 << fields.unknownFloatOwnerCombat1_69913 << fields.unknownI32OwnerCombat7_69913;
-            data << fields.unknownI32OwnerCombat8_69913 << fields.unknownI32OwnerCombat9_69913 << fields.unknownI32OwnerCombat10_69913 << fields.unknownI32OwnerCombat11_69913 << fields.unknownFloatOwnerCombat2_69913 << fields.unknownFloatOwnerCombat3_69913 << fields.unknownFloatOwnerCombat4_69913 << fields.unknownFloatOwnerCombat5_69913;
+            data << fields.rangedAttackPower69913 << fields.rangedAttackPowerModPos69913 << fields.rangedAttackPowerModNeg69913 << fields.rangedAttackPowerMultiplier69913 << fields.rangedAttackPowerModSupport69913;
+            data << fields.mainHandWeaponAttackPower69913 << fields.offHandWeaponAttackPower69913 << fields.rangedWeaponAttackPower69913 << fields.setAttackSpeedAura69913 << fields.lifesteal69913 << fields.minRangedDamage69913 << fields.maxRangedDamage69913 << fields.manaCostMultiplier69913;
         }
 
-        data << fields.unknownFloatAfterOwnerCombat0_69913 << fields.unknownFloatAfterOwnerCombat1_69913 << fields.unknownI32AfterOwnerCombat0_69913 << fields.unknownI32AfterOwnerCombat1_69913 << fields.unknownI32AfterOwnerCombat2_69913 << fields.unknownI32AfterOwnerCombat3_69913 << fields.unknownI32AfterOwnerCombat4_69913 << fields.unknownI32AfterOwnerCombat5_69913 << fields.unknownU32AfterOwnerCombat0_69913;
-        data << fields.unknownI32AfterOwnerCombat6_69913 << fields.unknownI32AfterOwnerCombat7_69913 << fields.unknownI32AfterOwnerCombat8_69913 << fields.unknownI32AfterOwnerCombat9_69913 << fields.unknownI32AfterOwnerCombat10_69913 << fields.unknownI32AfterOwnerCombat11_69913 << fields.unknownI32AfterOwnerCombat12_69913;
+        data << fields.maxHealthModifier69913 << fields.hoverHeight69913 << fields.minItemLevelCutoff69913 << fields.minItemLevel69913 << fields.maxItemLevel69913 << fields.azeriteItemLevel69913 << fields.wildBattlePetLevel69913 << fields.battlePetCompanionExperience69913 << fields.battlePetCompanionNameTimestamp69913;
+        data << fields.interactSpellId69913 << fields.scaleDuration69913 << fields.looksLikeMountId69913 << fields.looksLikeCreatureId69913 << fields.lookAtControllerId69913 << fields.perksVendorItemId69913 << fields.taxiNodesId69913;
         writeModernGuid(data, fields.unknownGuid0_69913);
         data << uint32_t(fields.passiveSpells.size()) << uint32_t(fields.worldEffects.size()) << uint32_t(fields.channelObjects.size());
-        data << fields.unknownI32AfterGuid0_69913 << fields.unknownFloatAfterGuid0_69913 << fields.unknownI32AfterGuid1_69913 << fields.unknownI32AfterGuid2_69913 << fields.unknownI32AfterGuid3_69913 << fields.unknownU32AfterGuid0_69913;
+        data << fields.flightCapabilityId69913 << fields.glideEventSpeedDivisor69913 << fields.driveCapabilityId69913 << fields.maxHealthModifierFlatNeg69913 << fields.maxHealthModifierFlatPos69913 << fields.silencedSchoolMask69913;
         if (ownerVisible)
             data << fields.unknownBeforeCurrentAreaId69913;
         data << fields.currentAreaId << fields.nameplateDistanceMod << fields.autoAttackRangeMod;
@@ -695,22 +702,34 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         std::span<const uint8_t> packedGuid,
         float x, float y, float z, float orientation, uint32_t movementTimeMs,
         Fields::ObjectData const& objectFields,
-        Fields::UnitData const& unitFields)
+        Fields::UnitData const& unitFields,
+        uint32_t vendorDataFlags69913)
     {
         if (packedGuid.empty())
             return {};
 
         ByteBuffer fieldPayload;
 
-        // Minimal Forever unit fragment set observed on ordinary stationary
-        // creatures: flags=0x04, CGObject, Unit tag, end, CGObject active.
+        // Ordinary stationary creature:
+        //   04 03 CC FF 01
+        //
+        // Capture/runtime-verified vendor creature fragment list in 69913:
+        //   04 03 12 CC FF 01
         fieldPayload << uint8_t(0x04)
-                     << uint8_t(FRAGMENT_CGOBJECT_69913)
-                     << uint8_t(FRAGMENT_TAG_UNIT_69913)
+                     << uint8_t(FRAGMENT_CGOBJECT_69913);
+
+        if (vendorDataFlags69913 != 0)
+            fieldPayload << uint8_t(FRAGMENT_VENDOR_69913);
+
+        fieldPayload << uint8_t(FRAGMENT_TAG_UNIT_69913)
                      << uint8_t(FRAGMENT_END_69913)
                      << uint8_t(1);
+
         writeObjectDataCreate(fieldPayload, objectFields);
         writeUnitDataCreate(fieldPayload, unitFields, false);
+
+        if (vendorDataFlags69913 != 0)
+            fieldPayload << int32_t(vendorDataFlags69913);
 
         ByteBuffer block;
         block << uint8_t(1); // CREATE_OBJECT (ordinary world unit)

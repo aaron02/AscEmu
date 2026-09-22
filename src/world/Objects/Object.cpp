@@ -565,12 +565,14 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
             return 0;
 
         Unit* const unit = static_cast<Unit*>(this);
+        Creature* const creature = static_cast<Creature*>(this);
         const std::vector<uint8_t> block =
             AscEmu::Version::Forever::ObjectUpdate::buildCreatureCreateBlock69913(
                 packedGuid,
                 GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(),
                 static_cast<uint32_t>(Util::getMSTime()),
-                foreverObjectFields(), unit->foreverUnitFields());
+                foreverObjectFields(), unit->foreverUnitFields(),
+                creature->isVendor() ? 1U : 0U);
 
         if (block.empty())
             return 0;

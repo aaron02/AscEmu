@@ -14,6 +14,8 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "WoWItem.hpp"
+#include <bitset>
+#include "WoWGuid.hpp"
 
 #pragma pack(push, 1)
 

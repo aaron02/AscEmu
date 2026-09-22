@@ -1,0 +1,1053 @@
+/*
+Copyright (c) 2014-2026 AscEmu Team <http://www.ascemu.org>
+This file is released under the MIT license. See README-MIT for more information.
+*/
+
+#pragma once
+
+#if !defined(AE_FOREVER)
+#error "ForeverUpdateFields.hpp is only valid for the Forever client profile."
+#endif
+
+#include "WoWGuid.hpp"
+
+#include <array>
+#include <bitset>
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace AscEmu::Version::Forever::Fields
+{
+    inline constexpr uint32_t SchemaBuild = 69913;
+
+    struct Vec2 { float x = 0.0f; float y = 0.0f; };
+    struct Vec3 { float x = 0.0f; float y = 0.0f; float z = 0.0f; };
+    struct Quaternion { float x = 0.0f; float y = 0.0f; float z = 0.0f; float w = 1.0f; };
+
+    struct SpellCastVisual
+    {
+        int32_t spellXSpellVisualId = 0;
+        int32_t scriptVisualId = 0;
+    };
+
+    struct ChrCustomizationChoice
+    {
+        uint32_t optionId = 0;
+        uint32_t choiceId = 0;
+    };
+
+    struct ItemEnchantment
+    {
+        int32_t id = 0;
+        uint32_t duration = 0;
+        int16_t charges = 0;
+        uint16_t inactive = 0;
+    };
+
+    struct ItemMod
+    {
+        uint8_t type = 0;
+        int32_t value = 0;
+    };
+
+    struct ArtifactPower
+    {
+        int16_t artifactPowerId = 0;
+        uint8_t purchasedRank = 0;
+        uint8_t currentRankWithBonus = 0;
+    };
+
+    struct SocketedGem
+    {
+        int32_t itemId = 0;
+        uint8_t context = 0;
+        std::array<uint16_t, 16> bonusListIds{};
+    };
+
+    struct VisibleItem
+    {
+        bool hasTransmog = false;
+        bool hasIllusion = false;
+        int32_t itemId = 0;
+        int32_t secondaryItemModifiedAppearanceId = 0;
+        int32_t conditionalItemAppearanceId = 0;
+        uint16_t itemAppearanceModId = 0;
+        uint16_t itemVisual = 0;
+        uint32_t itemModifiedAppearanceId = 0;
+        // 1.60.1.69913 captures contain one additional uint32 in VisibleItem.
+        // Its semantic meaning is not identified yet; keep it explicit instead of hiding it as padding.
+        uint32_t field69913 = 0;
+        uint8_t transmogSlotOption = 0;
+        uint8_t sheatheCategory = 0;
+    };
+
+    struct PassiveSpellHistory
+    {
+        int32_t spellId = 0;
+        int32_t auraSpellId = 0;
+    };
+
+    struct UnitChannel
+    {
+        int32_t spellId = 0;
+        SpellCastVisual spellVisual{};
+        uint32_t startTimeMs = 0;
+        uint32_t duration = 0;
+    };
+
+    struct UnitAssistActionData
+    {
+        uint8_t type = 0;
+        std::string playerName;
+        uint32_t virtualRealmAddress = 0;
+    };
+
+    struct QuestLog
+    {
+        int32_t questId = 0;
+        uint16_t stateFlags = 0;
+        int64_t endTime = 0;
+        uint32_t objectiveFlags = 0;
+        uint32_t enabledObjectivesMask = 0;
+        std::array<int16_t, 24> objectiveProgress{};
+    };
+
+    struct SkillInfo
+    {
+        std::array<uint16_t, 300> skillLineId{};
+        std::array<uint16_t, 300> skillStep{};
+        std::array<uint16_t, 300> skillRank{};
+        std::array<uint16_t, 300> skillStartingRank{};
+        std::array<uint16_t, 300> skillMaxRank{};
+        std::array<int16_t, 300> skillTempBonus{};
+        std::array<uint16_t, 300> skillPermBonus{};
+    };
+
+    // These nested records are intentionally represented as semantic payload records here.
+    // Their exact sub-field serializers are implemented separately from the top-level field schema.
+    struct DynamicRecord { std::vector<uint8_t> data; };
+
+
+    struct ZonePlayerForcedReaction
+    {
+        int32_t factionId = 0;
+        int32_t reaction = 0;
+    };
+
+    struct CtrOptions
+    {
+        std::vector<uint32_t> conditionalFlags;
+        uint8_t factionGroup = 0;
+        uint32_t chromieTimeExpansionMask = 0;
+        // 1.60.1.69913 carries one additional 32-bit scalar before the
+        // conditional flag payload. Semantics are not known yet.
+        uint32_t unknown69913 = 0;
+    };
+
+    struct DungeonScoreMapSummary
+    {
+        int32_t challengeModeId = 0;
+        float mapScore = 0.0f;
+        int32_t bestRunLevel = 0;
+        int32_t bestRunDurationMs = 0;
+        bool finishedSuccess = false;
+        uint8_t unknown1110 = 0;
+    };
+
+    struct DungeonScoreSummary
+    {
+        float overallScoreCurrentSeason = 0.0f;
+        float ladderScoreCurrentSeason = 0.0f;
+        std::vector<DungeonScoreMapSummary> runs;
+    };
+
+    struct LeaverInfo
+    {
+        bool isLeaver = false;
+        WoWGuid bnetAccountGuid;
+        float leaveScore = 0.0f;
+        uint32_t seasonId = 0;
+        uint32_t totalLeaves = 0;
+        uint32_t totalSuccesses = 0;
+        int32_t consecutiveSuccesses = 0;
+        int64_t lastPenaltyTime = 0;
+        int64_t leaverExpirationTime = 0;
+        int32_t flags = 0;
+    };
+
+    struct CustomTabardInfo
+    {
+        int32_t emblemStyle = 0;
+        int32_t emblemColor = 0;
+        int32_t borderStyle = 0;
+        int32_t borderColor = 0;
+        int32_t backgroundColor = 0;
+    };
+
+    struct NpcAsPlayerInfo
+    {
+        int32_t field0 = 0;
+        int32_t characterLoadoutId = 0;
+        int32_t creatureId = 0;
+        Vec3 locWorldSpace{};
+        float facingWorldSpace = 0.0f;
+        WoWGuid transportGuid;
+    };
+
+    struct ItemBonuses
+    {
+        uint8_t context = 0;
+        std::vector<uint32_t> bonusListIds;
+    };
+
+    struct ItemInstanceMod
+    {
+        uint8_t type = 0;
+        int32_t value = 0;
+    };
+
+    struct ItemInstance
+    {
+        int32_t itemId = 0;
+        std::optional<ItemBonuses> itemBonus;
+        std::vector<ItemInstanceMod> modifications;
+    };
+
+    struct TransmogOutfitDataInfo
+    {
+        bool situationsEnabled = false;
+        uint8_t setType = 0;
+        std::string name;
+        uint32_t icon = 0;
+    };
+
+    struct TransmogOutfitSituationInfo
+    {
+        uint32_t situationId = 0;
+        uint32_t specId = 0;
+        uint32_t loadoutId = 0;
+        uint32_t equipmentSetId = 0;
+    };
+
+    struct TransmogOutfitSlotData
+    {
+        int8_t slot = 0;
+        uint8_t slotOption = 0;
+        uint8_t sheatheCategory = 0;
+        uint32_t itemModifiedAppearanceId = 0;
+        uint8_t appearanceDisplayType = 0;
+        uint32_t spellItemEnchantmentId = 0;
+        uint8_t illusionDisplayType = 0;
+        uint32_t flags = 0;
+    };
+
+    struct TransmogOutfitData
+    {
+        std::vector<TransmogOutfitSituationInfo> situations;
+        std::vector<TransmogOutfitSlotData> slots;
+        uint32_t id = 0;
+        TransmogOutfitDataInfo outfitInfo{};
+        uint32_t flags = 0;
+    };
+
+    struct TransmogOutfitMetadata
+    {
+        bool locked = false;
+        uint8_t situationTrigger = 0;
+        uint32_t transmogOutfitId = 0;
+        uint8_t stampedOptionMainHand = 0;
+        uint8_t stampedOptionOffHand = 0;
+        float costMod = 0.0f;
+    };
+
+    struct ObjectData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 4;
+        static inline constexpr std::size_t GroupBit = 0;
+        static inline constexpr std::size_t EntryIdBit = 1;
+        static inline constexpr std::size_t DynamicFlagsBit = 2;
+        static inline constexpr std::size_t ScaleBit = 3;
+
+        int32_t entryId = 0;
+        uint32_t dynamicFlags = 0;
+        float scale = 1.0f;
+        std::bitset<ChangeMaskSize> changes{};
+
+        void markChanged(std::size_t bit) { changes.set(GroupBit); changes.set(bit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+    };
+
+    struct ItemData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 41;
+        static inline constexpr std::size_t ArtifactPowersBit = 1;
+        static inline constexpr std::size_t GemsBit = 2;
+        static inline constexpr std::size_t OwnerBit = 3;
+        static inline constexpr std::size_t ContainedInBit = 4;
+        static inline constexpr std::size_t CreatorBit = 5;
+        static inline constexpr std::size_t GiftCreatorBit = 6;
+        static inline constexpr std::size_t StackCountBit = 7;
+        static inline constexpr std::size_t ExpirationBit = 8;
+        static inline constexpr std::size_t DynamicFlagsBit = 9;
+        static inline constexpr std::size_t DurabilityBit = 10;
+        static inline constexpr std::size_t MaxDurabilityBit = 11;
+        static inline constexpr std::size_t CreatePlayedTimeBit = 12;
+        static inline constexpr std::size_t ContextBit = 13;
+        static inline constexpr std::size_t CreateTimeBit = 14;
+        static inline constexpr std::size_t ArtifactXpBit = 15;
+        static inline constexpr std::size_t ItemAppearanceModIdBit = 16;
+        static inline constexpr std::size_t ModifiersBit = 17;
+        static inline constexpr std::size_t ZoneFlagsBit = 18;
+        static inline constexpr std::size_t ItemBonusKeyBit = 19;
+        static inline constexpr std::size_t DebugItemLevelBit = 20;
+        static inline constexpr std::size_t SpellChargesGroupBit = 21;
+        static inline constexpr std::size_t SpellChargesFirstBit = 22;
+        static inline constexpr std::size_t EnchantmentGroupBit = 27;
+        static inline constexpr std::size_t EnchantmentFirstBit = 28;
+
+        std::bitset<ChangeMaskSize> changes{};
+        std::vector<ArtifactPower> artifactPowers;
+        std::vector<SocketedGem> gems;
+        WoWGuid owner;
+        WoWGuid containedIn;
+        WoWGuid creator;
+        WoWGuid giftCreator;
+        uint32_t stackCount = 0;
+        uint32_t expiration = 0;
+        uint32_t dynamicFlags = 0;
+        uint32_t durability = 0;
+        uint32_t maxDurability = 0;
+        uint32_t createPlayedTime = 0;
+        uint8_t context = 0;
+        int64_t createTime = 0;
+        uint64_t artifactXp = 0;
+        uint8_t itemAppearanceModId = 0;
+        std::vector<ItemMod> modifiers;
+        uint32_t zoneFlags = 0;
+        DynamicRecord itemBonusKey;
+        uint16_t debugItemLevel = 0;
+        std::array<int32_t, 5> spellCharges{};
+        std::array<ItemEnchantment, 13> enchantment{};
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void markArrayChanged(std::size_t groupBit, std::size_t elementBit) { markChanged(groupBit); changes.set(elementBit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+    };
+
+    struct ContainerData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 101;
+        static inline constexpr std::size_t NumSlotsBit = 1;
+        static inline constexpr std::size_t SlotsGroupBit = 2;
+        static inline constexpr std::size_t SlotsFirstBit = 3;
+
+        std::bitset<ChangeMaskSize> changes{};
+        uint32_t numSlots = 0;
+        std::array<WoWGuid, 98> slots{};
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void markArrayChanged(std::size_t groupBit, std::size_t elementBit) { markChanged(groupBit); changes.set(elementBit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+    };
+
+    struct UnitData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 228;
+        static inline constexpr std::size_t DisplayIdBit = 6;
+        // UnitData create wire order starts with DisplayID, NpcFlags and NpcFlags2.
+        // These are the corresponding update-field bits in the same block.
+        static inline constexpr std::size_t NpcFlagsBit = 7;
+        static inline constexpr std::size_t NpcFlags2Bit = 8;
+        static inline constexpr std::size_t CharmBit = 14;
+        static inline constexpr std::size_t SummonBit = 15;
+        static inline constexpr std::size_t CritterBit = 16;
+        static inline constexpr std::size_t CharmedByBit = 17;
+        static inline constexpr std::size_t SummonedByBit = 18;
+        static inline constexpr std::size_t CreatedByBit = 19;
+        static inline constexpr std::size_t DemonCreatorBit = 20;
+        static inline constexpr std::size_t LookAtControllerTargetBit = 21;
+        static inline constexpr std::size_t TargetBit = 22;
+        static inline constexpr std::size_t BattlePetCompanionGuidBit = 23;
+        static inline constexpr std::size_t RaceBit = 28;
+        static inline constexpr std::size_t ClassIdBit = 29;
+        static inline constexpr std::size_t PlayerClassIdBit = 30;
+        static inline constexpr std::size_t SexBit = 31;
+        static inline constexpr std::size_t DisplayPowerBit = 34;
+        static inline constexpr std::size_t HealthBit = 36;
+        static inline constexpr std::size_t MaxHealthBit = 37;
+        static inline constexpr std::size_t LevelBit = 38;
+        static inline constexpr std::size_t EffectiveLevelBit = 39;
+        static inline constexpr std::size_t FactionTemplateBit = 45;
+        // Verified against ordinary 1.60.1.69913 creature CreateObject blocks.
+        // Wire order after VirtualItems is UnitFlags, UnitFlags2, UnitFlags3,
+        // one still-unidentified uint32, then AuraState.
+        static inline constexpr std::size_t FlagsBit = 46;
+        static inline constexpr std::size_t Flags2Bit = 47;
+        static inline constexpr std::size_t Flags3Bit = 48;
+        static inline constexpr std::size_t UnknownAfterFlags3Bit = 49;
+        static inline constexpr std::size_t AuraStateBit = 50;
+        static inline constexpr std::size_t RangedAttackRoundBaseTimeBit = 51;
+        static inline constexpr std::size_t BoundingRadiusBit = 52;
+        static inline constexpr std::size_t CombatReachBit = 53;
+        static inline constexpr std::size_t NativeDisplayIdBit = 57;
+        static inline constexpr std::size_t MountDisplayIdBit = 59;
+        static inline constexpr std::size_t MinDamageBit = 61;
+        static inline constexpr std::size_t MaxDamageBit = 62;
+        static inline constexpr std::size_t MinOffHandDamageBit = 63;
+        static inline constexpr std::size_t MaxOffHandDamageBit = 65;
+        static inline constexpr std::size_t BaseManaBit = 83;
+        static inline constexpr std::size_t BaseHealthBit = 84;
+        static inline constexpr std::size_t PowerGroupBit = 137;
+        static inline constexpr std::size_t PowerFirstBit = 138;
+        static inline constexpr std::size_t MaxPowerFirstBit = 148;
+        static inline constexpr std::size_t AttackRoundBaseTimeGroupBit = 182;
+        static inline constexpr std::size_t AttackRoundBaseTimeFirstBit = 183;
+        static inline constexpr std::size_t StatsGroupBit = 185;
+        static inline constexpr std::size_t StatsFirstBit = 186;
+        static inline constexpr std::size_t StatPosBuffFirstBit = 191;
+        static inline constexpr std::size_t StatNegBuffFirstBit = 196;
+        static inline constexpr std::size_t ResistancesGroupBit = 206;
+        static inline constexpr std::size_t ResistancesFirstBit = 207;
+
+        std::bitset<ChangeMaskSize> changes{};
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void markArrayChanged(std::size_t groupBit, std::size_t elementBit) { markChanged(groupBit); changes.set(elementBit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+
+        // Forever 1.60.1.69913 CREATE wire order.
+        // Semantic names are kept only where current captures strongly support them.
+        bool field314 = false; // final bit; semantic meaning not proven
+        std::vector<uint32_t> stateWorldEffectIds;
+        std::vector<PassiveSpellHistory> passiveSpells;
+        std::vector<int32_t> worldEffects;
+        std::vector<WoWGuid> channelObjects;
+
+        int32_t displayId = 0;
+        uint32_t npcFlags = 0;
+        uint32_t npcFlags2 = 0;
+        uint32_t stateSpellVisualId = 0;
+        uint32_t stateAnimId = 0;
+        uint32_t stateAnimKitId = 0;
+        uint32_t stateWorldEffectsQuestObjectiveId = 0;
+        int32_t spellOverrideNameId = 0;
+
+        WoWGuid charm;
+        WoWGuid summon;
+        WoWGuid critter;
+        WoWGuid charmedBy;
+        WoWGuid summonedBy;
+        WoWGuid createdBy;
+        WoWGuid demonCreator;
+        WoWGuid lookAtControllerTarget;
+        WoWGuid target;
+        WoWGuid battlePetCompanionGuid;
+        uint64_t battlePetDbId = 0;
+        WoWGuid battlePetAttachedToDecorGuid;
+        WoWGuid battlePetDecorHouseGuid;
+        UnitChannel channelData{};
+        int8_t spellEmpowerStage = 0;
+        uint32_t summonedByHomeRealm = 0;
+        uint8_t race = 0;
+        uint8_t classId = 0;
+        uint8_t playerClassId = 0;
+        uint8_t sex = 0;
+        uint8_t creatureType = 0;
+        uint8_t displayPower = 0;
+        uint32_t overrideDisplayPowerId = 0;
+        int64_t health = 0;
+
+        std::array<int32_t, 10> power{};
+        std::array<int32_t, 10> maxPower{};
+        std::array<float, 10> powerRegenFlatModifier{};
+        std::array<float, 10> powerRegenInterruptedFlatModifier{};
+
+        int64_t maxHealth = 0;
+        int32_t level = 0;
+        int32_t effectiveLevel = 0;
+        int32_t contentTuningId = 0;
+        int32_t scalingLevelMin = 0;
+        int32_t scalingLevelMax = 0;
+        int32_t scalingLevelDelta = 0;
+        uint8_t scalingFactionGroup = 0;
+        int32_t factionTemplate = 0;
+
+        // Verified 1.60.1.69913 creature-create wire order.
+        // Example: Deputy Willem (entry 823) carries Flags=0x300, Flags2=0x800,
+        // Flags3=0, unknown=0, AuraState=0x00D00000.
+        std::array<VisibleItem, 3> virtualItems{};
+        uint32_t unitFlags69913 = 0;
+        uint32_t unitFlags2_69913 = 0;
+        uint32_t unitFlags3_69913 = 0;
+        uint32_t unknownU32AfterUnitFlags3_69913 = 0;
+        uint32_t auraState69913 = 0;
+        std::array<uint32_t, 2> attackRoundBaseTime{};
+        uint32_t rangedAttackRoundBaseTime = 0;
+        float boundingRadius = 0.0f;
+        float combatReach = 0.0f;
+        float displayScale = 1.0f;
+        int32_t creatureFamily = 0;
+        uint8_t overrideCreatureType = 0;
+        int32_t nativeDisplayId = 0;
+        float nativeXDisplayScale = 1.0f;
+        int32_t mountDisplayId = 0;
+        int32_t cosmeticMountDisplayId = 0;
+        // Owner-visible weapon damage fields. Verified by the 69913 self-create
+        // ordering and the existing Unit damage accessors: main hand min/max,
+        // followed by off-hand min/max.
+        float minDamage69913 = 0.0f;
+        float maxDamage69913 = 0.0f;
+        float minOffHandDamage69913 = 0.0f;
+        float maxOffHandDamage69913 = 0.0f;
+        // Verified in 73 ordinary 1.60.1.69913 creature creates (20 entries).
+        // Wire order is StandState, PetTalentPoints, VisFlags, AnimTier.
+        // The capture contains non-default VisFlags=5 on the generic hunter-pet
+        // entry, providing an additional boundary/order check.
+        uint8_t standState = 0;
+        uint8_t petTalentPoints = 0;
+        uint8_t visFlags = 0;
+        uint8_t animTier = 0;
+        uint32_t petNumber = 0;
+        uint32_t petNameTimestamp = 0;
+        uint32_t petExperience = 0;
+        uint8_t unknownAfterPetExperience69913 = 0;
+        uint32_t petNextLevelExperience = 0;
+        float modCastingSpeed = 1.0f;
+        float modCastingSpeedNeg = 1.0f;
+        float modSpellHaste = 1.0f;
+        float modHaste = 1.0f;
+        float modRangedHaste = 1.0f;
+        float modHasteRegen = 1.0f;
+        float unknownFloatAfterPet6_69913 = 1.0f;
+        int32_t unknownI32AfterPet0_69913 = 0;
+        int32_t unknownI32AfterPet1_69913 = 0;
+
+        uint32_t unknownBeforeStats69913 = 0;
+        // Verified against the 1.60.1.69913 self-create capture. The five
+        // primary stats are Strength, Agility, Stamina, Intellect and Spirit.
+        std::array<int32_t, 5> stats69913{};
+        std::array<int32_t, 5> statPosBuff69913{};
+        std::array<int32_t, 5> statNegBuff69913{};
+        std::array<int32_t, 5> unknownI32Array3_69913{};
+        // Resistance[0] is physical armor, followed by the six magic schools.
+        std::array<int32_t, 7> resistances69913{};
+        std::array<int32_t, 7> unknownI32Array5_69913{};
+        std::array<int32_t, 7> unknownI32Array6_69913{};
+
+        int32_t baseMana = 0;
+        int32_t baseHealth = 0;
+        // Verified 69913 creature-create byte quartet. Across the capture,
+        // SheatheState varies 0/1, PvpFlags 0/1 and Generic Hunter Pet carries
+        // PetFlags=2; ShapeshiftForm is zero in the sampled creatures.
+        uint8_t sheatheState = 0;
+        uint8_t pvpFlags = 0;
+        uint8_t petFlags = 0;
+        uint8_t shapeshiftForm = 0;
+
+        int32_t unknownI32OwnerCombat0_69913 = 0;
+        int32_t unknownI32OwnerCombat1_69913 = 0;
+        int32_t unknownI32OwnerCombat2_69913 = 0;
+        float unknownFloatOwnerCombat0_69913 = 0.0f;
+        int32_t unknownI32OwnerCombat3_69913 = 0;
+        uint32_t unknownBeforeRangedAttackPower69913A = 0;
+        uint32_t unknownBeforeRangedAttackPower69913B = 0;
+        int32_t unknownI32OwnerCombat4_69913 = 0;
+        int32_t unknownI32OwnerCombat5_69913 = 0;
+        int32_t unknownI32OwnerCombat6_69913 = 0;
+        float unknownFloatOwnerCombat1_69913 = 0.0f;
+        int32_t unknownI32OwnerCombat7_69913 = 0;
+        int32_t unknownI32OwnerCombat8_69913 = 0;
+        int32_t unknownI32OwnerCombat9_69913 = 0;
+        int32_t unknownI32OwnerCombat10_69913 = 0;
+        int32_t unknownI32OwnerCombat11_69913 = 0;
+        float unknownFloatOwnerCombat2_69913 = 0.0f;
+        float unknownFloatOwnerCombat3_69913 = 0.0f;
+        float unknownFloatOwnerCombat4_69913 = 0.0f;
+        float unknownFloatOwnerCombat5_69913 = 0.0f;
+
+        float unknownFloatAfterOwnerCombat0_69913 = 1.0f;
+        float unknownFloatAfterOwnerCombat1_69913 = 1.0f;
+        int32_t unknownI32AfterOwnerCombat0_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat1_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat2_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat3_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat4_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat5_69913 = 0;
+        uint32_t unknownU32AfterOwnerCombat0_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat6_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat7_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat8_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat9_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat10_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat11_69913 = 0;
+        int32_t unknownI32AfterOwnerCombat12_69913 = 0;
+        WoWGuid unknownGuid0_69913;
+
+        int32_t unknownI32AfterGuid0_69913 = 0;
+        float unknownFloatAfterGuid0_69913 = 0.0f;
+        int32_t unknownI32AfterGuid1_69913 = 0;
+        int32_t unknownI32AfterGuid2_69913 = 0;
+        int32_t unknownI32AfterGuid3_69913 = 0;
+        uint32_t unknownU32AfterGuid0_69913 = 0;
+        uint32_t unknownBeforeCurrentAreaId69913 = 0;
+        uint32_t currentAreaId = 0;
+        float nameplateDistanceMod = 0.0f;
+        float autoAttackRangeMod = 0.0f;
+
+        struct OwnerExtension69913
+        {
+            std::array<uint8_t, 15> prefix{};
+            WoWGuid guidA;
+            WoWGuid guidB;
+            std::array<uint8_t, 3> suffix{};
+        } ownerExtension69913;
+
+        WoWGuid nameplateAttachToGuid;
+        std::optional<UnitAssistActionData> unknownOptionalRecord0_69913;
+    };
+
+    struct PlayerData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 326;
+        // These positions are retained from the pre-cleanup runtime dirty-mask mapping.
+        // Their Forever 69913 semantics are not proofed yet, so keep neutral names.
+        static inline constexpr std::size_t UnknownChangeBit3_69913 = 3;
+        static inline constexpr std::size_t UnknownChangeBit9_69913 = 9;
+        static inline constexpr std::size_t UnknownChangeBit14_69913 = 14;
+        static inline constexpr std::size_t UnknownChangeBit15_69913 = 15;
+        static inline constexpr std::size_t UnknownChangeBit16_69913 = 16;
+        static inline constexpr std::size_t UnknownChangeBit17_69913 = 17;
+        static inline constexpr std::size_t UnknownChangeBit18_69913 = 18;
+        static inline constexpr std::size_t UnknownChangeBit19_69913 = 19;
+        static inline constexpr std::size_t UnknownChangeBit20_69913 = 20;
+        static inline constexpr std::size_t UnknownChangeBit21_69913 = 21;
+        static inline constexpr std::size_t UnknownChangeBit22_69913 = 22;
+        static inline constexpr std::size_t UnknownChangeBit23_69913 = 23;
+        static inline constexpr std::size_t UnknownChangeBit24_69913 = 24;
+        static inline constexpr std::size_t UnknownChangeBit26_69913 = 26;
+        static inline constexpr std::size_t UnknownChangeBit28_69913 = 28;
+        static inline constexpr std::size_t UnknownChangeBit29_69913 = 29;
+        static inline constexpr std::size_t UnknownChangeBit34_69913 = 34;
+        static inline constexpr std::size_t UnknownChangeBit35_69913 = 35;
+        static inline constexpr std::size_t UnknownChangeBit36_69913 = 36;
+        static inline constexpr std::size_t UnknownChangeBit53_69913 = 53;
+        static inline constexpr std::size_t UnknownChangeBit54_69913 = 54;
+        static inline constexpr std::size_t UnknownChangeBit229_69913 = 229;
+        static inline constexpr std::size_t UnknownChangeBit230_69913 = 230;
+
+        std::bitset<ChangeMaskSize> changes{};
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void markArrayChanged(std::size_t groupBit, std::size_t elementBit) { markChanged(groupBit); changes.set(elementBit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+
+        // Forever 1.60.1.69913 CREATE wire order.
+        // Only capture-proven semantics keep semantic names. Every other field
+        // intentionally uses an unknown*69913 name, even when an older client
+        // gives the slot a plausible semantic meaning.
+
+        WoWGuid unknownGuid0_69913;
+        WoWGuid unknownGuid1_69913;
+        WoWGuid unknownGuid2_69913;
+        uint64_t unknownU64_0_69913 = 0;
+        WoWGuid unknownGuid3_69913;
+        uint32_t unknownU32_0_69913 = 0;
+        uint32_t unknownU32_1_69913 = 0;
+        uint32_t unknownU32_2_69913 = 0;
+        uint32_t unknownU32_3_69913 = 0;
+        int32_t unknownI32_0_69913 = 0;
+
+        // Capture-proven 5-byte structural block immediately before the two
+        // customization-count fields. Internal semantics are unknown.
+        std::array<uint8_t, 5> unknownBeforeCustomizationCounts69913{};
+
+        // Capture-proven customization list. The second list occupies a proven
+        // customization-shaped wire slot, but its semantic purpose is not yet proven.
+        std::vector<ChrCustomizationChoice> customizations;
+        std::vector<ChrCustomizationChoice> unknownCustomizationChoices0_69913;
+
+        std::array<uint8_t, 2> unknownBytes0_69913{};
+        uint8_t unknownU8_0_69913 = 0;
+        uint8_t unknownU8_1_69913 = 0;
+        uint8_t unknownU8_2_69913 = 0;
+        uint8_t unknownU8_3_69913 = 0;
+        uint32_t unknownU32_4_69913 = 0;
+        int32_t unknownI32_1_69913 = 0;
+
+        std::array<QuestLog, 175> unknownPartyRecords0_69913{};
+        std::map<int32_t, int32_t> unknownPartyMap0_69913;
+        std::vector<QuestLog> unknownPartyDynamicRecords0_69913;
+
+        std::array<VisibleItem, 19> unknownVisibleItemRecords0_69913{};
+        int32_t unknownI32_2_69913 = 0;
+        int32_t unknownI32_3_69913 = 0;
+        uint32_t unknownU32_5_69913 = 0;
+        uint32_t unknownU32_6_69913 = 0;
+        int32_t unknownI32_4_69913 = 0;
+        int32_t unknownI32_5_69913 = 0;
+        std::array<float, 6> unknownFloatArray0_69913{};
+        uint8_t unknownU8_4_69913 = 0;
+        int32_t unknownI32_6_69913 = 0;
+        int64_t unknownI64_0_69913 = 0;
+
+        std::vector<DynamicRecord> unknownDynamicRecords0_69913;
+        std::array<ZonePlayerForcedReaction, 32> unknownFixedRecords0_69913{};
+        int32_t unknownI32_7_69913 = 0;
+        int32_t unknownI32_8_69913 = 0;
+        int32_t unknownI32_9_69913 = 0;
+        std::vector<DynamicRecord> unknownDynamicRecords1_69913;
+        CtrOptions unknownCtrOptions0_69913{};
+        int32_t unknownI32_10_69913 = 0;
+        int32_t unknownI32_11_69913 = 0;
+        DungeonScoreSummary unknownDungeonScore0_69913{};
+        LeaverInfo unknownLeaverInfo0_69913{};
+        WoWGuid unknownGuid4_69913;
+        int32_t unknownI32_12_69913 = 0;
+        std::array<ItemInstance, 16> unknownItemInstances0_69913{};
+        std::vector<int32_t> unknownI32Vector0_69913;
+        std::array<uint32_t, 19> attackRoundBaseTime{};
+        CustomTabardInfo unknownCustomTabard0_69913{};
+        NpcAsPlayerInfo unknownNpcAsPlayer0_69913{};
+
+        // Capture-proven 33-byte structural block immediately before the
+        // ChrCustomizationChoice payload. Internal semantics are unknown.
+        std::array<uint8_t, 33> unknownBeforeCustomizationPayload69913{
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x14, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+            0x0C, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+            0x01
+        };
+
+        // Capture-proven 69913 name tail.
+        std::string firstName;
+        std::string lastName;
+
+        // Three optional-name bits/payload positions are structurally present,
+        // but their individual semantic assignments are not proven yet.
+        bool unknownNameFlag0_69913 = false;
+        bool unknownNameFlag1_69913 = false;
+        std::optional<DynamicRecord> unknownOptionalNamePayload0_69913;
+    };
+
+    struct ActivePlayerData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 398;
+        // Runtime candidate bit positions retained from the old mapping.
+        // Do not treat these names as 69913 proof until a VALUES sniff confirms them.
+        static inline constexpr std::size_t UnknownChangeBit56_69913 = 56;
+        static inline constexpr std::size_t UnknownChangeBit57_69913 = 57;
+        static inline constexpr std::size_t UnknownChangeBit58_69913 = 58;
+        static inline constexpr std::size_t UnknownChangeBit59_69913 = 59;
+        static inline constexpr std::size_t UnknownChangeBit60_69913 = 60;
+        static inline constexpr std::size_t UnknownChangeBit61_69913 = 61;
+        static inline constexpr std::size_t UnknownChangeBit62_69913 = 62;
+        static inline constexpr std::size_t UnknownChangeBit163_69913 = 163;
+        static inline constexpr std::size_t UnknownChangeBit164_69913 = 164;
+
+        std::bitset<ChangeMaskSize> changes{};
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void markArrayChanged(std::size_t groupBit, std::size_t elementBit) { markChanged(groupBit); changes.set(elementBit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+
+        // -----------------------------------------------------------------
+        // CREATE wire order for Forever 1.60.1.69913.
+        // Keep this declaration order aligned with writeActivePlayerDataCreate.
+        // Names inherited from older layouts are not automatically considered
+        // proven Forever semantics; they remain until their regions are replaced
+        // by capture-proven names/unknown blocks.
+        // -----------------------------------------------------------------
+
+        std::array<WoWGuid, 105> invSlots{};
+        WoWGuid farsightObject;
+        WoWGuid summonedBattlePetGuid;
+
+        // Count is written here; payload is emitted in the dynamic payload tail.
+        std::vector<uint64_t> knownTitles;
+        uint64_t coinage = 0;
+        uint64_t accountBankCoinage = 0;
+        int32_t xp = 0;
+        int32_t nextLevelXp = 0;
+        int32_t unknownAfterNextLevelXp69913 = 0;
+
+        SkillInfo skill{};
+
+        // WoW 1.60.1.69913: the 104-byte create span immediately after
+        // SkillInfo is structurally capture-proven. Empty-inventory comparison
+        // shows bytes [0,28) and [65,104) matching the minimal zero-state,
+        // while only [28,65) contains capture-specific data. Semantics remain
+        // unknown, so retain neutral names.
+        std::array<uint8_t, 28> unknownAfterSkillInfoPrefix69913{};
+        std::array<uint8_t, 37> unknownAfterSkillInfoData69913{};
+        std::array<uint8_t, 39> unknownAfterSkillInfoSuffix69913{};
+
+        // WoW 1.60.1.69913: the following 180-byte create span is
+        // structurally capture-proven.  Empty-inventory comparison shows the
+        // first 4 bytes and the final 83 bytes matching the minimal zero-state;
+        // capture-specific bytes occur only inside [4,97).  Semantics are not
+        // proven, so keep neutral names.
+        std::array<uint8_t, 4> unknownPostSkillBlockPrefix69913{};
+        // The retail reference capture contains the visible combat-stat cluster in
+        // this span (including ~4.8%% values seen as Dodge/Crit in the character
+        // sheet). Exact per-field boundaries are intentionally not named yet; a
+        // differential capture is required before assigning 69913 semantics.
+        std::array<uint8_t, 93> unknownPostSkillBlockData69913{};
+        std::array<uint8_t, 83> unknownPostSkillBlockSuffix69913{};
+
+        // WoW 1.60.1.69913: structurally capture-proven 1089-byte wire span
+        // immediately before the transmog-outfit island.  After normalizing all
+        // preceding capture-specific data, bytes [0,348) and [1070,1089) are
+        // byte-identical to the empty-inventory capture.  Capture-specific data
+        // occurs only in [348,1070).  Semantics remain unknown, so retain neutral
+        // names and do not infer Midnight fields from this split.
+        static inline constexpr std::size_t UnknownBeforeTransmogPrefixSize69913 = 348;
+        static inline constexpr std::size_t UnknownBeforeTransmogDataSize69913 = 722;
+        static inline constexpr std::size_t UnknownBeforeTransmogSuffixSize69913 = 19;
+        std::array<uint8_t, UnknownBeforeTransmogPrefixSize69913> unknownBeforeTransmogPrefix69913{};
+        std::array<uint8_t, UnknownBeforeTransmogDataSize69913> unknownBeforeTransmogData69913{};
+        std::array<uint8_t, UnknownBeforeTransmogSuffixSize69913> unknownBeforeTransmogSuffix69913{};
+
+        // Capture-proven transmog outfit island.
+        std::map<uint32_t, DynamicRecord> transmogOutfits;
+        TransmogOutfitData viewedOutfit{};
+        TransmogOutfitMetadata transmogMetadata{};
+
+        // Opaque minimal tail after the capture-proven transmog metadata.
+        // Current zero-state wire span is 2 bytes; semantics are not proven.
+        static inline constexpr std::size_t UnknownAfterTransmogSize69913 = 2;
+        std::array<uint8_t, UnknownAfterTransmogSize69913> unknownAfterTransmog69913{};
+    };
+
+    struct GameObjectAssistActionData
+    {
+        std::string playerName;
+        std::string monsterName;
+        uint32_t virtualRealmAddress = 0;
+        uint8_t sex = 0;
+        int64_t time = 0;
+        int32_t delveTier = 0;
+    };
+
+    struct GameObjectData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 27;
+        static inline constexpr std::size_t DisplayIdBit = 4;
+        static inline constexpr std::size_t SpellVisualIdBit = 5;
+        static inline constexpr std::size_t CreatedByBit = 10;
+        static inline constexpr std::size_t GuildGuidBit = 11;
+        static inline constexpr std::size_t FlagsBit = 12;
+        static inline constexpr std::size_t FlagsBBit = 13;
+        static inline constexpr std::size_t ParentRotationBit = 14;
+        static inline constexpr std::size_t FactionTemplateBit = 15;
+        static inline constexpr std::size_t StateBit = 16;
+        static inline constexpr std::size_t TypeIdBit = 17;
+        static inline constexpr std::size_t PercentHealthBit = 18;
+        static inline constexpr std::size_t ArtKitBit = 19;
+        static inline constexpr std::size_t CustomParamBit = 20;
+        static inline constexpr std::size_t LevelBit = 21;
+
+        std::bitset<ChangeMaskSize> changes{};
+        std::vector<uint32_t> stateWorldEffectIds;
+        std::vector<int32_t> enableDoodadSets;
+        std::vector<int32_t> worldEffects;
+        int32_t displayId = 0;
+        uint32_t spellVisualId = 0;
+        uint32_t stateSpellVisualId = 0;
+        uint32_t spawnTrackingStateAnimId = 0;
+        uint32_t spawnTrackingStateAnimKitId = 0;
+        uint32_t stateWorldEffectsQuestObjectiveId = 0;
+        WoWGuid createdBy;
+        WoWGuid guildGuid;
+        uint32_t flags = 0;
+        uint32_t flagsB = 0;
+        std::array<float, 4> parentRotation{0.0f, 0.0f, 0.0f, 1.0f};
+        int32_t factionTemplate = 0;
+        int8_t state = 0;
+        int8_t typeId = 0;
+        uint8_t percentHealth = 100;
+        uint32_t artKit = 0;
+        uint32_t customParam = 0;
+        int32_t level = 0;
+        uint32_t animGroupInstance = 0;
+        uint32_t uiWidgetItemId = 0;
+        uint32_t uiWidgetItemQuality = 0;
+        uint32_t uiWidgetItemCount = 0;
+        std::optional<GameObjectAssistActionData> assistActionData;
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+    };
+
+    struct DynamicObjectData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 7;
+        static inline constexpr std::size_t CasterBit = 1;
+        static inline constexpr std::size_t TypeBit = 2;
+        static inline constexpr std::size_t SpellVisualBit = 3;
+        static inline constexpr std::size_t SpellIdBit = 4;
+        static inline constexpr std::size_t RadiusBit = 5;
+        static inline constexpr std::size_t CastTimeBit = 6;
+
+        std::bitset<ChangeMaskSize> changes{};
+        WoWGuid caster;
+        uint8_t type = 0;
+        SpellCastVisual spellVisual{};
+        int32_t spellId = 0;
+        float radius = 0.0f;
+        uint32_t castTime = 0;
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+    };
+
+    struct CorpseData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 33;
+        static inline constexpr std::size_t CustomizationsBit = 1;
+        static inline constexpr std::size_t DynamicFlagsBit = 2;
+        static inline constexpr std::size_t OwnerBit = 3;
+        static inline constexpr std::size_t PartyGuidBit = 4;
+        static inline constexpr std::size_t GuildGuidBit = 5;
+        static inline constexpr std::size_t DisplayIdBit = 6;
+        static inline constexpr std::size_t RaceIdBit = 7;
+        static inline constexpr std::size_t SexBit = 8;
+        static inline constexpr std::size_t ClassBit = 9;
+        static inline constexpr std::size_t FlagsBit = 10;
+        static inline constexpr std::size_t FactionTemplateBit = 11;
+        static inline constexpr std::size_t StateSpellVisualKitIdBit = 12;
+        static inline constexpr std::size_t ItemsGroupBit = 13;
+        static inline constexpr std::size_t ItemsFirstBit = 14;
+
+        std::bitset<ChangeMaskSize> changes{};
+        std::vector<ChrCustomizationChoice> customizations;
+        uint32_t dynamicFlags = 0;
+        WoWGuid owner;
+        WoWGuid partyGuid;
+        WoWGuid guildGuid;
+        uint32_t displayId = 0;
+        uint8_t raceId = 0;
+        uint8_t sex = 0;
+        uint8_t classId = 0;
+        uint32_t flags = 0;
+        int32_t factionTemplate = 0;
+        uint32_t stateSpellVisualKitId = 0;
+        std::array<uint32_t, 19> items{};
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void markArrayChanged(std::size_t groupBit, std::size_t elementBit) { markChanged(groupBit); changes.set(elementBit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+    };
+
+    struct ScaleCurve
+    {
+        bool overrideActive = false;
+        uint32_t startTimeOffset = 0;
+        uint32_t parameterCurve = 0;
+        std::array<Vec2, 2> points{};
+    };
+
+    struct VisualAnim
+    {
+        bool isDecay = false;
+        std::optional<int16_t> animationDataId;
+        uint32_t animKitId = 0;
+        uint32_t animProgress = 0;
+    };
+
+    struct ForceSetAreaTriggerPositionAndRotation
+    {
+        WoWGuid triggerGuid;
+        Vec3 pos{};
+        Quaternion rotation{};
+    };
+
+    struct AreaTriggerActionSetPeriodModifier
+    {
+        int32_t field0 = 0;
+        float field4 = 0.0f;
+    };
+
+    struct AreaTriggerData
+    {
+        static inline constexpr std::size_t ChangeMaskSize = 39;
+        static inline constexpr std::size_t CasterBit = 7;
+        static inline constexpr std::size_t DurationBit = 8;
+        static inline constexpr std::size_t TimeToTargetBit = 9;
+        static inline constexpr std::size_t SpellIdBit = 14;
+        static inline constexpr std::size_t SpellForVisualsBit = 15;
+        static inline constexpr std::size_t SpellVisualBit = 16;
+        static inline constexpr std::size_t BoundsRadius2DBit = 17;
+        static inline constexpr std::size_t CreatingEffectGuidBit = 19;
+        static inline constexpr std::size_t OrbitPathTargetBit = 20;
+        static inline constexpr std::size_t FlagsBit = 27;
+        static inline constexpr std::size_t FacingBit = 34;
+        static inline constexpr std::size_t PathTypeBit = 36;
+        static inline constexpr std::size_t ShapeTypeBit = 37;
+
+        std::bitset<ChangeMaskSize> changes{};
+        ScaleCurve overrideScaleCurve{};
+        ScaleCurve extraScaleCurve{};
+        ScaleCurve overrideMoveCurveX{};
+        ScaleCurve overrideMoveCurveY{};
+        ScaleCurve overrideMoveCurveZ{};
+        ScaleCurve unk1205Curve{};
+        WoWGuid caster;
+        uint32_t duration = 0;
+        uint32_t timeToTarget = 0;
+        uint32_t timeToTargetScale = 0;
+        uint32_t timeToTargetExtraScale = 0;
+        uint32_t timeToTargetPos = 0;
+        uint32_t timeToTargetUnk1205Curve = 0;
+        int32_t spellId = 0;
+        int32_t spellForVisuals = 0;
+        SpellCastVisual spellVisual{};
+        float boundsRadius2D = 0.0f;
+        uint32_t decalPropertiesId = 0;
+        WoWGuid creatingEffectGuid;
+        WoWGuid orbitPathTarget;
+        Vec3 rollPitchYaw{};
+        int32_t positionalSoundKitId = 0;
+        uint32_t movementStartTime = 0;
+        uint32_t creationTime = 0;
+        float zOffset = 0.0f;
+        std::optional<Vec3> targetRollPitchYaw;
+        uint32_t flags = 0;
+        VisualAnim visualAnim{};
+        uint32_t scaleCurveId = 0;
+        uint32_t facingCurveId = 0;
+        uint32_t morphCurveId = 0;
+        uint32_t moveCurveId = 0;
+        float facing = 0.0f;
+        std::optional<ForceSetAreaTriggerPositionAndRotation> forcedPositionAndRotation;
+        int32_t pathType = 0;
+        uint8_t shapeType = 0;
+        AreaTriggerActionSetPeriodModifier periodModifier{};
+        DynamicRecord pathData;
+        DynamicRecord shapeData;
+
+        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void clearChanges() { changes.reset(); }
+        bool hasChanges() const { return changes.any(); }
+    };
+
+    struct PlayerObjectData
+    {
+        ObjectData object;
+        UnitData unit;
+        PlayerData player;
+        ActivePlayerData active;
+    };
+}

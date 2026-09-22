@@ -160,6 +160,16 @@ inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChatChannelsEntry> sChatChanne
 inline SERVER_DECL WDB::WDBStore<WDB::Structures::CharStartOutfitEntry> sCharStartOutfitStore;
 inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrClassesEntry> sChrClassesStore;
 inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrRacesEntry> sChrRacesStore;
+#if defined(AE_FOREVER)
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrModelEntry> sChrModelStore;
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrRaceXChrModelEntry> sChrRaceXChrModelStore;
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrCustomizationChoiceEntry> sChrCustomizationChoiceStore;
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrCustomizationDisplayInfoEntry> sChrCustomizationDisplayInfoStore;
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrCustomizationElementEntry> sChrCustomizationElementStore;
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrCustomizationOptionEntry> sChrCustomizationOptionStore;
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrCustomizationReqEntry> sChrCustomizationReqStore;
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::ChrCustomizationReqChoiceEntry> sChrCustomizationReqChoiceStore;
+#endif
 inline SERVER_DECL WDB::WDBStore<WDB::Structures::CreatureDisplayInfoEntry> sCreatureDisplayInfoStore;
 inline SERVER_DECL WDB::WDBStore<WDB::Structures::CreatureDisplayInfoExtraEntry> sCreatureDisplayInfoExtraStore;
 inline SERVER_DECL WDB::WDBStore<WDB::Structures::CreatureModelDataEntry> sCreatureModelDataStore;
@@ -203,7 +213,11 @@ extern TaxiPathNodesByPath sTaxiPathNodesByPath;
 extern SERVER_DECL WDB::WDBContainer<WDB::Structures::TaxiPathNodeEntry> sTaxiPathNodeStore;
 extern SERVER_DECL WDB::WDBContainer<WDB::Structures::TransportAnimationEntry> sTransportAnimationStore;
 extern SERVER_DECL WDB::WDBContainer<WDB::Structures::WMOAreaTableEntry> sWMOAreaTableStore;
+#if defined(AE_FOREVER)
+inline SERVER_DECL WDB::WDBStore<WDB::Structures::WorldMapOverlayEntry> sWorldMapOverlayStore;
+#else
 extern SERVER_DECL WDB::WDBContainer<WDB::Structures::WorldMapOverlayEntry> sWorldMapOverlayStore;
+#endif
 extern SERVER_DECL WDB::WDBContainer<WDB::Structures::GtChanceToMeleeCritEntry> sGtChanceToMeleeCritStore; // todo: available for versions > Classic
 extern SERVER_DECL WDB::WDBContainer<WDB::Structures::GtChanceToMeleeCritBaseEntry> sGtChanceToMeleeCritBaseStore; // todo: available for versions > Classic
 extern SERVER_DECL WDB::WDBContainer<WDB::Structures::GtChanceToSpellCritEntry> sGtChanceToSpellCritStore; // todo: available for versions > Classic
@@ -326,6 +340,9 @@ WDB::Structures::MapDifficulty const* getMapDifficultyData(uint32_t mapId, Insta
 WDB::Structures::WMOAreaTableEntry const* GetWMOAreaTableEntryByTriple(int32_t root_id, int32_t adt_id, int32_t group_id);
 
 WDB::Structures::CharStartOutfitEntry const* getStartOutfitByRaceClass(uint8_t race, uint8_t class_, uint8_t gender);
+#if defined(AE_FOREVER)
+WDB::Structures::ChrModelEntry const* getForeverChrModel(uint8_t race, uint8_t gender);
+#endif
 
 std::string generateName(uint32_t type = 0);
 

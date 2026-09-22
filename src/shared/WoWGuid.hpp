@@ -45,9 +45,64 @@ enum HIGHGUID_TYPE : uint32_t
 
 enum class ModernHighGuid : uint8_t
 {
-    Null   = 0,
-    Player = 2,
-    Guild  = 28
+    Null             = 0,
+    Uniq             = 1,
+    Player           = 2,
+    Item             = 3,
+    WorldTransaction = 4,
+    StaticDoor       = 5,
+    Transport        = 6,
+    Conversation     = 7,
+    Creature         = 8,
+    Vehicle          = 9,
+    Pet              = 10,
+    GameObject       = 11,
+    DynamicObject    = 12,
+    AreaTrigger      = 13,
+    Corpse           = 14,
+    LootObject       = 15,
+    SceneObject      = 16,
+    Scenario         = 17,
+    AIGroup          = 18,
+    DynamicDoor      = 19,
+    ClientActor      = 20,
+    Vignette         = 21,
+    CallForHelp      = 22,
+    AIResource       = 23,
+    AILock           = 24,
+    AILockTicket     = 25,
+    ChatChannel      = 26,
+    Party            = 27,
+    Guild            = 28,
+    WowAccount       = 29,
+    BNetAccount      = 30,
+    GMTask           = 31,
+    MobileSession    = 32,
+    RaidGroup        = 33,
+    Spell            = 34,
+    Mail             = 35,
+    WebObj           = 36,
+    LFGObject        = 37,
+    LFGList          = 38,
+    UserRouter       = 39,
+    PVPQueueGroup    = 40,
+    UserClient       = 41,
+    PetBattle        = 42,
+    UniqUserClient   = 43,
+    BattlePet        = 44,
+    CommerceObj      = 45,
+    ClientSession    = 46,
+    Cast             = 47,
+    ClientConnection = 48,
+    ClubFinder       = 49,
+    ToolsClient      = 50,
+    WorldLayer       = 51,
+    ArenaTeam        = 52,
+    LMMParty         = 53,
+    LMMLobby         = 54,
+    Housing          = 55,
+    MeshObject       = 56,
+    Entity           = 57
 };
 
 enum class HighGuid : uint64_t
@@ -232,13 +287,170 @@ public:
         return createModern((uint64_t(ModernHighGuid::Guild) << 58U) | (uint64_t(realmId) << 42U), dbId);
     }
 
+    static WoWGuid createModernItem(uint32_t realmId, uint64_t dbId) noexcept
+    {
+        return createModern((uint64_t(ModernHighGuid::Item) << 58U) | (uint64_t(realmId) << 42U), dbId);
+    }
+
+    static WoWGuid createModernWorldObject(ModernHighGuid type, uint8_t subType, uint32_t realmId, uint16_t mapId, uint32_t serverId, uint32_t entry, uint64_t counter) noexcept
+    {
+        const uint64_t high = (uint64_t(type) << 58U)
+            | (uint64_t(realmId & 0x1FFFU) << 42U)
+            | (uint64_t(mapId & 0x1FFFU) << 29U)
+            | (uint64_t(entry & 0x7FFFFFU) << 6U)
+            | uint64_t(subType & 0x3FU);
+
+        const uint64_t low = (uint64_t(serverId & 0xFFFFFFU) << 40U)
+            | (counter & UINT64_C(0xFFFFFFFFFF));
+
+        return createModern(high, low);
+    }
+
+    static WoWGuid createModernTransport(ModernHighGuid type, uint32_t counter) noexcept
+    {
+        return createModern((uint64_t(type) << 58U) | (uint64_t(counter) << 38U), 0);
+    }
+
+    static WoWGuid createModernGlobal(ModernHighGuid type, uint64_t dbIdHigh, uint64_t dbIdLow) noexcept
+    {
+        return createModern((uint64_t(type) << 58U) | (dbIdHigh & UINT64_C(0x03FFFFFFFFFFFFFF)), dbIdLow);
+    }
+
+    static WoWGuid createModernRealmClient(ModernHighGuid type, uint32_t realmId, uint32_t arg1, uint64_t counter) noexcept
+    {
+        return createModern((uint64_t(type) << 58U) | (uint64_t(realmId & 0x1FFFU) << 42U) | (uint64_t(arg1) << 10U), counter);
+    }
+
     static WoWGuid createModernEmpty() noexcept { return createModern(0, 0); }
+
+    static HighGuid legacyTypeFromModern(ModernHighGuid type) noexcept
+    {
+        switch (type)
+        {
+            case ModernHighGuid::Player:        return HighGuid::Player;
+            case ModernHighGuid::Item:          return HighGuid::Item;
+            case ModernHighGuid::Transport:     return HighGuid::Transport;
+            case ModernHighGuid::Creature:      return HighGuid::Unit;
+            case ModernHighGuid::Vehicle:       return HighGuid::Vehicle;
+            case ModernHighGuid::Pet:           return HighGuid::Pet;
+            case ModernHighGuid::GameObject:    return HighGuid::GameObject;
+            case ModernHighGuid::DynamicObject: return HighGuid::DynamicObject;
+            case ModernHighGuid::AreaTrigger:   return HighGuid::AreaTrigger;
+            case ModernHighGuid::Corpse:        return HighGuid::Corpse;
+            case ModernHighGuid::Guild:         return HighGuid::Guild;
+            default:                            return HighGuid::Player;
+        }
+    }
+
+    uint64_t toLegacyRaw() const noexcept
+    {
+        if (isModernEmpty())
+            return 0;
+
+        switch (getModernHighType())
+        {
+            case ModernHighGuid::Player:
+                return getModernLow();
+
+            case ModernHighGuid::Item:
+                return (uint64_t(HIGHGUID_TYPE_ITEM) << 32U) | (getModernLow() & UINT64_C(0xFFFFFFFF));
+
+            case ModernHighGuid::Guild:
+                return (uint64_t(HIGHGUID_TYPE_GUILD) << 32U) | (getModernLow() & UINT64_C(0xFFFFFFFF));
+
+            case ModernHighGuid::Transport:
+                return (uint64_t(HIGHGUID_TYPE_TRANSPORT) << 32U) | (getModernCounter() & UINT64_C(0xFFFFFFFF));
+
+            case ModernHighGuid::Creature:
+            case ModernHighGuid::Vehicle:
+            case ModernHighGuid::Pet:
+            case ModernHighGuid::GameObject:
+            case ModernHighGuid::DynamicObject:
+            case ModernHighGuid::AreaTrigger:
+            case ModernHighGuid::Corpse:
+            {
+                const HighGuid legacyType = legacyTypeFromModern(getModernHighType());
+                return (uint64_t(legacyType) << 32U) | (uint64_t(getModernEntry() & 0xFFFFFFU) << 24U) | (getModernCounter() & UINT64_C(0xFFFFFF));
+            }
+
+            default:
+                return getModernLow();
+        }
+    }
+
+    static ModernHighGuid modernTypeFromLegacy(HighGuid type) noexcept
+    {
+        switch (type)
+        {
+            case HighGuid::Player:        return ModernHighGuid::Player;
+            case HighGuid::Item:
+            case HighGuid::Container:     return ModernHighGuid::Item;
+            case HighGuid::Transporter:
+            case HighGuid::Transport:     return ModernHighGuid::Transport;
+            case HighGuid::GameObject:    return ModernHighGuid::GameObject;
+            case HighGuid::DynamicObject: return ModernHighGuid::DynamicObject;
+            case HighGuid::Unit:          return ModernHighGuid::Creature;
+            case HighGuid::Pet:           return ModernHighGuid::Pet;
+            case HighGuid::Vehicle:       return ModernHighGuid::Vehicle;
+            case HighGuid::AreaTrigger:   return ModernHighGuid::AreaTrigger;
+            case HighGuid::Corpse:        return ModernHighGuid::Corpse;
+            case HighGuid::Guild:         return ModernHighGuid::Guild;
+            default:                      return ModernHighGuid::Null;
+        }
+    }
+
+    static WoWGuid createModernFromLegacy(uint64_t legacyGuid, uint32_t realmId, uint16_t mapId = 0, uint32_t serverId = 0, uint8_t subType = 0) noexcept
+    {
+        if (legacyGuid == 0)
+            return createModernEmpty();
+
+        const HighGuid legacyType = getHighTypeFromRaw(legacyGuid);
+        const ModernHighGuid modernType = modernTypeFromLegacy(legacyType);
+        const uint64_t lowPart = uint64_t(getLowGuidFromRaw(legacyGuid));
+
+        switch (modernType)
+        {
+            case ModernHighGuid::Player:
+                return createModernPlayer(realmId, lowPart);
+
+            case ModernHighGuid::Item:
+                return createModernItem(realmId, lowPart);
+
+            case ModernHighGuid::Guild:
+                return createModernGuild(realmId, lowPart);
+
+            case ModernHighGuid::Transport:
+                return createModernTransport(modernType, static_cast<uint32_t>(lowPart));
+
+            case ModernHighGuid::Creature:
+            case ModernHighGuid::Vehicle:
+            case ModernHighGuid::Pet:
+            case ModernHighGuid::GameObject:
+            case ModernHighGuid::DynamicObject:
+            case ModernHighGuid::AreaTrigger:
+            case ModernHighGuid::Corpse:
+                return createModernWorldObject(modernType, subType, realmId, mapId, serverId, static_cast<uint32_t>((legacyGuid >> 24U) & UINT64_C(0x00FFFFFF)), legacyGuid & UINT64_C(0x00FFFFFF));
+
+            default:
+                return createModernEmpty();
+        }
+    }
 
     uint64_t getModernRawValue(std::size_t index) const noexcept { ASSERT(index < 2); return index == 0 ? _raw.value : _modernHigh; }
     uint64_t getModernLow() const noexcept { return _raw.value; }
     uint64_t getModernHigh() const noexcept { return _modernHigh; }
     ModernHighGuid getModernHighType() const noexcept { return static_cast<ModernHighGuid>((_modernHigh >> 58U) & 0x3FU); }
     uint32_t getModernRealmId() const noexcept { return static_cast<uint32_t>((_modernHigh >> 42U) & 0xFFFFU); }
+    uint32_t getModernMapId() const noexcept { return static_cast<uint32_t>((_modernHigh >> 29U) & 0x1FFFU); }
+    uint32_t getModernEntry() const noexcept { return static_cast<uint32_t>((_modernHigh >> 6U) & 0x7FFFFFU); }
+    uint8_t getModernSubType() const noexcept { return static_cast<uint8_t>(_modernHigh & 0x3FU); }
+    uint32_t getModernServerId() const noexcept { return static_cast<uint32_t>((_raw.value >> 40U) & 0xFFFFFFU); }
+    uint64_t getModernCounter() const noexcept
+    {
+        if (getModernHighType() == ModernHighGuid::Transport)
+            return (_modernHigh >> 38U) & UINT64_C(0xFFFFF);
+        return _raw.value & UINT64_C(0xFFFFFFFFFF);
+    }
     bool isModernEmpty() const noexcept { return _raw.value == 0 && _modernHigh == 0; }
 
     static bool unpackModern(const uint8_t* data, std::size_t size, WoWGuid& guid, std::size_t& consumed)

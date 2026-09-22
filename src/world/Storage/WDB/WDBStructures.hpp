@@ -290,6 +290,102 @@ namespace WDB::Structures
         uint32_t power{0};
     };
 
+    struct ChrModelEntry
+    {
+        uint32_t id{0};
+        int8_t sex{0};
+        uint32_t displayId{0};
+    };
+
+    struct ChrRaceXChrModelEntry
+    {
+        uint32_t id{0};
+        uint8_t chrRacesId{0};
+        int32_t chrModelId{0};
+        int8_t sex{0};
+        int32_t allowedTransmogSlots{0};
+    };
+
+#if defined(AE_FOREVER)
+    struct ChrCustomizationChoiceEntry
+    {
+        uint32_t id{0};
+        uint32_t optionId{0};
+        int32_t reqId{0};
+        int32_t visReqId{0};
+        uint16_t sortOrder{0};
+        uint16_t uiOrderIndex{0};
+        int32_t flags{0};
+        int32_t addedInPatch{0};
+        int32_t soundKitId{0};
+        std::array<int32_t, 2> swatchColor{};
+    };
+
+    struct ChrCustomizationDisplayInfoEntry
+    {
+        uint32_t id{0};
+        int32_t shapeshiftFormId{0};
+        int32_t displayId{0};
+        float barberShopMinCameraDistance{0.0f};
+        float barberShopHeightOffset{0.0f};
+        float barberShopCameraZoomOffset{0.0f};
+    };
+
+    struct ChrCustomizationElementEntry
+    {
+        uint32_t id{0};
+        int32_t choiceId{0};
+        int32_t relatedChoiceId{0};
+        int32_t geosetId{0};
+        int32_t skinnedModelId{0};
+        int32_t materialId{0};
+        int32_t boneSetId{0};
+        int32_t condModelId{0};
+        int32_t displayInfoId{0};
+        int32_t itemGeoModifyId{0};
+        int32_t voiceId{0};
+        int32_t animKitId{0};
+        int32_t particleColorId{0};
+        int32_t geoComponentLinkId{0};
+    };
+
+    struct ChrCustomizationOptionEntry
+    {
+        uint32_t id{0};
+        uint16_t secondaryId{0};
+        int32_t flags{0};
+        uint32_t chrModelId{0};
+        int32_t sortIndex{0};
+        int32_t categoryId{0};
+        int32_t optionType{0};
+        float barberShopCostModifier{0.0f};
+        int32_t chrCustomizationId{0};
+        int32_t reqId{0};
+        int32_t uiOrderIndex{0};
+        int32_t addedInPatch{0};
+    };
+
+    struct ChrCustomizationReqEntry
+    {
+        uint32_t id{0};
+        int32_t flags{0};
+        int32_t classMask{0};
+        int32_t regionGroupMask{0};
+        int32_t achievementId{0};
+        int32_t questId{0};
+        int32_t overrideArchive{0};
+        int32_t itemModifiedAppearanceId{0};
+        std::array<int32_t, 2> raceMask{};
+    };
+
+    struct ChrCustomizationReqChoiceEntry
+    {
+        uint32_t id{0};
+        int32_t choiceId{0};
+        uint32_t reqId{0};
+    };
+#endif
+
     struct ChrRacesEntry
     {
         uint32_t raceId = 0;

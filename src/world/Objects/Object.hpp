@@ -6,6 +6,10 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "ObjectDefines.hpp"
+#include "Data/WoWObject.hpp"
+#if defined(AE_FOREVER)
+#include "version/Forever/Fields/ForeverUpdateFields.hpp"
+#endif
 #include "Server/UpdateMask.h"
 #include "Platform/SymbolVisibility.hpp"
 #include "Server/EventableObject.h"
@@ -115,8 +119,15 @@ protected:
     };
 
     const WoWObject* objectData() const { return wow_data; }
+#if defined(AE_FOREVER)
+    AscEmu::Version::Forever::Fields::ObjectData m_foreverObjectFields{};
+#endif
 
 public:
+#if defined(AE_FOREVER)
+    AscEmu::Version::Forever::Fields::ObjectData& foreverObjectFields() { return m_foreverObjectFields; }
+    AscEmu::Version::Forever::Fields::ObjectData const& foreverObjectFields() const { return m_foreverObjectFields; }
+#endif
     bool write(const uint8_t& member, uint8_t val, bool skipObjectUpdate = false);
     bool write(const uint16_t& member, uint16_t val, bool skipObjectUpdate = false);
     bool write(const float& member, float val, bool skipObjectUpdate = false);
@@ -171,14 +182,11 @@ public:
     bool hasDynamicFlags(uint16_t dynamicFlags) const;
     void setDynamicPathProgress(int16_t pathProgress);
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
-    uint16_t getDynamicFlags() const;
-    int16_t getDynamicPathProgress() const;
-    void setDynamicFlags(uint16_t dynamicFlags);
-    void addDynamicFlags(uint16_t dynamicFlags);
-    void removeDynamicFlags(uint16_t dynamicFlags);
-    bool hasDynamicFlags(uint16_t dynamicFlags) const;
-    void setDynamicPathProgress(int16_t pathProgress);
+    uint32_t getDynamicFlags() const;
+    void setDynamicFlags(uint32_t dynamicFlags);
+    void addDynamicFlags(uint32_t dynamicFlags);
+    void removeDynamicFlags(uint32_t dynamicFlags);
+    bool hasDynamicFlags(uint32_t dynamicFlags) const;
 #endif
 
     float getScale() const;

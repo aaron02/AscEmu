@@ -9,7 +9,11 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/World.h"
 #include "WDBContainer.hpp"
 #include "WDBGlobals.hpp"
+#include "WDBFormat.hpp"
 #include "WDBStructures.hpp"
+#if defined(AE_FOREVER)
+    #include "WDC5File.hpp"
+#endif
 #include "Logging/Logger.hpp"
 #include "Map/Area/AreaStorage.hpp"
 #include "Spell/Definitions/PowerType.hpp"
@@ -23,6 +27,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
+#include <initializer_list>
 #include <iterator>
 #include <map>
 #include <string>
@@ -87,7 +92,9 @@ SERVER_DECL WDB::WDBContainer<WDB::Structures::TransportAnimationEntry> sTranspo
 
 SERVER_DECL WDB::WDBContainer<WDB::Structures::WMOAreaTableEntry> sWMOAreaTableStore;
 static WMOAreaInfoByTripple sWMOAreaInfoByTripple;
+#if !defined(AE_FOREVER)
 SERVER_DECL WDB::WDBContainer<WDB::Structures::WorldMapOverlayEntry> sWorldMapOverlayStore;
+#endif
 
 SERVER_DECL WDB::WDBContainer<WDB::Structures::GtChanceToMeleeCritEntry> sGtChanceToMeleeCritStore; // todo: available for versions > Classic
 SERVER_DECL WDB::WDBContainer<WDB::Structures::GtChanceToMeleeCritBaseEntry> sGtChanceToMeleeCritBaseStore; // todo: available for versions > Classic
@@ -200,6 +207,656 @@ WDB::Structures::SpellPowerMap sSpellPowerMap;
 #endif
 
 namespace {
+#if defined(AE_FOREVER)
+    namespace ForeverFormat = WDB::Formats::Forever;
+
+    struct ForeverWDC5Load
+    {
+        WDB::WDC5File& file;
+        WDB::WDC5TableSchema const& format;
+    };
+
+    bool loadForeverWDC5(WDB::WDC5File& file, WDB::WDC5TableSchema const& format, WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        std::string error;
+        if (file.load(dbcPath + format.filename, format, &error))
+            return true;
+
+        errors.push_back("Forever WDC5: " + error);
+        sLogger.failure("Forever WDC5: {}", error);
+        return false;
+    }
+
+    bool loadForeverWDC5Group(std::initializer_list<ForeverWDC5Load> loads, WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        for (ForeverWDC5Load const& load : loads)
+            if (!loadForeverWDC5(load.file, load.format, errors, dbcPath))
+                return false;
+
+        return true;
+    }
+
+    bool loadForeverModernCharacterStores(WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        WDB::WDC5File chrModel;
+        WDB::WDC5File chrRaceXChrModel;
+        if (!loadForeverWDC5Group({ { chrModel, ForeverFormat::ChrModel }, { chrRaceXChrModel, ForeverFormat::ChrRaceXChrModel } }, errors, dbcPath))
+            return false;
+
+        sChrModelStore.clear();
+        for (uint32_t row = 0; row < chrModel.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrModelEntry entry;
+            entry.id = chrModel.getRecordId(row);
+            entry.sex = chrModel.getInt8(row, 3);
+            entry.displayId = chrModel.getUInt32(row, 4);
+            sChrModelStore[entry.id] = entry;
+        }
+
+        sChrRaceXChrModelStore.clear();
+        for (uint32_t row = 0; row < chrRaceXChrModel.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrRaceXChrModelEntry entry;
+            entry.id = chrRaceXChrModel.getRecordId(row);
+            entry.chrRacesId = chrRaceXChrModel.getUInt8(row, 0);
+            entry.chrModelId = chrRaceXChrModel.getInt32(row, 1);
+            entry.sex = chrRaceXChrModel.getInt8(row, 2);
+            entry.allowedTransmogSlots = chrRaceXChrModel.getInt32(row, 3);
+            sChrRaceXChrModelStore[entry.id] = entry;
+        }
+
+        WDB::WDC5File chrClasses;
+        WDB::WDC5File chrRaces;
+        WDB::WDC5File faction;
+        WDB::WDC5File factionTemplate;
+
+        if (!loadForeverWDC5Group({ { chrClasses, ForeverFormat::ChrClasses }, { chrRaces, ForeverFormat::ChrRaces }, { faction, ForeverFormat::Faction }, { factionTemplate, ForeverFormat::FactionTemplate } }, errors, dbcPath))
+            return false;
+
+        // Populate the existing AscEmu runtime stores. This deliberately keeps
+        // Player and the rest of the core on the established WDBStore API while
+        // replacing the legacy ChrClasses/ChrRaces DBC source for Forever.
+        sChrClassesStore.clear();
+        for (uint32_t row = 0; row < chrClasses.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrClassesEntry entry;
+            entry.classId = chrClasses.getUInt8(row, 29);
+            entry.powerType = static_cast<uint32_t>(static_cast<uint8_t>(chrClasses.getInt8(row, 32))); // DisplayPower
+            entry.spellClassSet = chrClasses.getUInt8(row, 36);
+            entry.cinematicSequenceId = chrClasses.getUInt32(row, 27);
+            entry.apPerStr = chrClasses.getUInt8(row, 35);
+            entry.apPerAgi = chrClasses.getUInt8(row, 34);
+            entry.rapPerAgi = chrClasses.getUInt8(row, 33);
+            sChrClassesStore[entry.classId] = std::move(entry);
+        }
+
+        sChrRacesStore.clear();
+        for (uint32_t row = 0; row < chrRaces.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrRacesEntry entry;
+            entry.raceId = chrRaces.getRecordId(row);
+            entry.flags = static_cast<uint32_t>(chrRaces.getInt32(row, 15));
+            entry.factionId = static_cast<uint32_t>(chrRaces.getInt32(row, 16));
+            entry.cinematicId = static_cast<uint32_t>(chrRaces.getInt32(row, 17));
+
+            // Modern ChrRaces::Alliance: 0=Alliance, 1=Horde, 2=Neutral.
+            // AscEmu's legacy runtime expects teamId 7 for Alliance and a
+            // non-7 value for Horde. Preserve that established convention.
+            int8_t const alliance = chrRaces.getInt8(row, 36);
+            entry.teamId = alliance == 0 ? 7U : (alliance == 1 ? 1U : 0U);
+
+            if (auto const* maleModel = getForeverChrModel(static_cast<uint8_t>(entry.raceId), 0))
+                entry.modelMale = maleModel->displayId;
+            if (auto const* femaleModel = getForeverChrModel(static_cast<uint8_t>(entry.raceId), 1))
+                entry.modelFemale = femaleModel->displayId;
+
+            sChrRacesStore[entry.raceId] = std::move(entry);
+        }
+
+        // Faction.db2 in the 1.60.1.69800 beta has one additional modern field
+        // compared with the current Midnight metadata. The fields required by
+        // AscEmu during login are stable at the front of the record, so keep
+        // the unknown tail opaque for now instead of guessing its meaning.
+        sFactionStore.clear();
+        for (uint32_t row = 0; row < faction.getRecordCount(); ++row)
+        {
+            WDB::Structures::FactionEntry entry;
+            entry.id = faction.getRecordId(row);
+            entry.reputationIndex = faction.getInt32(row, 2);
+            entry.parentFactionId = faction.getUInt32(row, 3);
+            entry.expansion = faction.getUInt8(row, 4);
+            sFactionStore[entry.id] = std::move(entry);
+        }
+
+        // FactionTemplate.db2 keeps the Midnight layout in this beta. The
+        // modern client has eight explicit friend/enemy relations while the
+        // existing AscEmu runtime structure stores four; copy the first four
+        // and preserve the established core API.
+        sFactionTemplateStore.clear();
+        for (uint32_t row = 0; row < factionTemplate.getRecordCount(); ++row)
+        {
+            WDB::Structures::FactionTemplateEntry entry;
+            entry.id = factionTemplate.getRecordId(row);
+            entry.faction = factionTemplate.getUInt32(row, 0);
+            entry.factionFlags = factionTemplate.getUInt32(row, 1);
+            entry.ourMask = factionTemplate.getUInt8(row, 2);
+            entry.friendlyMask = factionTemplate.getUInt8(row, 3);
+            entry.hostileMask = factionTemplate.getUInt8(row, 4);
+
+            for (std::size_t i = 0; i < WDB::Structures::maxFactionRelations; ++i)
+            {
+                entry.enemyFaction[i] = factionTemplate.getUInt32(row, 5, static_cast<uint32_t>(i));
+                entry.friendFaction[i] = factionTemplate.getUInt32(row, 6, static_cast<uint32_t>(i));
+            }
+
+            sFactionTemplateStore[entry.id] = std::move(entry);
+        }
+
+        auto const* humanFemale = getForeverChrModel(1, 1);
+        auto const* humanRace = sChrRacesStore.lookupEntry(1);
+        auto const* rogueClass = sChrClassesStore.lookupEntry(4);
+        auto const* humanFactionTemplate = sFactionTemplateStore.lookupEntry(humanRace ? humanRace->factionId : 0U);
+        auto const* humanFaction = humanFactionTemplate ? sFactionStore.lookupEntry(humanFactionTemplate->faction) : nullptr;
+        sLogger.info(
+            "Forever WDC5: loaded ChrModel={} (layout=0x{:08X}), ChrRaceXChrModel={} (layout=0x{:08X}), ChrRaces={} (layout=0x{:08X}), ChrClasses={} (layout=0x{:08X}), Faction={} (layout=0x{:08X}), FactionTemplate={} (layout=0x{:08X}); human female displayId={}, human teamId={}, rogue powerType={}, human factionTemplate={} -> faction={} (loaded={}).",
+            sChrModelStore.getNumRows(), chrModel.getLayoutHash(),
+            sChrRaceXChrModelStore.getNumRows(), chrRaceXChrModel.getLayoutHash(),
+            sChrRacesStore.getNumRows(), chrRaces.getLayoutHash(),
+            sChrClassesStore.getNumRows(), chrClasses.getLayoutHash(),
+            sFactionStore.getNumRows(), faction.getLayoutHash(),
+            sFactionTemplateStore.getNumRows(), factionTemplate.getLayoutHash(),
+            humanFemale ? humanFemale->displayId : 0U,
+            humanRace ? humanRace->teamId : 0U,
+            rogueClass ? rogueClass->powerType : 0U,
+            humanRace ? humanRace->factionId : 0U,
+            humanFactionTemplate ? humanFactionTemplate->faction : 0U,
+            humanFaction != nullptr);
+
+        return true;
+    }
+
+    bool loadForeverModernCreatureStores(WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        WDB::WDC5File creatureDisplayInfo;
+        WDB::WDC5File creatureDisplayInfoExtra;
+        WDB::WDC5File creatureModelData;
+
+        bool const displayInfoLoaded = loadForeverWDC5(
+            creatureDisplayInfo, ForeverFormat::CreatureDisplayInfo, errors, dbcPath);
+        bool const displayInfoExtraLoaded = loadForeverWDC5(
+            creatureDisplayInfoExtra, ForeverFormat::CreatureDisplayInfoExtra, errors, dbcPath);
+        bool const modelDataLoaded = loadForeverWDC5(
+            creatureModelData, ForeverFormat::CreatureModelData, errors, dbcPath);
+
+        sLogger.info(
+            "Forever WDC5 creature load result: CreatureDisplayInfo={} CreatureDisplayInfoExtra={} CreatureModelData={}.",
+            displayInfoLoaded, displayInfoExtraLoaded, modelDataLoaded);
+
+        if (displayInfoLoaded)
+        {
+            sCreatureDisplayInfoStore.clear();
+            for (uint32_t row = 0; row < creatureDisplayInfo.getRecordCount(); ++row)
+            {
+                WDB::Structures::CreatureDisplayInfoEntry entry;
+                entry.id = creatureDisplayInfo.getRecordId(row);
+                entry.modelId = creatureDisplayInfo.getUInt16(row, 1);
+                entry.creatureModelScale = creatureDisplayInfo.getFloat(row, 4);
+                entry.extendedDisplayInfoId = creatureDisplayInfo.getUInt32(row, 7);
+                sCreatureDisplayInfoStore[entry.id] = std::move(entry);
+            }
+
+            sLogger.info(
+                "Forever WDC5: loaded CreatureDisplayInfo={} (records={}, layout=0x{:08X}).",
+                sCreatureDisplayInfoStore.getNumRows(), creatureDisplayInfo.getRecordCount(), creatureDisplayInfo.getLayoutHash());
+        }
+        else
+        {
+            sLogger.failure("Forever WDC5: CreatureDisplayInfo.db2 was not loaded; existing store size={}.",
+                sCreatureDisplayInfoStore.getNumRows());
+        }
+
+        if (displayInfoExtraLoaded)
+        {
+            sCreatureDisplayInfoExtraStore.clear();
+            for (uint32_t row = 0; row < creatureDisplayInfoExtra.getRecordCount(); ++row)
+            {
+                WDB::Structures::CreatureDisplayInfoExtraEntry entry;
+                entry.displayExtraId = creatureDisplayInfoExtra.getRecordId(row);
+                entry.race = creatureDisplayInfoExtra.getUInt8(row, 1);
+                entry.displaySexId = creatureDisplayInfoExtra.getUInt8(row, 2);
+                sCreatureDisplayInfoExtraStore[entry.displayExtraId] = std::move(entry);
+            }
+
+            sLogger.info(
+                "Forever WDC5: loaded CreatureDisplayInfoExtra={} (records={}, layout=0x{:08X}).",
+                sCreatureDisplayInfoExtraStore.getNumRows(), creatureDisplayInfoExtra.getRecordCount(), creatureDisplayInfoExtra.getLayoutHash());
+        }
+        else
+        {
+            sLogger.failure("Forever WDC5: CreatureDisplayInfoExtra.db2 was not loaded; existing store size={}.",
+                sCreatureDisplayInfoExtraStore.getNumRows());
+        }
+
+        if (modelDataLoaded)
+        {
+            sCreatureModelDataStore.clear();
+            for (uint32_t row = 0; row < creatureModelData.getRecordCount(); ++row)
+            {
+                WDB::Structures::CreatureModelDataEntry entry;
+                entry.id = creatureModelData.getRecordId(row);
+                entry.flags = creatureModelData.getUInt32(row, 1);
+                entry.modelName.clear(); // Modern CreatureModelData.db2 no longer contains ModelName.
+                entry.collisionHeight = creatureModelData.getFloat(row, 16);
+                entry.modelScale = creatureModelData.getFloat(row, 21);
+                entry.mountHeight = creatureModelData.getFloat(row, 25);
+                sCreatureModelDataStore[entry.id] = std::move(entry);
+            }
+
+            sLogger.info(
+                "Forever WDC5: loaded CreatureModelData={} (records={}, layout=0x{:08X}).",
+                sCreatureModelDataStore.getNumRows(), creatureModelData.getRecordCount(), creatureModelData.getLayoutHash());
+        }
+        else
+        {
+            sLogger.failure("Forever WDC5: CreatureModelData.db2 was not loaded; existing store size={}.",
+                sCreatureModelDataStore.getNumRows());
+        }
+
+        return displayInfoLoaded && displayInfoExtraLoaded && modelDataLoaded;
+    }
+
+    bool loadForeverModernCustomizationStores(WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        WDB::WDC5File customization;
+        WDB::WDC5File boneSet;
+        WDB::WDC5File category;
+        WDB::WDC5File choice;
+        WDB::WDC5File condModel;
+        WDB::WDC5File conversion;
+        WDB::WDC5File displayInfo;
+        WDB::WDC5File element;
+        WDB::WDC5File geoset;
+        WDB::WDC5File glyphPet;
+        WDB::WDC5File material;
+        WDB::WDC5File option;
+        WDB::WDC5File req;
+        WDB::WDC5File reqChoice;
+        WDB::WDC5File skinnedModel;
+        WDB::WDC5File visReq;
+        WDB::WDC5File voice;
+
+        if (!loadForeverWDC5Group({
+            { customization, ForeverFormat::ChrCustomization }, { boneSet, ForeverFormat::ChrCustomizationBoneSet }, { category, ForeverFormat::ChrCustomizationCategory },
+            { choice, ForeverFormat::ChrCustomizationChoice }, { condModel, ForeverFormat::ChrCustomizationCondModel }, { conversion, ForeverFormat::ChrCustomizationConversion },
+            { displayInfo, ForeverFormat::ChrCustomizationDisplayInfo }, { element, ForeverFormat::ChrCustomizationElement }, { geoset, ForeverFormat::ChrCustomizationGeoset },
+            { glyphPet, ForeverFormat::ChrCustomizationGlyphPet }, { material, ForeverFormat::ChrCustomizationMaterial }, { option, ForeverFormat::ChrCustomizationOption },
+            { req, ForeverFormat::ChrCustomizationReq }, { reqChoice, ForeverFormat::ChrCustomizationReqChoice }, { skinnedModel, ForeverFormat::ChrCustomizationSkinnedModel },
+            { visReq, ForeverFormat::ChrCustomizationVisReq }, { voice, ForeverFormat::ChrCustomizationVoice } }, errors, dbcPath))
+            return false;
+
+        sChrCustomizationChoiceStore.clear();
+        for (uint32_t row = 0; row < choice.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrCustomizationChoiceEntry entry;
+            entry.id = choice.getRecordId(row);
+            entry.optionId = choice.getUInt32(row, 2);
+            entry.reqId = choice.getInt32(row, 3);
+            entry.visReqId = choice.getInt32(row, 4);
+            entry.sortOrder = choice.getUInt16(row, 5);
+            entry.uiOrderIndex = choice.getUInt16(row, 6);
+            entry.flags = choice.getInt32(row, 7);
+            entry.addedInPatch = choice.getInt32(row, 8);
+            entry.soundKitId = choice.getInt32(row, 9);
+            entry.swatchColor[0] = choice.getInt32(row, 10, 0);
+            entry.swatchColor[1] = choice.getInt32(row, 10, 1);
+            sChrCustomizationChoiceStore[entry.id] = entry;
+        }
+
+        sChrCustomizationDisplayInfoStore.clear();
+        for (uint32_t row = 0; row < displayInfo.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrCustomizationDisplayInfoEntry entry;
+            entry.id = displayInfo.getRecordId(row);
+            entry.shapeshiftFormId = displayInfo.getInt32(row, 0);
+            entry.displayId = displayInfo.getInt32(row, 1);
+            entry.barberShopMinCameraDistance = displayInfo.getFloat(row, 2);
+            entry.barberShopHeightOffset = displayInfo.getFloat(row, 3);
+            entry.barberShopCameraZoomOffset = displayInfo.getFloat(row, 4);
+            sChrCustomizationDisplayInfoStore[entry.id] = entry;
+        }
+
+        sChrCustomizationElementStore.clear();
+        for (uint32_t row = 0; row < element.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrCustomizationElementEntry entry;
+            entry.id = element.getRecordId(row);
+            entry.choiceId = element.getInt32(row, 0);
+            entry.relatedChoiceId = element.getInt32(row, 1);
+            entry.geosetId = element.getInt32(row, 2);
+            entry.skinnedModelId = element.getInt32(row, 3);
+            entry.materialId = element.getInt32(row, 4);
+            entry.boneSetId = element.getInt32(row, 5);
+            entry.condModelId = element.getInt32(row, 6);
+            entry.displayInfoId = element.getInt32(row, 7);
+            entry.itemGeoModifyId = element.getInt32(row, 8);
+            entry.voiceId = element.getInt32(row, 9);
+            entry.animKitId = element.getInt32(row, 10);
+            entry.particleColorId = element.getInt32(row, 11);
+            entry.geoComponentLinkId = element.getInt32(row, 12);
+            sChrCustomizationElementStore[entry.id] = entry;
+        }
+
+        sChrCustomizationOptionStore.clear();
+        for (uint32_t row = 0; row < option.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrCustomizationOptionEntry entry;
+            entry.id = option.getRecordId(row);
+            entry.secondaryId = option.getUInt16(row, 2);
+            entry.flags = option.getInt32(row, 3);
+            entry.chrModelId = option.getUInt32(row, 4);
+            entry.sortIndex = option.getInt32(row, 5);
+            entry.categoryId = option.getInt32(row, 6);
+            entry.optionType = option.getInt32(row, 7);
+            entry.barberShopCostModifier = option.getFloat(row, 8);
+            entry.chrCustomizationId = option.getInt32(row, 9);
+            entry.reqId = option.getInt32(row, 10);
+            entry.uiOrderIndex = option.getInt32(row, 11);
+            entry.addedInPatch = option.getInt32(row, 12);
+            sChrCustomizationOptionStore[entry.id] = entry;
+        }
+
+        sChrCustomizationReqStore.clear();
+        for (uint32_t row = 0; row < req.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrCustomizationReqEntry entry;
+            entry.id = req.getRecordId(row);
+            entry.flags = req.getInt32(row, 1);
+            entry.classMask = req.getInt32(row, 2);
+            entry.regionGroupMask = req.getInt32(row, 3);
+            entry.achievementId = req.getInt32(row, 4);
+            entry.questId = req.getInt32(row, 5);
+            entry.overrideArchive = req.getInt32(row, 6);
+            entry.itemModifiedAppearanceId = req.getInt32(row, 7);
+            entry.raceMask[0] = req.getInt32(row, 8, 0);
+            entry.raceMask[1] = req.getInt32(row, 8, 1);
+            sChrCustomizationReqStore[entry.id] = entry;
+        }
+
+        sChrCustomizationReqChoiceStore.clear();
+        for (uint32_t row = 0; row < reqChoice.getRecordCount(); ++row)
+        {
+            WDB::Structures::ChrCustomizationReqChoiceEntry entry;
+            entry.id = reqChoice.getRecordId(row);
+            entry.choiceId = reqChoice.getInt32(row, 0);
+            entry.reqId = reqChoice.getParentId(row);
+            sChrCustomizationReqChoiceStore[entry.id] = entry;
+        }
+
+        uint32_t humanFemaleOptions = 0;
+        uint32_t humanFemaleChoices = 0;
+        if (auto const* humanFemale = getForeverChrModel(1, 1))
+        {
+            for (auto const& [id, customizationOption] : sChrCustomizationOptionStore)
+            {
+                (void)id;
+                if (customizationOption.chrModelId != humanFemale->id)
+                    continue;
+                ++humanFemaleOptions;
+                for (auto const& [choiceId, customizationChoice] : sChrCustomizationChoiceStore)
+                {
+                    (void)choiceId;
+                    if (customizationChoice.optionId == customizationOption.id)
+                        ++humanFemaleChoices;
+                }
+            }
+        }
+
+        sLogger.info(
+            "Forever WDC5 customizations: ChrCustomization={} BoneSet={} Category={} Choice={} CondModel={} Conversion={} DisplayInfo={} Element={} Geoset={} GlyphPet={} Material={} Option={} Req={} ReqChoice={} SkinnedModel={} VisReq={} Voice={}; typed stores Choice={} Option={} Element={} DisplayInfo={} Req={} ReqChoice={}; human female options={} choices={}.",
+            customization.getRecordCount(), boneSet.getRecordCount(), category.getRecordCount(), choice.getRecordCount(), condModel.getRecordCount(),
+            conversion.getRecordCount(), displayInfo.getRecordCount(), element.getRecordCount(), geoset.getRecordCount(), glyphPet.getRecordCount(),
+            material.getRecordCount(), option.getRecordCount(), req.getRecordCount(), reqChoice.getRecordCount(), skinnedModel.getRecordCount(),
+            visReq.getRecordCount(), voice.getRecordCount(), sChrCustomizationChoiceStore.getNumRows(), sChrCustomizationOptionStore.getNumRows(),
+            sChrCustomizationElementStore.getNumRows(), sChrCustomizationDisplayInfoStore.getNumRows(), sChrCustomizationReqStore.getNumRows(),
+            sChrCustomizationReqChoiceStore.getNumRows(), humanFemaleOptions, humanFemaleChoices);
+
+        return true;
+    }
+
+    bool loadForeverModernTaxiStores(WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        WDB::WDC5File taxiNodes;
+        WDB::WDC5File taxiPath;
+        WDB::WDC5File taxiPathNode;
+        if (!loadForeverWDC5Group({ { taxiNodes, ForeverFormat::TaxiNodes }, { taxiPath, ForeverFormat::TaxiPath }, { taxiPathNode, ForeverFormat::TaxiPathNode } }, errors, dbcPath))
+            return false;
+
+        std::vector<std::pair<uint32_t, WDB::Structures::TaxiNodesEntry>> nodeEntries;
+        nodeEntries.reserve(taxiNodes.getRecordCount());
+        for (uint32_t row = 0; row < taxiNodes.getRecordCount(); ++row)
+        {
+            WDB::Structures::TaxiNodesEntry entry{};
+            entry.id = taxiNodes.getRecordId(row);
+            entry.mapid = taxiNodes.getUInt16(row, 5); // ContinentID
+            entry.x = taxiNodes.getFloat(row, 1, 0);
+            entry.y = taxiNodes.getFloat(row, 1, 1);
+            entry.z = taxiNodes.getFloat(row, 1, 2);
+            entry.mountCreatureID[0] = static_cast<uint32_t>(taxiNodes.getInt32(row, 14, 0));
+            entry.mountCreatureID[1] = static_cast<uint32_t>(taxiNodes.getInt32(row, 14, 1));
+#if VERSION_STRING >= Cata
+            entry.flags = static_cast<uint32_t>(taxiNodes.getInt32(row, 8));
+#endif
+            nodeEntries.emplace_back(entry.id, entry);
+        }
+        sTaxiNodesStore.assignEntries(nodeEntries);
+
+        std::vector<std::pair<uint32_t, WDB::Structures::TaxiPathEntry>> pathEntries;
+        pathEntries.reserve(taxiPath.getRecordCount());
+        for (uint32_t row = 0; row < taxiPath.getRecordCount(); ++row)
+        {
+            WDB::Structures::TaxiPathEntry entry{};
+            entry.id = taxiPath.getRecordId(row);
+            entry.from = taxiPath.getUInt16(row, 1);
+            entry.to = taxiPath.getUInt16(row, 2);
+            entry.price = taxiPath.getUInt32(row, 3);
+            pathEntries.emplace_back(entry.id, entry);
+        }
+        sTaxiPathStore.assignEntries(pathEntries);
+
+        std::vector<std::pair<uint32_t, WDB::Structures::TaxiPathNodeEntry>> pathNodeEntries;
+        pathNodeEntries.reserve(taxiPathNode.getRecordCount());
+        for (uint32_t row = 0; row < taxiPathNode.getRecordCount(); ++row)
+        {
+            WDB::Structures::TaxiPathNodeEntry entry{};
+            entry.pathId = taxiPathNode.getUInt32(row, 2);
+            entry.NodeIndex = static_cast<uint32_t>(taxiPathNode.getInt32(row, 3));
+            entry.mapid = taxiPathNode.getUInt16(row, 4);
+            entry.x = taxiPathNode.getFloat(row, 0, 0);
+            entry.y = taxiPathNode.getFloat(row, 0, 1);
+            entry.z = taxiPathNode.getFloat(row, 0, 2);
+            entry.flags = static_cast<uint32_t>(taxiPathNode.getInt32(row, 5));
+            entry.waittime = taxiPathNode.getUInt32(row, 6);
+#if VERSION_STRING >= TBC
+            entry.arivalEventID = static_cast<uint32_t>(taxiPathNode.getInt32(row, 7));
+            entry.departureEventID = static_cast<uint32_t>(taxiPathNode.getInt32(row, 8));
+#endif
+            pathNodeEntries.emplace_back(taxiPathNode.getRecordId(row), entry);
+        }
+        sTaxiPathNodeStore.assignEntries(pathNodeEntries);
+
+        sLogger.info(
+            "Forever WDC5 taxi: TaxiNodes={} records (rows={}, layout=0x{:08X}), TaxiPath={} records (rows={}, layout=0x{:08X}), TaxiPathNode={} records (rows={}, layout=0x{:08X}).",
+            taxiNodes.getRecordCount(), sTaxiNodesStore.getNumRows(), taxiNodes.getLayoutHash(),
+            taxiPath.getRecordCount(), sTaxiPathStore.getNumRows(), taxiPath.getLayoutHash(),
+            taxiPathNode.getRecordCount(), sTaxiPathNodeStore.getNumRows(), taxiPathNode.getLayoutHash());
+
+        return !nodeEntries.empty() && !pathEntries.empty() && !pathNodeEntries.empty();
+    }
+
+
+    bool loadForeverModernItemStores(WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        WDB::WDC5File itemSet;
+        WDB::WDC5File itemSetSpell;
+        if (!loadForeverWDC5Group({ { itemSet, ForeverFormat::ItemSet }, { itemSetSpell, ForeverFormat::ItemSetSpell } }, errors, dbcPath))
+            return false;
+
+        std::vector<std::pair<uint32_t, WDB::Structures::ItemSetEntry>> entries;
+        entries.reserve(itemSet.getRecordCount());
+        std::map<uint32_t, size_t> entryIndexById;
+
+        for (uint32_t row = 0; row < itemSet.getRecordCount(); ++row)
+        {
+            WDB::Structures::ItemSetEntry entry{};
+            entry.id = itemSet.getRecordId(row);
+            entry.RequiredSkillID = itemSet.getUInt32(row, 2);
+            entry.RequiredSkillAmt = itemSet.getUInt16(row, 3);
+
+            // Modern ItemSet has 17 item IDs while the legacy AscEmu view has 10.
+            // Preserve the first ten IDs used by the existing core API.
+            for (uint32_t i = 0; i < 10; ++i)
+                entry.itemid[i] = itemSet.getUInt32(row, 4, i);
+
+            entryIndexById.emplace(entry.id, entries.size());
+            entries.emplace_back(entry.id, entry);
+        }
+
+        uint32_t mergedGenericBonuses = 0;
+        uint32_t ignoredSpecializedBonuses = 0;
+        std::map<uint32_t, uint32_t> bonusCountBySet;
+
+        for (uint32_t row = 0; row < itemSetSpell.getRecordCount(); ++row)
+        {
+            uint32_t const itemSetId = itemSetSpell.getParentId(row);
+            auto const indexItr = entryIndexById.find(itemSetId);
+            if (indexItr == entryIndexById.end())
+                continue;
+
+            uint16_t const chrSpecId = itemSetSpell.getUInt16(row, 0);
+            uint16_t const traitSubTreeId = itemSetSpell.getUInt16(row, 2);
+            if (chrSpecId != 0 || traitSubTreeId != 0)
+            {
+                ++ignoredSpecializedBonuses;
+                continue;
+            }
+
+            uint32_t& bonusIndex = bonusCountBySet[itemSetId];
+            if (bonusIndex >= 8)
+                continue;
+
+            auto& entry = entries[indexItr->second].second;
+            entry.SpellID[bonusIndex] = itemSetSpell.getUInt32(row, 1);
+            entry.itemscount[bonusIndex] = itemSetSpell.getUInt8(row, 3);
+            ++bonusIndex;
+            ++mergedGenericBonuses;
+        }
+
+        sItemSetStore.assignEntries(entries);
+
+        // These two client tables no longer exist in the Forever beta / modern
+        // Trinity DB2 set. Keep the legacy stores available to old AscEmu code,
+        // but intentionally empty instead of reporting missing .dbc files.
+        sItemRandomPropertiesStore.clear();
+        sItemRandomSuffixStore.clear();
+
+        sLogger.info(
+            "Forever WDC5 items: ItemSet={} records (layout=0x{:08X}), ItemSetSpell={} records (layout=0x{:08X}), merged generic bonuses={}, ignored specialization/trait bonuses={}; ItemRandomProperties/ItemRandomSuffix are legacy-only and remain empty.",
+            itemSet.getRecordCount(), itemSet.getLayoutHash(),
+            itemSetSpell.getRecordCount(), itemSetSpell.getLayoutHash(),
+            mergedGenericBonuses, ignoredSpecializedBonuses);
+
+        return true;
+    }
+
+    bool loadForeverModernMapStores(WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        WDB::WDC5File map;
+        WDB::WDC5File mapDifficulty;
+        WDB::WDC5File uiMapAssignment;
+        WDB::WDC5File worldMapOverlay;
+        if (!loadForeverWDC5Group({ { map, ForeverFormat::Map }, { mapDifficulty, ForeverFormat::MapDifficulty }, { uiMapAssignment, ForeverFormat::UiMapAssignment }, { worldMapOverlay, ForeverFormat::WorldMapOverlay } }, errors, dbcPath))
+            return false;
+
+        sMapStore.clear();
+        for (uint32_t row = 0; row < map.getRecordCount(); ++row)
+        {
+            WDB::Structures::MapEntry entry;
+            entry.id = map.getRecordId(row);
+
+            // AscEmu's legacy mapType uses the same 0..4 semantics as the
+            // modern Map::InstanceType field (world/party/raid/bg/arena).
+            entry.mapType = static_cast<uint32_t>(static_cast<uint8_t>(map.getInt8(row, 8)));
+            entry.linkedZone = map.getUInt16(row, 10);       // AreaTableID
+            entry.multimapId = static_cast<uint32_t>(static_cast<uint16_t>(map.getInt16(row, 14))); // CosmeticParentMapID
+            entry.parentMap = map.getInt16(row, 17);        // CorpseMapID
+            entry.startX = map.getFloat(row, 6, 0);         // Corpse X
+            entry.startY = map.getFloat(row, 6, 1);         // Corpse Y
+            entry.addon = map.getUInt8(row, 9);             // ExpansionID
+            entry.maxPlayers = map.getUInt8(row, 18);
+            sMapStore[entry.id] = std::move(entry);
+        }
+
+        sMapDifficultyStore.clear();
+        for (uint32_t row = 0; row < mapDifficulty.getRecordCount(); ++row)
+        {
+            WDB::Structures::MapDifficultyEntry entry;
+            entry.id = mapDifficulty.getRecordId(row);
+            entry.mapId = mapDifficulty.getParentId(row);
+            entry.difficulty = static_cast<uint32_t>(static_cast<uint16_t>(mapDifficulty.getInt16(row, 2)));
+            uint8_t const resetInterval = mapDifficulty.getUInt8(row, 4);
+            entry.raidDuration = resetInterval == 1 ? 86400U : (resetInterval == 2 ? 604800U : 0U);
+            int32_t const maxPlayers = mapDifficulty.getInt32(row, 5);
+            entry.maxPlayers = maxPlayers > 0 ? static_cast<uint32_t>(maxPlayers) : 0U;
+            sMapDifficultyStore[entry.id] = std::move(entry);
+        }
+
+        // WorldMapArea.dbc no longer exists in modern clients. UiMapAssignment
+        // is the modern source that directly relates AreaID -> MapID. Populate
+        // the legacy compatibility store from that relation so old AscEmu code
+        // (notably flying-map resolution) can keep using the established API.
+        sWorldMapAreaStore.clear();
+        for (uint32_t row = 0; row < uiMapAssignment.getRecordCount(); ++row)
+        {
+            int32_t const mapId = uiMapAssignment.getInt32(row, 6);
+            int32_t const areaId = uiMapAssignment.getInt32(row, 7);
+            if (mapId < 0 || areaId <= 0)
+                continue;
+
+            WDB::Structures::WorldMapAreaEntry entry;
+            entry.mapId = static_cast<uint32_t>(mapId);
+            entry.zoneId = static_cast<uint32_t>(areaId);
+            entry.continentMapId = mapId;
+            sWorldMapAreaStore[entry.zoneId] = entry;
+        }
+
+        sWorldMapOverlayStore.clear();
+        for (uint32_t row = 0; row < worldMapOverlay.getRecordCount(); ++row)
+        {
+            WDB::Structures::WorldMapOverlayEntry entry{};
+            entry.ID = worldMapOverlay.getRecordId(row);
+            entry.areaID = worldMapOverlay.getUInt32(row, 12, 0);
+            entry.areaID_2 = worldMapOverlay.getUInt32(row, 12, 1);
+            entry.areaID_3 = worldMapOverlay.getUInt32(row, 12, 2);
+            entry.areaID_4 = worldMapOverlay.getUInt32(row, 12, 3);
+            sWorldMapOverlayStore[entry.ID] = entry;
+        }
+
+        auto const* map0 = sMapStore.lookupEntry(0);
+        auto const* map1 = sMapStore.lookupEntry(1);
+        sLogger.info(
+            "Forever WDC5 maps: Map={} readable (+{} encrypted skipped, layout=0x{:08X}), MapDifficulty={} readable (+{} encrypted skipped, layout=0x{:08X}), UiMapAssignment={} (layout=0x{:08X}), WorldMapOverlay={} (layout=0x{:08X}); map0={} type={}, map1={} type={}, legacy WorldMapArea={}.",
+            sMapStore.getNumRows(), map.getSkippedEncryptedRecordCount(), map.getLayoutHash(),
+            sMapDifficultyStore.getNumRows(), mapDifficulty.getSkippedEncryptedRecordCount(), mapDifficulty.getLayoutHash(),
+            uiMapAssignment.getRecordCount(), uiMapAssignment.getLayoutHash(),
+            sWorldMapOverlayStore.getNumRows(), worldMapOverlay.getLayoutHash(),
+            map0 != nullptr, map0 ? map0->mapType : 0U,
+            map1 != nullptr, map1 ? map1->mapType : 0U,
+            sWorldMapAreaStore.getNumRows());
+
+        return map0 != nullptr;
+    }
+#endif
+
     void buildAreaMapCollection()
     {
         auto* areaMapCollection = MapManagement::AreaManagement::AreaStorage::getMapCollection();
@@ -283,7 +940,20 @@ bool loadDBCs()
     WDB::StoreProblemList bad_dbc_files;
     std::string dbc_path = sWorld.settings.server.dataDir + "dbc/";
 
+#if defined(AE_FOREVER)
+    // Load the modern Forever WDC5 character baseline into the existing
+    // AscEmu runtime stores. ChrClasses/ChrRaces replace their legacy DBC
+    // sources for Forever; the rest of the core can keep using the same API.
+    loadForeverModernCharacterStores(bad_dbc_files, dbc_path);
+    loadForeverModernCreatureStores(bad_dbc_files, dbc_path);
+    loadForeverModernCustomizationStores(bad_dbc_files, dbc_path);
+    loadForeverModernTaxiStores(bad_dbc_files, dbc_path);
+    loadForeverModernItemStores(bad_dbc_files, dbc_path);
+    loadForeverModernMapStores(bad_dbc_files, dbc_path);
+#endif
+
     // Load ChrClasses.dbc first to ensure the dbcLocaleId is set correctly before loading other DBC files that may depend on it
+#if !defined(AE_FOREVER)
     WDB::loadUnifiedWDBStore<WDB::Structures::ChrClassesEntry>(
         bad_dbc_files, sChrClassesStore, dbc_path,
         []<typename RawType>(const RawType& raw, WDB::Structures::ChrClassesEntry& entry) {
@@ -332,6 +1002,7 @@ bool loadDBCs()
             }
         }
     );
+#endif
 
     WDB::loadUnifiedWDBStore<WDB::Structures::AreaTableEntry>(
         bad_dbc_files, sAreaStore, dbc_path,
@@ -457,6 +1128,7 @@ bool loadDBCs()
         sCharStartOutfitMap[outfit.makeKey()] = &outfit;
     }
 
+#if !defined(AE_FOREVER)
     WDB::loadUnifiedWDBStore<WDB::Structures::ChrRacesEntry>(
         bad_dbc_files, sChrRacesStore, dbc_path,
         []<typename RawType>(const RawType& raw, WDB::Structures::ChrRacesEntry& entry) {
@@ -505,7 +1177,9 @@ bool loadDBCs()
             }
         }
     );
+#endif
 
+#if !defined(AE_FOREVER)
     WDB::loadUnifiedWDBStore<WDB::Structures::CreatureDisplayInfoEntry>(
         bad_dbc_files, sCreatureDisplayInfoStore, dbc_path,
         []<typename RawType>(RawType const& raw, WDB::Structures::CreatureDisplayInfoEntry& entry)
@@ -544,6 +1218,8 @@ bool loadDBCs()
                 entry.mountHeight = raw.mountHeight;
             }
         });
+
+#endif
 
     WDB::loadUnifiedWDBStore<WDB::Structures::CreatureSpellDataEntry>(
         bad_dbc_files, sCreatureSpellDataStore, dbc_path,
@@ -618,6 +1294,7 @@ bool loadDBCs()
             }
         });
 
+#if !defined(AE_FOREVER)
     WDB::loadUnifiedWDBStore<WDB::Structures::FactionEntry>(
         bad_dbc_files, sFactionStore, dbc_path,
         [](const auto& raw, WDB::Structures::FactionEntry& entry) {
@@ -678,10 +1355,14 @@ bool loadDBCs()
         }
     );
 
+#endif
+
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sGameObjectDisplayInfoStore, dbc_path, "GameObjectDisplayInfo.dbc");
 
+#if !defined(AE_FOREVER)
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sItemSetStore, dbc_path, "ItemSet.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sItemRandomPropertiesStore, dbc_path, "ItemRandomProperties.dbc");
+#endif
 
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sLFGDungeonStore, dbc_path, "LFGDungeons.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sLiquidTypeStore, dbc_path, "LiquidType.dbc");
@@ -689,6 +1370,7 @@ bool loadDBCs()
 
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sMailTemplateStore, dbc_path, "MailTemplate.dbc");
 
+#if !defined(AE_FOREVER)
     WDB::loadUnifiedWDBStore<WDB::Structures::MapDifficultyEntry>(
         bad_dbc_files, sMapDifficultyStore, dbc_path,
         [](const auto& raw, WDB::Structures::MapDifficultyEntry& entry) {
@@ -757,6 +1439,8 @@ bool loadDBCs()
             }
         }
     );
+
+#endif
 
     for (auto const& entry : sMapDifficultyStore | std::views::values)
     {
@@ -872,11 +1556,16 @@ bool loadDBCs()
     }
 #endif
 
+#if !defined(AE_FOREVER)
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sTaxiNodesStore, dbc_path, "TaxiNodes.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sTaxiPathStore, dbc_path, "TaxiPath.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sTaxiPathNodeStore, dbc_path, "TaxiPathNode.dbc");
+#endif
     // note: Generate path data
     {
+        sTaxiPathSetBySource.clear();
+        sTaxiPathNodesByPath.clear();
+
         for (uint32_t i = 1; i < sTaxiPathStore.getNumRows(); ++i)
         {
             if (WDB::Structures::TaxiPathEntry const* entry = sTaxiPathStore.lookupEntry(i))
@@ -892,6 +1581,9 @@ bool loadDBCs()
         {
             if (WDB::Structures::TaxiPathNodeEntry const* entry = sTaxiPathNodeStore.lookupEntry(i))
             {
+                if (entry->pathId >= pathLength.size())
+                    continue;
+
                 if (pathLength[entry->pathId] < entry->NodeIndex + 1)
                     pathLength[entry->pathId] = entry->NodeIndex + 1;
             }
@@ -906,7 +1598,12 @@ bool loadDBCs()
         for (uint32_t i = 0; i < sTaxiPathNodeStore.getNumRows(); ++i)
         {
             if (WDB::Structures::TaxiPathNodeEntry const* entry = sTaxiPathNodeStore.lookupEntry(i))
+            {
+                if (entry->pathId >= sTaxiPathNodesByPath.size() || entry->NodeIndex >= sTaxiPathNodesByPath[entry->pathId].size())
+                    continue;
+
                 sTaxiPathNodesByPath[entry->pathId][entry->NodeIndex] = entry;
+            }
         }
     }
 
@@ -921,7 +1618,9 @@ bool loadDBCs()
         }
     }
 
+#if !defined(AE_FOREVER)
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sWorldMapOverlayStore, dbc_path, "WorldMapOverlay.dbc");
+#endif
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Load single version specific dbcs
@@ -1047,6 +1746,7 @@ bool loadDBCs()
         }
     );
 
+#if !defined(AE_FOREVER)
     WDB::loadUnifiedWDBStore<WDB::Structures::WorldMapAreaEntry>(
         bad_dbc_files, sWorldMapAreaStore, dbc_path,
         [](const auto& raw, WDB::Structures::WorldMapAreaEntry& entry) {
@@ -1055,6 +1755,7 @@ bool loadDBCs()
             entry.continentMapId = raw.continentMapId;
         }
     );
+#endif
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Load multi version specific dbcs available since TBC
@@ -1066,7 +1767,9 @@ bool loadDBCs()
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sGtChanceToSpellCritBaseStore, dbc_path, "gtChanceToSpellCritBase.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sGtCombatRatingsStore, dbc_path, "gtCombatRatings.dbc");
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sGtRegenMPPerSptStore, dbc_path, "gtRegenMPPerSpt.dbc"); // loaded but not used
-    WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sItemRandomSuffixStore, dbc_path, "ItemRandomSuffix.dbc");
+    #if !defined(AE_FOREVER)
+        WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sItemRandomSuffixStore, dbc_path, "ItemRandomSuffix.dbc");
+    #endif
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sSummonPropertiesStore, dbc_path, "SummonProperties.dbc");
 
     #if VERSION_STRING < Cata
@@ -1364,6 +2067,25 @@ WDB::Structures::WMOAreaTableEntry const* GetWMOAreaTableEntryByTriple(int32_t r
         return nullptr;
     return iter->second;
 }
+
+#if defined(AE_FOREVER)
+WDB::Structures::ChrModelEntry const* getForeverChrModel(uint8_t race, uint8_t gender)
+{
+    for (auto const& [id, relation] : sChrRaceXChrModelStore)
+    {
+        (void)id;
+        if (relation.chrRacesId != race || relation.sex != static_cast<int8_t>(gender))
+            continue;
+
+        if (relation.chrModelId <= 0)
+            return nullptr;
+
+        return sChrModelStore.lookupEntry(static_cast<uint32_t>(relation.chrModelId));
+    }
+
+    return nullptr;
+}
+#endif
 
 WDB::Structures::CharStartOutfitEntry const* getStartOutfitByRaceClass(uint8_t race, uint8_t class_, uint8_t gender)
 {

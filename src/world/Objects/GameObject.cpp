@@ -222,29 +222,110 @@ void GameObject::onDetachFromWorld()
 //////////////////////////////////////////////////////////////////////////////////////////
 // WoWData
 
-uint64_t GameObject::getCreatedByGuid() const { return gameObjectData()->object_field_created_by.guid; }
-void GameObject::setCreatedByGuid(uint64_t guid) { write(gameObjectData()->object_field_created_by.guid, guid); }
+#if defined(AE_FOREVER)
+namespace
+{
+    WoWGuid makeForeverGameObjectReferenceGuid(GameObject const* owner, uint64_t legacyGuid)
+    {
+        if (legacyGuid == 0)
+            return WoWGuid::createModernEmpty();
+        return WoWGuid::createModernFromLegacy(legacyGuid, worldConfig.battleNetComm.realmId, static_cast<uint16_t>(owner->GetMapId()), 0, 0);
+    }
+}
+#endif
 
-uint32_t GameObject::getDisplayId() const { return gameObjectData()->display_id; }
+uint64_t GameObject::getCreatedByGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverGameObjectFields.createdBy.toLegacyRaw();
+#else
+    return gameObjectData()->object_field_created_by.guid;
+#endif
+}
+void GameObject::setCreatedByGuid(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid value = makeForeverGameObjectReferenceGuid(this, guid);
+    if (m_foreverGameObjectFields.createdBy.getModernHigh() == value.getModernHigh() && m_foreverGameObjectFields.createdBy.getModernLow() == value.getModernLow())
+        return;
+    m_foreverGameObjectFields.createdBy = value;
+    m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::CreatedByBit);
+    updateObject();
+#else
+    write(gameObjectData()->object_field_created_by.guid, guid);
+#endif
+}
+
+uint32_t GameObject::getDisplayId() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(m_foreverGameObjectFields.displayId);
+#else
+    return gameObjectData()->display_id;
+#endif
+}
 void GameObject::setDisplayId(uint32_t id)
 {
+#if defined(AE_FOREVER)
+    if (m_foreverGameObjectFields.displayId != static_cast<int32_t>(id))
+    {
+        m_foreverGameObjectFields.displayId = static_cast<int32_t>(id);
+        m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::DisplayIdBit);
+        updateObject();
+    }
+#else
     write(gameObjectData()->display_id, id);
+#endif
     updateModel();
 }
 
-uint32_t GameObject::getFlags() const { return gameObjectData()->flags; }
-void GameObject::setFlags(uint32_t flags) { write(gameObjectData()->flags, flags); }
+uint32_t GameObject::getFlags() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverGameObjectFields.flags;
+#else
+    return gameObjectData()->flags;
+#endif
+}
+void GameObject::setFlags(uint32_t flags)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverGameObjectFields.flags == flags)
+        return;
+    m_foreverGameObjectFields.flags = flags;
+    m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::FlagsBit);
+    updateObject();
+#else
+    write(gameObjectData()->flags, flags);
+#endif
+}
 void GameObject::addFlags(uint32_t flags) { setFlags(getFlags() | flags); }
 void GameObject::removeFlags(uint32_t flags) { setFlags(getFlags() & ~flags); }
 bool GameObject::hasFlags(uint32_t flags) const { return (getFlags() & flags) != 0; }
 
-float GameObject::getParentRotation(uint8_t type) const { return gameObjectData()->rotation[type]; }
+float GameObject::getParentRotation(uint8_t type) const
+{
+#if defined(AE_FOREVER)
+    return type < m_foreverGameObjectFields.parentRotation.size() ? m_foreverGameObjectFields.parentRotation[type] : 0.0f;
+#else
+    return gameObjectData()->rotation[type];
+#endif
+}
 void GameObject::setParentRotation(QuaternionData const& rotation)
 {
+#if defined(AE_FOREVER)
+    const std::array<float, 4> value{rotation.x, rotation.y, rotation.z, rotation.w};
+    if (m_foreverGameObjectFields.parentRotation == value)
+        return;
+    m_foreverGameObjectFields.parentRotation = value;
+    m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::ParentRotationBit);
+    updateObject();
+#else
     write(gameObjectData()->rotation[0], rotation.x);
     write(gameObjectData()->rotation[1], rotation.y);
     write(gameObjectData()->rotation[2], rotation.z);
     write(gameObjectData()->rotation[3], rotation.w);
+#endif
 }
 
 QuaternionData const& GameObject::getLocalRotation() const { return m_localRotation; }
@@ -258,45 +339,107 @@ uint16_t GameObject::getDynamicFlags() const { return gameObjectData()->dynamic.
 int16_t GameObject::getDynamicPathProgress() const { return gameObjectData()->dynamic.dynamic_field_parts.path_progress; }
 void GameObject::setDynamicFlags(uint16_t dynamicFlags) { write(gameObjectData()->dynamic.dynamic_field_parts.dyn_flag, dynamicFlags); }
 void GameObject::setDynamicPathProgress(int16_t pathProgress) { write(gameObjectData()->dynamic.dynamic_field_parts.path_progress, pathProgress); }
+#elif defined(AE_FOREVER)
+int16_t GameObject::getDynamicPathProgress() const { return m_foreverDynamicPathProgress; }
+void GameObject::setDynamicPathProgress(int16_t pathProgress)
+{
+    if (m_foreverDynamicPathProgress == pathProgress)
+        return;
+
+    m_foreverDynamicPathProgress = pathProgress;
+    updateObject();
+}
 #endif
 
-uint32_t GameObject::getFactionTemplate() const { return gameObjectData()->faction_template; }
-void GameObject::setFactionTemplate(uint32_t id) { write(gameObjectData()->faction_template, id); }
+uint32_t GameObject::getFactionTemplate() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(m_foreverGameObjectFields.factionTemplate);
+#else
+    return gameObjectData()->faction_template;
+#endif
+}
+void GameObject::setFactionTemplate(uint32_t id)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverGameObjectFields.factionTemplate == static_cast<int32_t>(id))
+        return;
+    m_foreverGameObjectFields.factionTemplate = static_cast<int32_t>(id);
+    m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::FactionTemplateBit);
+    updateObject();
+#else
+    write(gameObjectData()->faction_template, id);
+#endif
+}
 
-uint32_t GameObject::getLevel() const { return gameObjectData()->level; }
-void GameObject::setLevel(uint32_t level) { write(gameObjectData()->level, level); }
+uint32_t GameObject::getLevel() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(m_foreverGameObjectFields.level);
+#else
+    return gameObjectData()->level;
+#endif
+}
+void GameObject::setLevel(uint32_t level)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverGameObjectFields.level == static_cast<int32_t>(level))
+        return;
+    m_foreverGameObjectFields.level = static_cast<int32_t>(level);
+    m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::LevelBit);
+    updateObject();
+#else
+    write(gameObjectData()->level, level);
+#endif
+}
 
 //bytes1
 uint8_t GameObject::getState() const
 {
-#if VERSION_STRING <= TBC
+#if defined(AE_FOREVER)
+    return static_cast<uint8_t>(m_foreverGameObjectFields.state);
+#elif VERSION_STRING <= TBC
     return static_cast<uint8_t>(gameObjectData()->state);
-#elif VERSION_STRING >= WotLK
+#else
     return gameObjectData()->bytes_1.bytes_1_gameobject.state;
 #endif
 }
 void GameObject::setState(uint8_t state)
 {
-#if VERSION_STRING <= TBC
+#if defined(AE_FOREVER)
+    if (m_foreverGameObjectFields.state == static_cast<int8_t>(state))
+        return;
+    m_foreverGameObjectFields.state = static_cast<int8_t>(state);
+    m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::StateBit);
+    updateObject();
+#elif VERSION_STRING <= TBC
     write(gameObjectData()->state, static_cast<uint32_t>(state));
-#elif VERSION_STRING >= WotLK
+#else
     write(gameObjectData()->bytes_1.bytes_1_gameobject.state, state);
 #endif
 }
 
 uint8_t GameObject::getGoType() const
 {
-#if VERSION_STRING <= TBC
+#if defined(AE_FOREVER)
+    return static_cast<uint8_t>(m_foreverGameObjectFields.typeId);
+#elif VERSION_STRING <= TBC
     return static_cast<uint8_t>(gameObjectData()->type);
-#elif VERSION_STRING >= WotLK
+#else
     return gameObjectData()->bytes_1.bytes_1_gameobject.type;
 #endif
 }
 void GameObject::setGoType(uint8_t type)
 {
-#if VERSION_STRING <= TBC
+#if defined(AE_FOREVER)
+    if (m_foreverGameObjectFields.typeId == static_cast<int8_t>(type))
+        return;
+    m_foreverGameObjectFields.typeId = static_cast<int8_t>(type);
+    m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::TypeIdBit);
+    updateObject();
+#elif VERSION_STRING <= TBC
     write(gameObjectData()->type, static_cast<uint32_t>(type));
-#elif VERSION_STRING >= WotLK
+#else
     write(gameObjectData()->bytes_1.bytes_1_gameobject.type, type);
 #endif
 }
@@ -321,11 +464,23 @@ void GameObject::setArtKit(uint8_t artkit)
 #else
 uint8_t GameObject::getArtKit() const
 {
+#if defined(AE_FOREVER)
+    return static_cast<uint8_t>(m_foreverGameObjectFields.artKit);
+#else
     return gameObjectData()->bytes_2.bytes_2_gameobject.art_kit;
+#endif
 }
 void GameObject::setArtKit(uint8_t artkit)
 {
+#if defined(AE_FOREVER)
+    if (m_foreverGameObjectFields.artKit == artkit)
+        return;
+    m_foreverGameObjectFields.artKit = artkit;
+    m_foreverGameObjectFields.markChanged(AscEmu::Version::Forever::Fields::GameObjectData::ArtKitBit);
+    updateObject();
+#else
     write(gameObjectData()->bytes_2.bytes_2_gameobject.art_kit, artkit);
+#endif
 }
 #endif
 

@@ -58,6 +58,9 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Utilities/MathConstants.hpp"
 #include "Server/PacketBroadcast.hpp"
 #include "Server/Script/InstanceScript.hpp"
+#if defined(AE_FOREVER)
+#include "version/Forever/World/ObjectUpdate.hpp"
+#endif
 
 using namespace AscEmu::Packets;
 
@@ -292,6 +295,19 @@ bool Object::write(const uint64_t& member, uint32_t low, uint32_t high, bool ski
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // WoWData
+#if defined(AE_FOREVER)
+uint64_t Object::getGuid() const { return m_wowGuid.getRawGuid(); }
+void Object::setGuid(uint64_t guid)
+{
+    m_wowGuid.init(guid);
+    obj_movement_info.guid = guid;
+}
+void Object::setGuid(uint32_t low, uint32_t high) { setGuid((static_cast<uint64_t>(high) << 32U) | low); }
+uint32_t Object::getGuidLow() const { return m_wowGuid.getLowGuid(); }
+void Object::setGuidLow(uint32_t low) { setGuid(low, m_wowGuid.getHighGuid()); }
+uint32_t Object::getGuidHigh() const { return m_wowGuid.getHighGuid(); }
+void Object::setGuidHigh(uint32_t high) { setGuid(m_wowGuid.getLowGuid(), high); }
+#else
 uint64_t Object::getGuid() const { return objectData()->guid.guid; }
 void Object::setGuid(uint64_t guid)
 {
@@ -300,12 +316,11 @@ void Object::setGuid(uint64_t guid)
     obj_movement_info.guid = guid;
 }
 void Object::setGuid(uint32_t low, uint32_t high) { setGuid(static_cast<uint64_t>(high) << 32 | low); }
-
 uint32_t Object::getGuidLow() const { return objectData()->guid.parts.low; }
 void Object::setGuidLow(uint32_t low) { setGuid(low, objectData()->guid.parts.high); }
-
 uint32_t Object::getGuidHigh() const { return objectData()->guid.parts.high; }
 void Object::setGuidHigh(uint32_t high) { setGuid(objectData()->guid.parts.low, high); }
+#endif
 
 #if VERSION_STRING < Cata
 uint32_t Object::getOType() const { return objectData()->type; }
@@ -341,6 +356,42 @@ void Object::setObjectType(uint8_t objectTypeId)
     m_objectType = object_type;
     m_objectTypeId = objectTypeId;
     write(objectData()->type, static_cast<uint32_t>(m_objectType));
+}
+#elif defined(AE_FOREVER)
+uint16_t Object::getOType() const { return static_cast<uint16_t>(m_objectType); }
+void Object::setOType(uint16_t type) { m_objectType = type; }
+void Object::setObjectType(uint8_t objectTypeId)
+{
+    uint16_t objectType = TYPE_OBJECT;
+    switch (objectTypeId)
+    {
+    case TYPEID_CONTAINER:
+        objectType |= TYPE_CONTAINER;
+        [[fallthrough]];
+    case TYPEID_ITEM:
+        objectType |= TYPE_ITEM;
+        break;
+    case TYPEID_PLAYER:
+        objectType |= TYPE_PLAYER;
+        [[fallthrough]];
+    case TYPEID_UNIT:
+        objectType |= TYPE_UNIT;
+        break;
+    case TYPEID_GAMEOBJECT:
+        objectType |= TYPE_GAMEOBJECT;
+        break;
+    case TYPEID_DYNAMICOBJECT:
+        objectType |= TYPE_DYNAMICOBJECT;
+        break;
+    case TYPEID_CORPSE:
+        objectType |= TYPE_CORPSE;
+        break;
+    default:
+        break;
+    }
+
+    m_objectType = objectType;
+    m_objectTypeId = objectTypeId;
 }
 #else
 uint16_t Object::getOType() const { return objectData()->field_type.parts.type; }
@@ -379,8 +430,22 @@ void Object::setObjectType(uint8_t objectTypeId)
 }
 #endif
 
+#if defined(AE_FOREVER)
+uint32_t Object::getEntry() const { return static_cast<uint32_t>(m_foreverObjectFields.entryId); }
+void Object::setEntry(uint32_t entry)
+{
+    const int32_t value = static_cast<int32_t>(entry);
+    if (m_foreverObjectFields.entryId == value)
+        return;
+
+    m_foreverObjectFields.entryId = value;
+    m_foreverObjectFields.markChanged(AscEmu::Version::Forever::Fields::ObjectData::EntryIdBit);
+    updateObject();
+}
+#else
 uint32_t Object::getEntry() const { return objectData()->entry; }
 void Object::setEntry(uint32_t entry) { write(objectData()->entry, entry); }
+#endif
 
 #if VERSION_STRING == Mop
 uint16_t Object::getDynamicFlags() const { return objectData()->dynamic_field.dynamic_field_parts.dynamic_flags; }
@@ -424,30 +489,36 @@ void Object::setDynamicPathProgress(int16_t pathProgress)
     write(objectData()->dynamic_field.dynamic_field_parts.path_progress, pathProgress);
 }
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
-uint16_t Object::getDynamicFlags() const { return objectData()->dynamic_field.dynamic_field_parts.dynamic_flags; }
-int16_t Object::getDynamicPathProgress() const
+uint32_t Object::getDynamicFlags() const { return m_foreverObjectFields.dynamicFlags; }
+void Object::setDynamicFlags(uint32_t dynamicFlags)
 {
-    if (!isGameObject())
-        return 0;
-
-    return objectData()->dynamic_field.dynamic_field_parts.path_progress;
-}
-void Object::setDynamicFlags(uint16_t dynamicFlags) { write(objectData()->dynamic_field.dynamic_field_parts.dynamic_flags, dynamicFlags); }
-void Object::addDynamicFlags(uint16_t dynamicFlags) { setDynamicFlags(static_cast<uint16_t>(getDynamicFlags() | dynamicFlags)); }
-void Object::removeDynamicFlags(uint16_t dynamicFlags) { setDynamicFlags(static_cast<uint16_t>(getDynamicFlags() & ~dynamicFlags)); }
-bool Object::hasDynamicFlags(uint16_t dynamicFlags) const { return (getDynamicFlags() & dynamicFlags) != 0; }
-void Object::setDynamicPathProgress(int16_t pathProgress)
-{
-    if (!isGameObject())
+    if (m_foreverObjectFields.dynamicFlags == dynamicFlags)
         return;
 
-    write(objectData()->dynamic_field.dynamic_field_parts.path_progress, pathProgress);
+    m_foreverObjectFields.dynamicFlags = dynamicFlags;
+    m_foreverObjectFields.markChanged(AscEmu::Version::Forever::Fields::ObjectData::DynamicFlagsBit);
+    updateObject();
 }
+void Object::addDynamicFlags(uint32_t dynamicFlags) { setDynamicFlags(getDynamicFlags() | dynamicFlags); }
+void Object::removeDynamicFlags(uint32_t dynamicFlags) { setDynamicFlags(getDynamicFlags() & ~dynamicFlags); }
+bool Object::hasDynamicFlags(uint32_t dynamicFlags) const { return (getDynamicFlags() & dynamicFlags) != 0; }
 #endif
 
+#if defined(AE_FOREVER)
+float Object::getScale() const { return m_foreverObjectFields.scale; }
+void Object::setScale(float scale)
+{
+    if (m_foreverObjectFields.scale == scale)
+        return;
+
+    m_foreverObjectFields.scale = scale;
+    m_foreverObjectFields.markChanged(AscEmu::Version::Forever::Fields::ObjectData::ScaleBit);
+    updateObject();
+}
+#else
 float Object::getScale() const { return objectData()->scale_x; }
 void Object::setScale(float scaleX) { write(objectData()->scale_x, scaleX); }
+#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Object update
@@ -460,6 +531,8 @@ void Object::updateObject()
     }
 }
 
+#define AE_FOREVER_ENABLE_CREATURE_CREATES
+
 uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* target)
 {
     if (m_wowGuid.getNewGuidLen() <= 0)
@@ -467,6 +540,50 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
 
     if (target == nullptr)
         return 0;
+
+#if defined(AE_FOREVER)
+    // Forever uses a different create grammar from the legacy UpdateMask path.
+    //
+    // IMPORTANT: keep runtime creature visibility disabled until the ordinary
+    // creature CREATE_OBJECT layout is proven against 1.60.1.69913 captures.
+    // Enabling it globally causes every creature in the activated cells to be
+    // serialized immediately during login; one malformed UnitData/movement
+    // block is enough for the client to abort the world bootstrap.
+    //
+    // The serializer is intentionally kept below so it can be exercised again
+    // behind this explicit opt-in while we compare single-creature captures.
+#if defined(AE_FOREVER_ENABLE_CREATURE_CREATES)
+    if (isCreature())
+    {
+        const WoWGuid modernGuid = WoWGuid::createModernFromLegacy(
+            m_wowGuid.getRawGuid(),
+            target->getForeverRealmId(),
+            static_cast<uint16_t>(GetMapId()),
+            0);
+        const std::vector<uint8_t> packedGuid = modernGuid.packModern();
+        if (packedGuid.empty())
+            return 0;
+
+        Unit* const unit = static_cast<Unit*>(this);
+        const std::vector<uint8_t> block =
+            AscEmu::Version::Forever::ObjectUpdate::buildCreatureCreateBlock69913(
+                packedGuid,
+                GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(),
+                static_cast<uint32_t>(Util::getMSTime()),
+                foreverObjectFields(), unit->foreverUnitFields());
+
+        if (block.empty())
+            return 0;
+
+        data->append(block.data(), block.size());
+        return 1;
+    }
+#endif
+
+    // Do not let unsupported Forever object types (including creatures while
+    // the opt-in above is disabled) fall through into the legacy create grammar.
+    return 0;
+#endif
 
     uint8_t updateType = UPDATETYPE_CREATE_OBJECT;
 #if VERSION_STRING <= TBC

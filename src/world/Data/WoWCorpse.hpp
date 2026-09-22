@@ -14,6 +14,10 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "WoWObject.hpp"
+#include "WoWGuid.hpp"
+#include "WoWPlayer.hpp"
+#include <bitset>
+#include <vector>
 
 #include <array>
 

@@ -15,8 +15,12 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "AEVersion.hpp"
 #include "GuidData.hpp"
+#include "WoWGuid.hpp"
 
 #include <cstdint>
+#include <array>
+#include <bitset>
+#include <vector>
 
 #pragma pack(push, 1)
 
@@ -147,7 +151,9 @@ struct WoWObject
     }
 };
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+// Transitional storage only: WoWUnit/WoWPlayer still inherit this packed descriptor layout while
+// their Forever migration is in progress. Object getters/setters no longer use these fields.
+// Remove this AE_FOREVER block when Unit/Player no longer depend on descriptor offsets.
 struct WoWObject
 {
     guid_union guid;

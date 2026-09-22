@@ -5,12 +5,18 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include <cstdint>
 #include <vector>
+#include <span>
 
 #include "UpdateManager.hpp"
 #include "Map/Maps/WorldMap.hpp"
 #include "Objects/Units/Players/Player.hpp"
 #include "Server/Opcodes.hpp"
 #include "Server/WorldSession.h"
+#if defined(AE_FOREVER)
+#include "version/Forever/Opcodes.hpp"
+#include "version/Forever/World/ObjectUpdate.hpp"
+#include "Server/WorldSocket.hpp"
+#endif
 
 UpdateManager::UpdateManager(Player* owner, size_t compressionThreshold, size_t creationBufferInitialSize, size_t updateBufferInitialSize, size_t outOfRangeIdsInitialSize)
     : 
@@ -135,6 +141,33 @@ void UpdateManager::internalProcessPendingUpdates()
 
     if (m_creationBuffer.size() > 0 || m_outOfRangeIdCount > 0)
     {
+#if defined(AE_FOREVER)
+        // 69913 wraps concatenated create blocks in UpdateData with an explicit
+        // byte length. Keep creation aggregation in UpdateManager, but use the
+        // Forever envelope instead of the legacy map/count-only framing.
+        // Out-of-range/destroy encoding is intentionally left for the runtime
+        // updater pass; initial visibility creation does not require it.
+        if (m_creationBuffer.size() > 0 && m_outOfRangeIdCount == 0)
+        {
+            const std::vector<uint8_t> packet =
+                AscEmu::Version::Forever::ObjectUpdate::buildUpdateObjectPacket69913(
+                    static_cast<uint16_t>(m_owner->GetMapId()),
+                    m_creationCount,
+                    std::span<const uint8_t>(m_creationBuffer.contents(), m_creationBuffer.size()));
+
+            if (!packet.empty())
+            {
+                WorldSocket* const socket = m_owner->getSession()->GetForeverInstanceSocket();
+                if (socket && socket->isConnected())
+                    socket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_UPDATE_OBJECT, packet.data(), static_cast<uint32_t>(packet.size()));
+            }
+
+            m_creationBuffer.clear();
+            m_creationCount = 0;
+        }
+        else
+#endif
+        {
 #if VERSION_STRING >= Cata
         buffer << uint16_t(m_owner->GetMapId());
 #endif
@@ -173,6 +206,7 @@ void UpdateManager::internalProcessPendingUpdates()
 
         if (!sent_packet)
             m_owner->getSession()->OutPacket(SMSG_UPDATE_OBJECT, uint16_t(buffer.wpos()), buffer.contents());
+        }
 }
 
     if (m_updateBuffer.size() > 0)

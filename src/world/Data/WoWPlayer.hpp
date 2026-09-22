@@ -14,6 +14,14 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "WoWUnit.hpp"
+#include "WoWGuid.hpp"
+
+#include <array>
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <string>
+#include <vector>
 
 #pragma pack(push, 1)
 
@@ -488,7 +496,7 @@ struct WoWPlayer : WoWUnit
     std::array<WoWPlayer_Quest, WOWPLAYER_QUEST_COUNT> quests;
     std::array<WoWPlayer_VisibleItem, WOWPLAYER_VISIBLE_ITEM_COUNT> visible_items;
     uint32_t chosen_title;
-    uint32_t inebriation;
+    uint32_t unknownU8_1_69913;
     uint32_t player_padding_0;
     std::array<uint64_t, WOWPLAYER_INVENTORY_SLOT_COUNT> inventory_slot;
     std::array<uint64_t, WOWPLAYER_PACK_SLOT_COUNT> pack_slot;
@@ -669,7 +677,7 @@ struct WoWPlayer : WoWUnit
     std::array<WoWPlayer_Quest, WOWPLAYER_QUEST_COUNT> quests;
     std::array<WoWPlayer_VisibleItem, WOWPLAYER_VISIBLE_ITEM_COUNT> visible_items;
     uint32_t chosen_title;
-    uint32_t inebriation;
+    uint32_t unknownU8_1_69913;
     uint32_t player_padding_0;
     std::array<uint64_t, WOWPLAYER_INVENTORY_SLOT_COUNT> inventory_slot;
     std::array<uint64_t, WOWPLAYER_PACK_SLOT_COUNT> pack_slot;
@@ -863,7 +871,7 @@ struct WoWPlayer : WoWUnit
     std::array<WoWPlayer_Quest, WOWPLAYER_QUEST_COUNT> quests;
     std::array<WoWPlayer_VisibleItem, WOWPLAYER_VISIBLE_ITEM_COUNT> visible_items;
     uint32_t chosen_title;
-    uint32_t inebriation;
+    uint32_t unknownU8_1_69913;
     uint32_t virtual_player_realm;
     uint32_t current_spec_id;
     uint32_t taxi_mount_anim_kit_id;
@@ -1070,7 +1078,7 @@ struct WoWPlayer : WoWUnit
     std::array<WoWPlayer_Quest, WOWPLAYER_QUEST_COUNT> quests;
     std::array<WoWPlayer_VisibleItem, WOWPLAYER_VISIBLE_ITEM_COUNT> visible_items;
     uint32_t chosen_title;
-    uint32_t inebriation;
+    uint32_t unknownU8_1_69913;
     uint32_t virtual_player_realm;
     uint32_t current_spec_id;
     uint32_t taxi_mount_anim_kit_id;
@@ -1176,7 +1184,8 @@ struct WoWPlayer : WoWUnit
     uint32_t item_level_delta;
 };
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+// Temporary legacy descriptor storage used by the old AscEmu field-offset core while Forever is migrated.
+// Do not use this layout as the Forever wire schema.
 static inline constexpr uint8_t WOWPLAYER_EXPLORED_ZONES_COUNT = 200;
 static inline constexpr uint8_t WOWPLAYER_WEAPON_DMG_MULTIPLIER_COUNT = 3;
 static inline constexpr uint8_t WOWPLAYER_SPELL_SCHOOL_COUNT = 7;
@@ -1277,7 +1286,7 @@ struct WoWPlayer : WoWUnit
     std::array<WoWPlayer_Quest, WOWPLAYER_QUEST_COUNT> quests;
     std::array<WoWPlayer_VisibleItem, WOWPLAYER_VISIBLE_ITEM_COUNT> visible_items;
     uint32_t chosen_title;
-    uint32_t inebriation;
+    uint32_t unknownU8_1_69913;
     uint32_t virtual_player_realm;
     uint32_t current_spec_id;
     uint32_t taxi_mount_anim_kit_id;
@@ -1384,3 +1393,5 @@ struct WoWPlayer : WoWUnit
 };
 #endif
 #pragma pack(pop)
+
+

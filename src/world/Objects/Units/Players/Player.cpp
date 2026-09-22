@@ -895,14 +895,79 @@ void Player::onPreDetachFromWorld()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Data
-uint64_t Player::getDuelArbiter() const { return playerData()->duel_arbiter; }
-void Player::setDuelArbiter(uint64_t guid) { write(playerData()->duel_arbiter, guid); }
+#if defined(AE_FOREVER)
+namespace
+{
+    WoWGuid makeForeverPlayerReferenceGuid(Player const* owner, uint64_t legacyGuid)
+    {
+        if (legacyGuid == 0)
+            return WoWGuid::createModernEmpty();
 
-uint32_t Player::getPlayerFlags() const { return playerData()->player_flags; }
+        return WoWGuid::createModernFromLegacy(legacyGuid, worldConfig.battleNetComm.realmId, static_cast<uint16_t>(owner->GetMapId()), 0, 0);
+    }
+
+    WoWGuid makeForeverItemGuid(uint64_t legacyGuid)
+    {
+        if (legacyGuid == 0)
+            return WoWGuid::createModernEmpty();
+
+        return WoWGuid::createModernItem(worldConfig.battleNetComm.realmId, uint64_t(WoWGuid::getLowGuidFromRaw(legacyGuid)));
+    }
+
+    constexpr std::size_t ForeverInventoryOffset = 0;
+    constexpr std::size_t ForeverPackOffset = ForeverInventoryOffset + WOWPLAYER_INVENTORY_SLOT_COUNT;
+    constexpr std::size_t ForeverBankOffset = ForeverPackOffset + WOWPLAYER_PACK_SLOT_COUNT;
+    constexpr std::size_t ForeverBankBagOffset = ForeverBankOffset + WOWPLAYER_BANK_SLOT_COUNT;
+    constexpr std::size_t ForeverBuybackOffset = ForeverBankBagOffset + WOWPLAYER_BANK_BAG_SLOT_COUNT;
+
+    static_assert(ForeverBuybackOffset + WOWPLAYER_BUY_BACK_COUNT <= 105);
+}
+#endif
+
+uint64_t Player::getDuelArbiter() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverPlayerFields.unknownGuid0_69913.toLegacyRaw();
+#else
+    return playerData()->duel_arbiter;
+#endif
+}
+void Player::setDuelArbiter(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverPlayerReferenceGuid(this, guid);
+    if (m_foreverPlayerFields.unknownGuid0_69913.getModernHigh() == modernGuid.getModernHigh() && m_foreverPlayerFields.unknownGuid0_69913.getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverPlayerFields.unknownGuid0_69913 = modernGuid;
+    m_foreverPlayerFields.markChanged(AscEmu::Version::Forever::Fields::PlayerData::UnknownChangeBit9_69913);
+    updateObject();
+#else
+    write(playerData()->duel_arbiter, guid);
+#endif
+}
+
+uint32_t Player::getPlayerFlags() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverPlayerFields.unknownU32_0_69913;
+#else
+    return playerData()->player_flags;
+#endif
+}
 
 void Player::setPlayerFlags(uint32_t flags)
 {
+#if defined(AE_FOREVER)
+    if (m_foreverPlayerFields.unknownU32_0_69913 != flags)
+    {
+        m_foreverPlayerFields.unknownU32_0_69913 = flags;
+        m_foreverPlayerFields.markChanged(AscEmu::Version::Forever::Fields::PlayerData::UnknownChangeBit14_69913);
+        updateObject();
+    }
+#else
     write(playerData()->player_flags, flags);
+#endif
 
 #if VERSION_STRING == TBC
     // TODO Fix this later
@@ -951,7 +1016,7 @@ void Player::setGuildRank(uint32_t guildRank) { write(playerData()->guild_rank, 
 
 #if VERSION_STRING >= Cata
 uint32_t Player::getGuildLevel() const { return playerData()->guild_level; }
-void Player::setGuildLevel(uint32_t guildLevel) { write(playerData()->guild_level, guildLevel); }
+void Player::setGuildLevel(uint32_t unknownI32_0_69913) { write(playerData()->guild_level, unknownI32_0_69913); }
 #endif
 
 //bytes begin
@@ -1080,20 +1145,155 @@ void Player::setVisibleItemEnchantment(uint32_t slot, uint8_t pos, uint32_t ench
 #endif
 //VisibleItem end
 
-uint64_t Player::getInventorySlotItemGuid(uint8_t slot) const { return playerData()->inventory_slot[slot]; }
-void Player::setInventorySlotItemGuid(uint8_t slot, uint64_t guid) { write(playerData()->inventory_slot[slot], guid); }
+uint64_t Player::getInventorySlotItemGuid(uint8_t slot) const
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_INVENTORY_SLOT_COUNT)
+        return 0;
 
-uint64_t Player::getPackSlotItemGuid(uint8_t slot) const { return playerData()->pack_slot[slot]; }
-void Player::setPackSlotItemGuid(uint8_t slot, uint64_t guid) { write(playerData()->pack_slot[slot], guid); }
+    return m_foreverActivePlayerFields.invSlots[ForeverInventoryOffset + slot].toLegacyRaw();
+#else
+    return playerData()->inventory_slot[slot];
+#endif
+}
+void Player::setInventorySlotItemGuid(uint8_t slot, uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_INVENTORY_SLOT_COUNT)
+        return;
 
-uint64_t Player::getBankSlotItemGuid(uint8_t slot) const { return playerData()->bank_slot[slot]; }
-void Player::setBankSlotItemGuid(uint8_t slot, uint64_t guid) { write(playerData()->bank_slot[slot], guid); }
+    const std::size_t index = ForeverInventoryOffset + slot;
+    const WoWGuid modernGuid = makeForeverItemGuid(guid);
+    if (m_foreverActivePlayerFields.invSlots[index].getModernHigh() == modernGuid.getModernHigh() && m_foreverActivePlayerFields.invSlots[index].getModernLow() == modernGuid.getModernLow())
+        return;
 
-uint64_t Player::getBankBagSlotItemGuid(uint8_t slot) const { return playerData()->bank_bag_slot[slot]; }
-void Player::setBankBagSlotItemGuid(uint8_t slot, uint64_t guid) { write(playerData()->bank_bag_slot[slot], guid); }
+    m_foreverActivePlayerFields.invSlots[index] = modernGuid;
+    m_foreverActivePlayerFields.markArrayChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit163_69913, AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit164_69913 + index);
+    updateObject();
+#else
+    write(playerData()->inventory_slot[slot], guid);
+#endif
+}
 
-uint64_t Player::getVendorBuybackSlot(uint8_t slot) const { return playerData()->vendor_buy_back_slot[slot]; }
-void Player::setVendorBuybackSlot(uint8_t slot, uint64_t guid) { write(playerData()->vendor_buy_back_slot[slot], guid); }
+uint64_t Player::getPackSlotItemGuid(uint8_t slot) const
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_PACK_SLOT_COUNT)
+        return 0;
+
+    return m_foreverActivePlayerFields.invSlots[ForeverPackOffset + slot].toLegacyRaw();
+#else
+    return playerData()->pack_slot[slot];
+#endif
+}
+void Player::setPackSlotItemGuid(uint8_t slot, uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_PACK_SLOT_COUNT)
+        return;
+
+    const std::size_t index = ForeverPackOffset + slot;
+    const WoWGuid modernGuid = makeForeverItemGuid(guid);
+    if (m_foreverActivePlayerFields.invSlots[index].getModernHigh() == modernGuid.getModernHigh() && m_foreverActivePlayerFields.invSlots[index].getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverActivePlayerFields.invSlots[index] = modernGuid;
+    m_foreverActivePlayerFields.markArrayChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit163_69913, AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit164_69913 + index);
+    updateObject();
+#else
+    write(playerData()->pack_slot[slot], guid);
+#endif
+}
+
+uint64_t Player::getBankSlotItemGuid(uint8_t slot) const
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_BANK_SLOT_COUNT)
+        return 0;
+
+    return m_foreverActivePlayerFields.invSlots[ForeverBankOffset + slot].toLegacyRaw();
+#else
+    return playerData()->bank_slot[slot];
+#endif
+}
+void Player::setBankSlotItemGuid(uint8_t slot, uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_BANK_SLOT_COUNT)
+        return;
+
+    const std::size_t index = ForeverBankOffset + slot;
+    const WoWGuid modernGuid = makeForeverItemGuid(guid);
+    if (m_foreverActivePlayerFields.invSlots[index].getModernHigh() == modernGuid.getModernHigh() && m_foreverActivePlayerFields.invSlots[index].getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverActivePlayerFields.invSlots[index] = modernGuid;
+    m_foreverActivePlayerFields.markArrayChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit163_69913, AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit164_69913 + index);
+    updateObject();
+#else
+    write(playerData()->bank_slot[slot], guid);
+#endif
+}
+
+uint64_t Player::getBankBagSlotItemGuid(uint8_t slot) const
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_BANK_BAG_SLOT_COUNT)
+        return 0;
+
+    return m_foreverActivePlayerFields.invSlots[ForeverBankBagOffset + slot].toLegacyRaw();
+#else
+    return playerData()->bank_bag_slot[slot];
+#endif
+}
+void Player::setBankBagSlotItemGuid(uint8_t slot, uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_BANK_BAG_SLOT_COUNT)
+        return;
+
+    const std::size_t index = ForeverBankBagOffset + slot;
+    const WoWGuid modernGuid = makeForeverItemGuid(guid);
+    if (m_foreverActivePlayerFields.invSlots[index].getModernHigh() == modernGuid.getModernHigh() && m_foreverActivePlayerFields.invSlots[index].getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverActivePlayerFields.invSlots[index] = modernGuid;
+    m_foreverActivePlayerFields.markArrayChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit163_69913, AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit164_69913 + index);
+    updateObject();
+#else
+    write(playerData()->bank_bag_slot[slot], guid);
+#endif
+}
+
+uint64_t Player::getVendorBuybackSlot(uint8_t slot) const
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_BUY_BACK_COUNT)
+        return 0;
+
+    return m_foreverActivePlayerFields.invSlots[ForeverBuybackOffset + slot].toLegacyRaw();
+#else
+    return playerData()->vendor_buy_back_slot[slot];
+#endif
+}
+void Player::setVendorBuybackSlot(uint8_t slot, uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    if (slot >= WOWPLAYER_BUY_BACK_COUNT)
+        return;
+
+    const std::size_t index = ForeverBuybackOffset + slot;
+    const WoWGuid modernGuid = makeForeverItemGuid(guid);
+    if (m_foreverActivePlayerFields.invSlots[index].getModernHigh() == modernGuid.getModernHigh() && m_foreverActivePlayerFields.invSlots[index].getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverActivePlayerFields.invSlots[index] = modernGuid;
+    m_foreverActivePlayerFields.markArrayChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit163_69913, AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit164_69913 + index);
+    updateObject();
+#else
+    write(playerData()->vendor_buy_back_slot[slot], guid);
+#endif
+}
 
 #if VERSION_STRING < Cata
 uint64_t Player::getKeyRingSlotItemGuid(uint8_t slot) const { return playerData()->key_ring_slot[slot]; }
@@ -1110,8 +1310,28 @@ uint64_t Player::getCurrencyTokenSlotItemGuid(uint8_t slot) const { return playe
 void Player::setCurrencyTokenSlotItemGuid(uint8_t slot, uint64_t guid) { write(playerData()->currencytoken_slot[slot], guid); }
 #endif
 
-uint64_t Player::getFarsightGuid() const { return playerData()->farsight_guid; }
-void Player::setFarsightGuid(uint64_t farsightGuid) { write(playerData()->farsight_guid, farsightGuid); }
+uint64_t Player::getFarsightGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverActivePlayerFields.farsightObject.toLegacyRaw();
+#else
+    return playerData()->farsight_guid;
+#endif
+}
+void Player::setFarsightGuid(uint64_t farsightGuid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverPlayerReferenceGuid(this, farsightGuid);
+    if (m_foreverActivePlayerFields.farsightObject.getModernHigh() == modernGuid.getModernHigh() && m_foreverActivePlayerFields.farsightObject.getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverActivePlayerFields.farsightObject = modernGuid;
+    m_foreverActivePlayerFields.markChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit56_69913);
+    updateObject();
+#else
+    write(playerData()->farsight_guid, farsightGuid);
+#endif
+}
 
 #if VERSION_STRING > Classic
 uint64_t Player::getKnownTitles(uint8_t index) const { return playerData()->field_known_titles[index]; }
@@ -1128,12 +1348,53 @@ uint64_t Player::getKnownCurrencies() const { return playerData()->field_known_c
 void Player::setKnownCurrencies(uint64_t currencies) { write(playerData()->field_known_currencies, currencies); }
 #endif
 
-uint32_t Player::getXp() const { return playerData()->xp; }
-void Player::setXp(uint32_t xp) { write(playerData()->xp, xp); }
-void Player::addXP(uint32_t xp) { write(playerData()->xp, getXp() + xp); }
+uint32_t Player::getXp() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverActivePlayerFields.xp));
+#else
+    return playerData()->xp;
+#endif
+}
+void Player::setXp(uint32_t xp)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverActivePlayerFields.xp == static_cast<int32_t>(xp))
+        return;
 
-uint32_t Player::getNextLevelXp() const { return playerData()->next_level_xp; }
-void Player::setNextLevelXp(uint32_t xp) { write(playerData()->next_level_xp, xp); }
+    m_foreverActivePlayerFields.xp = static_cast<int32_t>(xp);
+    m_foreverActivePlayerFields.markChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit60_69913);
+    updateObject();
+#else
+    write(playerData()->xp, xp);
+#endif
+}
+void Player::addXP(uint32_t xp)
+{
+    setXp(getXp() + xp);
+}
+
+uint32_t Player::getNextLevelXp() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverActivePlayerFields.nextLevelXp));
+#else
+    return playerData()->next_level_xp;
+#endif
+}
+void Player::setNextLevelXp(uint32_t xp)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverActivePlayerFields.nextLevelXp == static_cast<int32_t>(xp))
+        return;
+
+    m_foreverActivePlayerFields.nextLevelXp = static_cast<int32_t>(xp);
+    m_foreverActivePlayerFields.markChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit61_69913);
+    updateObject();
+#else
+    write(playerData()->next_level_xp, xp);
+#endif
+}
 
 #if VERSION_STRING < Cata
 uint16_t Player::getSkillInfoId(uint32_t index) const { return playerData()->skill_info[index].id; }
@@ -1273,8 +1534,26 @@ void Player::setExploredZone(uint32_t idx, uint32_t data)
 uint32_t Player::getSelfResurrectSpell() const { return playerData()->self_resurrection_spell; }
 void Player::setSelfResurrectSpell(uint32_t spell) { write(playerData()->self_resurrection_spell, spell); }
 
-uint32_t Player::getWatchedFaction() const { return playerData()->field_watched_faction_idx; }
-void Player::setWatchedFaction(uint32_t factionId) { write(playerData()->field_watched_faction_idx, factionId); }
+uint32_t Player::getWatchedFaction() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverWatchedFactionIndex));
+#else
+    return playerData()->field_watched_faction_idx;
+#endif
+}
+void Player::setWatchedFaction(uint32_t factionId)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverWatchedFactionIndex == static_cast<int32_t>(factionId))
+        return;
+
+    m_foreverWatchedFactionIndex = static_cast<int32_t>(factionId);
+    updateObject();
+#else
+    write(playerData()->field_watched_faction_idx, factionId);
+#endif
+}
 
 #if VERSION_STRING == TBC
 float Player::getManaRegeneration() const { return playerData()->field_mod_mana_regen; }
@@ -1319,8 +1598,27 @@ void Player::modCoinage(int32_t coinage)
     setCoinage(getCoinage() + coinage);
 }
 #else
-uint64_t Player::getCoinage() const { return playerData()->field_coinage; }
-void Player::setCoinage(uint64_t coinage) { write(playerData()->field_coinage, coinage); }
+uint64_t Player::getCoinage() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverActivePlayerFields.coinage;
+#else
+    return playerData()->field_coinage;
+#endif
+}
+void Player::setCoinage(uint64_t coinage)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverActivePlayerFields.coinage == coinage)
+        return;
+
+    m_foreverActivePlayerFields.coinage = coinage;
+    m_foreverActivePlayerFields.markChanged(AscEmu::Version::Forever::Fields::ActivePlayerData::UnknownChangeBit58_69913);
+    updateObject();
+#else
+    write(playerData()->field_coinage, coinage);
+#endif
+}
 bool Player::hasEnoughCoinage(uint64_t coinage) const { return getCoinage() >= coinage; }
 
 void Player::modCoinage(int64_t coinage)
@@ -1400,8 +1698,26 @@ void Player::setFieldKills(uint32_t kills) { write(playerData()->field_kills.raw
 #endif
 #endif
 
-uint32_t Player::getLifetimeHonorableKills() const { return playerData()->field_lifetime_honorable_kills; }
-void Player::setLifetimeHonorableKills(uint32_t kills) { write(playerData()->field_lifetime_honorable_kills, kills); }
+uint32_t Player::getLifetimeHonorableKills() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverLifetimeHonorableKills;
+#else
+    return playerData()->field_lifetime_honorable_kills;
+#endif
+}
+void Player::setLifetimeHonorableKills(uint32_t kills)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverLifetimeHonorableKills == kills)
+        return;
+
+    m_foreverLifetimeHonorableKills = kills;
+    updateObject();
+#else
+    write(playerData()->field_lifetime_honorable_kills, kills);
+#endif
+}
 
 #if VERSION_STRING != Mop && VERSION_STRING != AE_PROFILE_MIDNIGHT && VERSION_STRING != AE_PROFILE_FOREVER
 uint32_t Player::getPlayerFieldBytes2() const { return playerData()->player_field_bytes_2.raw; }
@@ -1413,8 +1729,26 @@ void Player::addAuraVision(uint8_t auraVision) { setAuraVision(getAuraVision() |
 void Player::removeAuraVision(uint8_t auraVision) { setAuraVision(getAuraVision() & ~auraVision); }
 #endif
 
-uint32_t Player::getCombatRating(uint8_t combatRating) const { return playerData()->field_combat_rating[combatRating]; }
-void Player::setCombatRating(uint8_t combatRating, uint32_t value) { write(playerData()->field_combat_rating[combatRating], value); }
+uint32_t Player::getCombatRating(uint8_t combatRating) const
+{
+#if defined(AE_FOREVER)
+    return combatRating < m_foreverCombatRatings.size() ? static_cast<uint32_t>(std::max<int32_t>(0, m_foreverCombatRatings[combatRating])) : 0;
+#else
+    return playerData()->field_combat_rating[combatRating];
+#endif
+}
+void Player::setCombatRating(uint8_t combatRating, uint32_t value)
+{
+#if defined(AE_FOREVER)
+    if (combatRating >= m_foreverCombatRatings.size() || m_foreverCombatRatings[combatRating] == static_cast<int32_t>(value))
+        return;
+
+    m_foreverCombatRatings[combatRating] = static_cast<int32_t>(value);
+    updateObject();
+#else
+    write(playerData()->field_combat_rating[combatRating], value);
+#endif
+}
 void Player::modCombatRating(uint8_t combatRating, int32_t value) { setCombatRating(combatRating, getCombatRating(combatRating) + value); }
 
 #if VERSION_STRING > Classic
@@ -2612,8 +2946,44 @@ bool Player::create(CharCreate& charCreateContent)
 WDB::Structures::ChrRacesEntry const* Player::getDbcRaceEntry() { return m_dbcRace; };
 WDB::Structures::ChrClassesEntry const* Player::getDbcClassEntry() { return m_dbcClass; };
 
-utf8_string Player::getName() const { return m_name; }
-void Player::setName(utf8_string name) { m_name = name; }
+utf8_string Player::getName() const
+{
+    return m_name;
+}
+void Player::setName(utf8_string name)
+{
+    m_name = std::move(name);
+#if defined(AE_FOREVER)
+    const std::string value(m_name);
+    const std::size_t separator = value.find(' ');
+
+    std::string firstName;
+    std::string lastName;
+
+    if (separator == std::string::npos)
+    {
+        firstName = value;
+    }
+    else
+    {
+        firstName = value.substr(0, separator);
+        lastName = value.substr(separator + 1U);
+    }
+
+    if (firstName.size() > 63U)
+        firstName.resize(63U);
+    if (lastName.size() > 63U)
+        lastName.resize(63U);
+
+    if (m_foreverPlayerFields.firstName != firstName || m_foreverPlayerFields.lastName != lastName)
+    {
+        m_foreverPlayerFields.firstName = std::move(firstName);
+        m_foreverPlayerFields.lastName = std::move(lastName);
+        m_foreverPlayerFields.markChanged(AscEmu::Version::Forever::Fields::PlayerData::UnknownChangeBit36_69913);
+        updateObject();
+    }
+#endif
+}
 
 uint32_t Player::getLoginFlag() const { return m_loginFlag; }
 void Player::setLoginFlag(uint32_t flag) { m_loginFlag = flag; }
@@ -6484,8 +6854,27 @@ void Player::learnTalent(uint32_t talentId, uint32_t talentRank)
 }
 
 #if VERSION_STRING == Mop
-uint32_t Player::getCurrentSpecId() const { return playerData()->current_spec_id; }
-void Player::setCurrentSpecId(uint32_t specializationId) { write(playerData()->current_spec_id, specializationId); }
+uint32_t Player::getCurrentSpecId() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverPlayerFields.unknownU32_6_69913;
+#else
+    return playerData()->current_spec_id;
+#endif
+}
+void Player::setCurrentSpecId(uint32_t specializationId)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverPlayerFields.unknownU32_6_69913 == specializationId)
+        return;
+
+    m_foreverPlayerFields.unknownU32_6_69913 = specializationId;
+    m_foreverPlayerFields.markChanged(AscEmu::Version::Forever::Fields::PlayerData::UnknownChangeBit29_69913);
+    updateObject();
+#else
+    write(playerData()->current_spec_id, specializationId);
+#endif
+}
 
 void Player::setPrimaryTalentSpecialization(uint32_t specializationTabId)
 {
@@ -6510,8 +6899,27 @@ void Player::setPrimaryTalentSpecialization(uint32_t specializationTabId)
 }
 #elif defined(AE_MIDNIGHT)
 // Copied from MoP as a temporary baseline. Replace with dedicated Midnight values once verified.
-uint32_t Player::getCurrentSpecId() const { return playerData()->current_spec_id; }
-void Player::setCurrentSpecId(uint32_t specializationId) { write(playerData()->current_spec_id, specializationId); }
+uint32_t Player::getCurrentSpecId() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverPlayerFields.unknownU32_6_69913;
+#else
+    return playerData()->current_spec_id;
+#endif
+}
+void Player::setCurrentSpecId(uint32_t specializationId)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverPlayerFields.unknownU32_6_69913 == specializationId)
+        return;
+
+    m_foreverPlayerFields.unknownU32_6_69913 = specializationId;
+    m_foreverPlayerFields.markChanged(AscEmu::Version::Forever::Fields::PlayerData::UnknownChangeBit29_69913);
+    updateObject();
+#else
+    write(playerData()->current_spec_id, specializationId);
+#endif
+}
 
 void Player::setPrimaryTalentSpecialization(uint32_t specializationTabId)
 {
@@ -6536,8 +6944,27 @@ void Player::setPrimaryTalentSpecialization(uint32_t specializationTabId)
 }
 #elif defined(AE_FOREVER)
 // Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
-uint32_t Player::getCurrentSpecId() const { return playerData()->current_spec_id; }
-void Player::setCurrentSpecId(uint32_t specializationId) { write(playerData()->current_spec_id, specializationId); }
+uint32_t Player::getCurrentSpecId() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverPlayerFields.unknownU32_6_69913;
+#else
+    return playerData()->current_spec_id;
+#endif
+}
+void Player::setCurrentSpecId(uint32_t specializationId)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverPlayerFields.unknownU32_6_69913 == specializationId)
+        return;
+
+    m_foreverPlayerFields.unknownU32_6_69913 = specializationId;
+    m_foreverPlayerFields.markChanged(AscEmu::Version::Forever::Fields::PlayerData::UnknownChangeBit29_69913);
+    updateObject();
+#else
+    write(playerData()->current_spec_id, specializationId);
+#endif
+}
 
 void Player::setPrimaryTalentSpecialization(uint32_t specializationTabId)
 {
@@ -15521,7 +15948,12 @@ void Player::loadFromDBProc(QueryResultVector& results)
     setInitialPlayerData();
 
     // set xp
-    setXp(field[8].asUint32());
+    const uint32_t dbXp = field[8].asUint32();
+    setXp(dbXp);
+#if defined(AE_FOREVER)
+    sLogger.info("Player::Forever: XP load guid={} dbXp={} activeXp={} nextLevelXp={} level={}",
+        getGuidLow(), dbXp, getXp(), getNextLevelXp(), getLevel());
+#endif
 
     // Load active cheats
     uint32_t active_cheats = field[9].asUint32();

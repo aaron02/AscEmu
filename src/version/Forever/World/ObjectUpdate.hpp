@@ -9,31 +9,45 @@ This file is released under the MIT license. See README-MIT for more information
 #include <span>
 #include <vector>
 
+class ByteBuffer;
+
+namespace AscEmu::Version::Forever::Fields
+{
+    struct ObjectData;
+    struct UnitData;
+    struct PlayerData;
+    struct ActivePlayerData;
+}
+
 namespace AscEmu::Version::Forever::ObjectUpdate
 {
-    struct SelfMovementState
-    {
-        std::vector<uint8_t> packedGuid;
-        uint64_t movementFlags = 0;
-        uint32_t moveTime = 0;
-        float x = 0.0f;
-        float y = 0.0f;
-        float z = 0.0f;
-        float orientation = 0.0f;
-        float pitch = 0.0f;
-        float stepUpStartElevation = 0.0f;
-        float walkSpeed = 2.5f;
-        float runSpeed = 7.0f;
-        float runBackSpeed = 4.5f;
-        float swimSpeed = 4.722222f;
-        float swimBackSpeed = 2.5f;
-        float flightSpeed = 7.0f;
-        float flightBackSpeed = 4.5f;
-        float turnRate = 3.141594f;
-        float pitchRate = 3.14f;
-    };
+    void writeObjectDataCreate(ByteBuffer& data, Fields::ObjectData const& fields);
+    void writeUnitDataCreate(ByteBuffer& data, Fields::UnitData const& fields, bool ownerVisible);
+    bool writePlayerDataCreate(ByteBuffer& data, Fields::PlayerData const& fields, bool partyMemberVisible);
+    bool writeActivePlayerDataCreate(ByteBuffer& data, Fields::ActivePlayerData const& fields);
 
-    std::vector<uint8_t> buildSelfCreateBlock(const SelfMovementState& state, std::span<const uint8_t> updateFieldPayload);
-    std::vector<uint8_t> buildUpdateObjectPacket(uint16_t mapId, std::span<const uint8_t> updateBlock);
-    std::vector<uint8_t> buildTemporary69913SelfCreatePacket(uint16_t mapId, std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation);
+    std::vector<uint8_t> buildHybridSelfFieldPayload69913(
+        Fields::ObjectData const& objectFields,
+        Fields::UnitData const& unitFields,
+        Fields::PlayerData const& playerFields,
+        Fields::ActivePlayerData const& activePlayerFields);
+
+
+    // 69913 create-only local updater path for ordinary world units.
+    // This intentionally covers the stationary/minimal creature grammar first;
+    // runtime VALUES masks and spline/transport movement remain separate work.
+    std::vector<uint8_t> buildCreatureCreateBlock69913(
+        std::span<const uint8_t> packedGuid,
+        float x, float y, float z, float orientation, uint32_t movementTimeMs,
+        Fields::ObjectData const& objectFields,
+        Fields::UnitData const& unitFields);
+
+    std::vector<uint8_t> buildUpdateObjectPacket69913(
+        uint16_t mapId, uint32_t updateCount, std::span<const uint8_t> updateBlocks);
+
+    std::vector<uint8_t> buildTemporary69913SelfCreatePacketWithFieldPayload(
+        uint16_t mapId,
+        std::span<const uint8_t> packedGuid,
+        float x, float y, float z, float orientation,
+        std::span<const uint8_t> fieldPayload);
 }

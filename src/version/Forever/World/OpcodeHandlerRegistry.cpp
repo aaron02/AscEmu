@@ -25,6 +25,7 @@ namespace AscEmu::Version::Forever
 
         registerOpcode(Opcode::CMSG_DB_QUERY_BULK, &WorldSocket::handleForeverDbQueryBulkOpcode);
         registerOpcode(Opcode::CMSG_HOTFIX_REQUEST, &WorldSocket::handleForeverHotfixRequestOpcode);
+        registerOpcode(Opcode::CMSG_QUERY_CREATURE, &WorldSocket::handleForeverQueryCreatureOpcode);
 
         registerOpcode(Opcode::CMSG_PING, &WorldSocket::handleForeverPingOpcode);
         registerOpcode(Opcode::CMSG_SOCIAL_CONTRACT_REQUEST, &WorldSocket::handleForeverSocialContractOpcode);

@@ -14,8 +14,11 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "WoWObject.hpp"
+#include "WoWGuid.hpp"
 
 #include <array>
+#include <vector>
+#include <bitset>
 
 #pragma pack(push, 1)
 

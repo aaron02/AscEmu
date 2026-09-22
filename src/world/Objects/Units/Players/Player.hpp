@@ -11,6 +11,9 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Management/QuestDefines.hpp"
 #include "Management/ObjectUpdates/UpdateManager.hpp"
 #include "Data/WoWPlayer.hpp"
+#if defined(AE_FOREVER)
+#include "version/Forever/Fields/ForeverUpdateFields.hpp"
+#endif
 #include "AEVersion.hpp"
 #include "Logging/Log.hpp"
 #include "Server/UpdateFieldInclude.h"
@@ -2357,9 +2360,30 @@ protected:
     // Raid
     uint8_t m_targetIcon = 0;
 
+#if defined(AE_FOREVER)
+    AscEmu::Version::Forever::Fields::PlayerData m_foreverPlayerFields{};
+    AscEmu::Version::Forever::Fields::ActivePlayerData m_foreverActivePlayerFields{};
+    uint32_t m_foreverRealmId = 0;
+
+    // Server-only state whose Forever 69913 wire fields/change-mask bits are
+    // not proven yet.  Keep these out of ActivePlayerData until a sniff maps
+    // them to the real wire representation.
+    int32_t m_foreverWatchedFactionIndex = 0;
+    uint32_t m_foreverLifetimeHonorableKills = 0;
+    std::array<int32_t, 32> m_foreverCombatRatings{};
+#endif
     uint32_t _fields[getSizeOfStructure(WoWPlayer)];
 
 public:
+#if defined(AE_FOREVER)
+    AscEmu::Version::Forever::Fields::PlayerData& foreverPlayerFields() { return m_foreverPlayerFields; }
+    AscEmu::Version::Forever::Fields::PlayerData const& foreverPlayerFields() const { return m_foreverPlayerFields; }
+    AscEmu::Version::Forever::Fields::ActivePlayerData& foreverActivePlayerFields() { return m_foreverActivePlayerFields; }
+    AscEmu::Version::Forever::Fields::ActivePlayerData const& foreverActivePlayerFields() const { return m_foreverActivePlayerFields; }
+    void setForeverRealmId(uint32_t realmId) { m_foreverRealmId = realmId; }
+    uint32_t getForeverRealmId() const { return m_foreverRealmId; }
+#endif
+
     std::map<uint32_t, Standing> m_forcedReactions;
 
     bool m_passOnLoot = false;

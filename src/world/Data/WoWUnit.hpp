@@ -14,8 +14,13 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "WoWObject.hpp"
+#include "WoWGuid.hpp"
 
 #include <array>
+#include <bitset>
+#include <vector>
+#include <string>
+#include <optional>
 
 #pragma pack(push, 1)
 
@@ -47,7 +52,8 @@ union field_bytes_0_union
     uint32_t raw;
 };
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+// Temporary legacy descriptor storage used by the old AscEmu field-offset core while Forever is migrated.
+// Do not use this layout as the Forever wire schema.
 union field_bytes_0_union
 {
     struct parts
@@ -776,7 +782,8 @@ struct WoWUnit : WoWObject
     uint32_t interact_spell_id;
 };
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
+// Temporary legacy descriptor storage used by the old AscEmu field-offset core while Forever is migrated.
+// Do not use this layout as the Forever wire schema.
 static inline constexpr uint8_t WOWUNIT_VIRTUAL_ITEM_SLOT_DISPLAY_COUNT = 3;
 static inline constexpr uint8_t WOWUNIT_POWER_COUNT = 5;
 static inline constexpr uint8_t WOWUNIT_SPELL_SCHOOL_COUNT = 7;

@@ -321,7 +321,10 @@ void Unit::onAttachToWorld()
     m_zAxisPosition = 0.0f;
 #endif
 
-    getMovementManager()->addToWorld();
+#ifndef AE_FOREVER
+    // This Crashes our Client
+    //getMovementManager()->addToWorld();
+#endif
 
     Object::onAttachToWorld();
 }
@@ -411,28 +414,181 @@ void Unit::die(Unit* /*pAttacker*/, uint32_t /*damage*/, uint32_t /*spellid*/)
 //////////////////////////////////////////////////////////////////////////////////////////
 // WoWData
 
-uint64_t Unit::getCharmGuid() const { return unitData()->charm_guid.guid; };
-void Unit::setCharmGuid(uint64_t guid) { write(unitData()->charm_guid.guid, guid); }
+#if defined(AE_FOREVER)
+namespace
+{
+    WoWGuid makeForeverUnitReferenceGuid(Unit const* owner, uint64_t legacyGuid)
+    {
+        if (legacyGuid == 0)
+            return WoWGuid::createModernEmpty();
 
-uint64_t Unit::getSummonGuid() const { return unitData()->summon_guid.guid; };
-void Unit::setSummonGuid(uint64_t guid) { write(unitData()->summon_guid.guid, guid); }
-
-#if VERSION_STRING > TBC
-uint64_t Unit::getCritterGuid() const { return unitData()->critter_guid.guid; };
-void Unit::setCritterGuid(uint64_t guid) { write(unitData()->critter_guid.guid, guid); }
+        return WoWGuid::createModernFromLegacy(legacyGuid, worldConfig.battleNetComm.realmId, static_cast<uint16_t>(owner->GetMapId()), 0, 0);
+    }
+}
 #endif
 
-uint64_t Unit::getCharmedByGuid() const { return unitData()->charmed_by_guid.guid; };
-void Unit::setCharmedByGuid(uint64_t guid) { write(unitData()->charmed_by_guid.guid, guid); }
+uint64_t Unit::getCharmGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.charm.toLegacyRaw();
+#else
+    return unitData()->charm_guid.guid;
+#endif
+}
+void Unit::setCharmGuid(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverUnitReferenceGuid(this, guid);
+    if (m_foreverUnitFields.charm.getModernHigh() == modernGuid.getModernHigh() && m_foreverUnitFields.charm.getModernLow() == modernGuid.getModernLow())
+        return;
 
-uint64_t Unit::getSummonedByGuid() const { return unitData()->summoned_by_guid.guid; };
-void Unit::setSummonedByGuid(uint64_t guid) { write(unitData()->summoned_by_guid.guid, guid); }
+    m_foreverUnitFields.charm = modernGuid;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::CharmBit);
+    updateObject();
+#else
+    write(unitData()->charm_guid.guid, guid);
+#endif
+}
 
-uint64_t Unit::getCreatedByGuid() const { return unitData()->created_by_guid.guid; };
-void Unit::setCreatedByGuid(uint64_t guid) { write(unitData()->created_by_guid.guid, guid); }
+uint64_t Unit::getSummonGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.summon.toLegacyRaw();
+#else
+    return unitData()->summon_guid.guid;
+#endif
+}
+void Unit::setSummonGuid(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverUnitReferenceGuid(this, guid);
+    if (m_foreverUnitFields.summon.getModernHigh() == modernGuid.getModernHigh() && m_foreverUnitFields.summon.getModernLow() == modernGuid.getModernLow())
+        return;
 
-uint64_t Unit::getTargetGuid() const { return unitData()->target_guid.guid; };
-void Unit::setTargetGuid(uint64_t guid) { write(unitData()->target_guid.guid, guid); }
+    m_foreverUnitFields.summon = modernGuid;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::SummonBit);
+    updateObject();
+#else
+    write(unitData()->summon_guid.guid, guid);
+#endif
+}
+
+#if VERSION_STRING > TBC
+uint64_t Unit::getCritterGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.critter.toLegacyRaw();
+#else
+    return unitData()->critter_guid.guid;
+#endif
+}
+void Unit::setCritterGuid(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverUnitReferenceGuid(this, guid);
+    if (m_foreverUnitFields.critter.getModernHigh() == modernGuid.getModernHigh() && m_foreverUnitFields.critter.getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverUnitFields.critter = modernGuid;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::CritterBit);
+    updateObject();
+#else
+    write(unitData()->critter_guid.guid, guid);
+#endif
+}
+#endif
+
+uint64_t Unit::getCharmedByGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.charmedBy.toLegacyRaw();
+#else
+    return unitData()->charmed_by_guid.guid;
+#endif
+}
+void Unit::setCharmedByGuid(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverUnitReferenceGuid(this, guid);
+    if (m_foreverUnitFields.charmedBy.getModernHigh() == modernGuid.getModernHigh() && m_foreverUnitFields.charmedBy.getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverUnitFields.charmedBy = modernGuid;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::CharmedByBit);
+    updateObject();
+#else
+    write(unitData()->charmed_by_guid.guid, guid);
+#endif
+}
+
+uint64_t Unit::getSummonedByGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.summonedBy.toLegacyRaw();
+#else
+    return unitData()->summoned_by_guid.guid;
+#endif
+}
+void Unit::setSummonedByGuid(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverUnitReferenceGuid(this, guid);
+    if (m_foreverUnitFields.summonedBy.getModernHigh() == modernGuid.getModernHigh() && m_foreverUnitFields.summonedBy.getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverUnitFields.summonedBy = modernGuid;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::SummonedByBit);
+    updateObject();
+#else
+    write(unitData()->summoned_by_guid.guid, guid);
+#endif
+}
+
+uint64_t Unit::getCreatedByGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.createdBy.toLegacyRaw();
+#else
+    return unitData()->created_by_guid.guid;
+#endif
+}
+void Unit::setCreatedByGuid(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverUnitReferenceGuid(this, guid);
+    if (m_foreverUnitFields.createdBy.getModernHigh() == modernGuid.getModernHigh() && m_foreverUnitFields.createdBy.getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverUnitFields.createdBy = modernGuid;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::CreatedByBit);
+    updateObject();
+#else
+    write(unitData()->created_by_guid.guid, guid);
+#endif
+}
+
+uint64_t Unit::getTargetGuid() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.target.toLegacyRaw();
+#else
+    return unitData()->target_guid.guid;
+#endif
+}
+void Unit::setTargetGuid(uint64_t guid)
+{
+#if defined(AE_FOREVER)
+    const WoWGuid modernGuid = makeForeverUnitReferenceGuid(this, guid);
+    if (m_foreverUnitFields.target.getModernHigh() == modernGuid.getModernHigh() && m_foreverUnitFields.target.getModernLow() == modernGuid.getModernLow())
+        return;
+
+    m_foreverUnitFields.target = modernGuid;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::TargetBit);
+    updateObject();
+#else
+    write(unitData()->target_guid.guid, guid);
+#endif
+}
 
 uint64_t Unit::getChannelObjectGuid() const { return unitData()->channel_object_guid.guid; };
 void Unit::setChannelObjectGuid(uint64_t guid) { write(unitData()->channel_object_guid.guid, guid); }
@@ -484,14 +640,73 @@ void Unit::setBytes0ForOffset(uint32_t offset, uint8_t value)
     }
 }
 
-uint8_t Unit::getRace() const { return unitData()->field_bytes_0.s.race; }
-void Unit::setRace(uint8_t race) { write(unitData()->field_bytes_0.s.race, race); }
+uint8_t Unit::getRace() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.race;
+#else
+    return unitData()->field_bytes_0.s.race;
+#endif
+}
+void Unit::setRace(uint8_t race)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.race == race)
+        return;
 
-uint8_t Unit::getClass() const { return unitData()->field_bytes_0.s.unit_class; }
-void Unit::setClass(uint8_t class_) { write(unitData()->field_bytes_0.s.unit_class, class_); }
+    m_foreverUnitFields.race = race;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::RaceBit);
+    updateObject();
+#else
+    write(unitData()->field_bytes_0.s.race, race);
+#endif
+}
 
-uint8_t Unit::getGender() const { return unitData()->field_bytes_0.s.gender; }
-void Unit::setGender(uint8_t gender) { write(unitData()->field_bytes_0.s.gender, gender); }
+uint8_t Unit::getClass() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.classId;
+#else
+    return unitData()->field_bytes_0.s.unit_class;
+#endif
+}
+void Unit::setClass(uint8_t classId)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.classId == classId && m_foreverUnitFields.playerClassId == classId)
+        return;
+
+    m_foreverUnitFields.classId = classId;
+    m_foreverUnitFields.playerClassId = classId;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::ClassIdBit);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::PlayerClassIdBit);
+    updateObject();
+#else
+    write(unitData()->field_bytes_0.s.unit_class, classId);
+#endif
+}
+
+uint8_t Unit::getGender() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.sex;
+#else
+    return unitData()->field_bytes_0.s.gender;
+#endif
+}
+void Unit::setGender(uint8_t gender)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.sex == gender)
+        return;
+
+    m_foreverUnitFields.sex = gender;
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::SexBit);
+    updateObject();
+#else
+    write(unitData()->field_bytes_0.s.gender, gender);
+#endif
+}
 
 #if VERSION_STRING == Mop
 PowerType Unit::getPowerType() const { return static_cast<PowerType>(unitData()->display_power); }
@@ -521,11 +736,15 @@ void Unit::setPowerType(uint8_t powerType)
     plr->addGroupUpdateFlag(isPlayer() ? GROUP_UPDATE_FLAG_POWER_TYPE : GROUP_UPDATE_FLAG_PET_POWER_TYPE);
 }
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
-PowerType Unit::getPowerType() const { return static_cast<PowerType>(unitData()->display_power); }
+PowerType Unit::getPowerType() const { return static_cast<PowerType>(m_foreverUnitFields.displayPower); }
 void Unit::setPowerType(uint8_t powerType)
 {
-    write(unitData()->display_power, static_cast<uint32_t>(powerType));
+    if (m_foreverUnitFields.displayPower != powerType)
+    {
+        m_foreverUnitFields.displayPower = powerType;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::DisplayPowerBit);
+        updateObject();
+    }
 
     // Update power type also to group
     const auto plr = getPlayerOwnerOrSelf();
@@ -556,20 +775,33 @@ void Unit::setPowerType(uint8_t powerType)
 #endif
 //bytes_0 end
 
-uint32_t Unit::getHealth() const { return unitData()->health; }
+uint32_t Unit::getHealth() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int64_t>(0, m_foreverUnitFields.health));
+#else
+    return unitData()->health;
+#endif
+}
 void Unit::setHealth(uint32_t health)
 {
     const auto maxHealth = getMaxHealth();
     health = std::min(health, maxHealth);
 
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.health != static_cast<int64_t>(health))
+    {
+        m_foreverUnitFields.health = health;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::HealthBit);
+        updateObject();
+    }
+#else
     write(unitData()->health, health);
+#endif
 
 #if VERSION_STRING == TBC
-    // TODO Fix this later
     return;
 #else
-
-    // Update health also to group
     const auto plr = getPlayerOwnerOrSelf();
     if (plr == nullptr || !plr->IsInWorld() || plr->getGroup() == nullptr)
         return;
@@ -595,30 +827,28 @@ uint32_t Unit::getPower(PowerType type) const
     if (type == POWER_TYPE_HEALTH)
         return getHealth();
 
-    // Since cata power fields work differently
-    // Get matching power index by power type
     const auto powerIndex = getPowerIndexFromDBC(type);
+
+#if defined(AE_FOREVER)
+    if (powerIndex < POWER_FIELD_INDEX_1 || powerIndex > POWER_FIELD_INDEX_5)
+        return 0;
+
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.power[static_cast<std::size_t>(powerIndex - POWER_FIELD_INDEX_1)]));
+#else
     switch (powerIndex)
     {
-        case POWER_FIELD_INDEX_1:
-            return unitData()->power_1;
-        case POWER_FIELD_INDEX_2:
-            return unitData()->power_2;
-        case POWER_FIELD_INDEX_3:
-            return unitData()->power_3;
-        case POWER_FIELD_INDEX_4:
-            return unitData()->power_4;
-        case POWER_FIELD_INDEX_5:
-            return unitData()->power_5;
+        case POWER_FIELD_INDEX_1: return unitData()->power_1;
+        case POWER_FIELD_INDEX_2: return unitData()->power_2;
+        case POWER_FIELD_INDEX_3: return unitData()->power_3;
+        case POWER_FIELD_INDEX_4: return unitData()->power_4;
+        case POWER_FIELD_INDEX_5: return unitData()->power_5;
 #if VERSION_STRING == WotLK
-        case POWER_FIELD_INDEX_6:
-            return unitData()->power_6;
-        case POWER_FIELD_INDEX_7:
-            return unitData()->power_7;
+        case POWER_FIELD_INDEX_6: return unitData()->power_6;
+        case POWER_FIELD_INDEX_7: return unitData()->power_7;
 #endif
-        default:
-            return 0;
+        default: return 0;
     }
+#endif
 }
 
 void Unit::setPower(PowerType type, uint32_t value, [[maybe_unused]] bool sendPacket/* = true*/, bool skipObjectUpdate/* = false*/)
@@ -635,51 +865,42 @@ void Unit::setPower(PowerType type, uint32_t value, [[maybe_unused]] bool sendPa
     if (getPower(type) == value)
         return;
 
-    // Since cata power fields work differently
-    // Get matching power index by power type
     const auto powerIndex = getPowerIndexFromDBC(type);
+
+#if defined(AE_FOREVER)
+    if (powerIndex < POWER_FIELD_INDEX_1 || powerIndex > POWER_FIELD_INDEX_5)
+        return;
+
+    const std::size_t index = static_cast<std::size_t>(powerIndex - POWER_FIELD_INDEX_1);
+    m_foreverUnitFields.power[index] = static_cast<int32_t>(value);
+    m_foreverUnitFields.markArrayChanged(AscEmu::Version::Forever::Fields::UnitData::PowerGroupBit, AscEmu::Version::Forever::Fields::UnitData::PowerFirstBit + index);
+    if (!skipObjectUpdate)
+        updateObject();
+#else
     switch (powerIndex)
     {
-        case POWER_FIELD_INDEX_1:
-            write(unitData()->power_1, value, skipObjectUpdate);
-            break;
-        case POWER_FIELD_INDEX_2:
-            write(unitData()->power_2, value, skipObjectUpdate);
-            break;
-        case POWER_FIELD_INDEX_3:
-            write(unitData()->power_3, value, skipObjectUpdate);
-            break;
-        case POWER_FIELD_INDEX_4:
-            write(unitData()->power_4, value, skipObjectUpdate);
-            break;
-        case POWER_FIELD_INDEX_5:
-            write(unitData()->power_5, value, skipObjectUpdate);
-            break;
+        case POWER_FIELD_INDEX_1: write(unitData()->power_1, value, skipObjectUpdate); break;
+        case POWER_FIELD_INDEX_2: write(unitData()->power_2, value, skipObjectUpdate); break;
+        case POWER_FIELD_INDEX_3: write(unitData()->power_3, value, skipObjectUpdate); break;
+        case POWER_FIELD_INDEX_4: write(unitData()->power_4, value, skipObjectUpdate); break;
+        case POWER_FIELD_INDEX_5: write(unitData()->power_5, value, skipObjectUpdate); break;
 #if VERSION_STRING == WotLK
-        case POWER_FIELD_INDEX_6:
-            write(unitData()->power_6, value, skipObjectUpdate);
-            break;
-        case POWER_FIELD_INDEX_7:
-            write(unitData()->power_7, value, skipObjectUpdate);
-            break;
+        case POWER_FIELD_INDEX_6: write(unitData()->power_6, value, skipObjectUpdate); break;
+        case POWER_FIELD_INDEX_7: write(unitData()->power_7, value, skipObjectUpdate); break;
 #endif
-        default:
-            return;
+        default: return;
     }
+#endif
 
     if (skipObjectUpdate)
         return;
 
 #if VERSION_STRING == TBC
-    // TODO Fix this later
     return;
 #else
-
-    // Send power update to client
     if (sendPacket)
         sendPowerUpdate(isPlayer());
 
-    // Update power also to group
     const auto plr = getPlayerOwnerOrSelf();
     if (plr == nullptr || !plr->IsInWorld() || plr->getGroup() == nullptr)
         return;
@@ -698,23 +919,35 @@ void Unit::modPower(PowerType type, int32_t value)
     setPower(type, newPower);
 }
 
-uint32_t Unit::getMaxHealth() const { return unitData()->max_health; }
+uint32_t Unit::getMaxHealth() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int64_t>(0, m_foreverUnitFields.maxHealth));
+#else
+    return unitData()->max_health;
+#endif
+}
 void Unit::setMaxHealth(uint32_t maxHealth)
 {
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.maxHealth != static_cast<int64_t>(maxHealth))
+    {
+        m_foreverUnitFields.maxHealth = maxHealth;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::MaxHealthBit);
+        updateObject();
+    }
+#else
     write(unitData()->max_health, maxHealth);
+#endif
 
 #if VERSION_STRING == TBC
-    // TODO Fix this later
     return;
 #else
-
-    // Update health also to group
     const auto plr = getPlayerOwnerOrSelf();
-    if (plr != nullptr && plr->IsInWorld() && plr->getGroup() != nullptr)
-        plr->addGroupUpdateFlag(isPlayer() ? GROUP_UPDATE_FLAG_MAX_HP : GROUP_UPDATE_FLAG_PET_MAX_HP);
+    if (plr == nullptr || !plr->IsInWorld() || plr->getGroup() == nullptr)
+        return;
 
-    if (maxHealth < getHealth())
-        setHealth(maxHealth);
+    plr->addGroupUpdateFlag(isPlayer() ? GROUP_UPDATE_FLAG_MAX_HP : GROUP_UPDATE_FLAG_PET_MAX_HP);
 #endif
 }
 
@@ -733,30 +966,28 @@ uint32_t Unit::getMaxPower(PowerType type) const
     if (type == POWER_TYPE_HEALTH)
         return getMaxHealth();
 
-    // Since cata power fields work differently
-    // Get matching power index by power type
     const auto powerIndex = getPowerIndexFromDBC(type);
+
+#if defined(AE_FOREVER)
+    if (powerIndex < POWER_FIELD_INDEX_1 || powerIndex > POWER_FIELD_INDEX_5)
+        return 0;
+
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.maxPower[static_cast<std::size_t>(powerIndex - POWER_FIELD_INDEX_1)]));
+#else
     switch (powerIndex)
     {
-        case POWER_FIELD_INDEX_1:
-            return unitData()->max_power_1;
-        case POWER_FIELD_INDEX_2:
-            return unitData()->max_power_2;
-        case POWER_FIELD_INDEX_3:
-            return unitData()->max_power_3;
-        case POWER_FIELD_INDEX_4:
-            return unitData()->max_power_4;
-        case POWER_FIELD_INDEX_5:
-            return unitData()->max_power_5;
+        case POWER_FIELD_INDEX_1: return unitData()->max_power_1;
+        case POWER_FIELD_INDEX_2: return unitData()->max_power_2;
+        case POWER_FIELD_INDEX_3: return unitData()->max_power_3;
+        case POWER_FIELD_INDEX_4: return unitData()->max_power_4;
+        case POWER_FIELD_INDEX_5: return unitData()->max_power_5;
 #if VERSION_STRING == WotLK
-        case POWER_FIELD_INDEX_6:
-            return unitData()->max_power_6;
-        case POWER_FIELD_INDEX_7:
-            return unitData()->max_power_7;
+        case POWER_FIELD_INDEX_6: return unitData()->max_power_6;
+        case POWER_FIELD_INDEX_7: return unitData()->max_power_7;
 #endif
-        default:
-            return 0;
+        default: return 0;
     }
+#endif
 }
 
 void Unit::setMaxPower(PowerType type, uint32_t value)
@@ -767,50 +998,41 @@ void Unit::setMaxPower(PowerType type, uint32_t value)
         return;
     }
 
-    // Since cata power fields work differently
-    // Get matching power index by power type
     const auto powerIndex = getPowerIndexFromDBC(type);
+
+#if defined(AE_FOREVER)
+    if (powerIndex < POWER_FIELD_INDEX_1 || powerIndex > POWER_FIELD_INDEX_5)
+        return;
+
+    const std::size_t index = static_cast<std::size_t>(powerIndex - POWER_FIELD_INDEX_1);
+    if (m_foreverUnitFields.maxPower[index] == static_cast<int32_t>(value))
+        return;
+
+    m_foreverUnitFields.maxPower[index] = static_cast<int32_t>(value);
+    m_foreverUnitFields.markArrayChanged(AscEmu::Version::Forever::Fields::UnitData::PowerGroupBit, AscEmu::Version::Forever::Fields::UnitData::MaxPowerFirstBit + index);
+    updateObject();
+#else
     switch (powerIndex)
     {
-        case POWER_FIELD_INDEX_1:
-            write(unitData()->max_power_1, value);
-            break;
-        case POWER_FIELD_INDEX_2:
-            write(unitData()->max_power_2, value);
-            break;
-        case POWER_FIELD_INDEX_3:
-            write(unitData()->max_power_3, value);
-            break;
-        case POWER_FIELD_INDEX_4:
-            write(unitData()->max_power_4, value);
-            break;
-        case POWER_FIELD_INDEX_5:
-            write(unitData()->max_power_5, value);
-            break;
+        case POWER_FIELD_INDEX_1: write(unitData()->max_power_1, value); break;
+        case POWER_FIELD_INDEX_2: write(unitData()->max_power_2, value); break;
+        case POWER_FIELD_INDEX_3: write(unitData()->max_power_3, value); break;
+        case POWER_FIELD_INDEX_4: write(unitData()->max_power_4, value); break;
+        case POWER_FIELD_INDEX_5: write(unitData()->max_power_5, value); break;
 #if VERSION_STRING == WotLK
-        case POWER_FIELD_INDEX_6:
-            write(unitData()->max_power_6, value);
-            break;
-        case POWER_FIELD_INDEX_7:
-            write(unitData()->max_power_7, value);
-            break;
+        case POWER_FIELD_INDEX_6: write(unitData()->max_power_6, value); break;
+        case POWER_FIELD_INDEX_7: write(unitData()->max_power_7, value); break;
 #endif
-        default:
-            return;
+        default: return;
     }
+#endif
 
-#if VERSION_STRING == TBC
-    // TODO Fix this later
-    return;
-#else
-
-    // Update power also to group
+#if VERSION_STRING != TBC
     const auto plr = getPlayerOwnerOrSelf();
-    if (plr != nullptr && plr->IsInWorld() && plr->getGroup() != nullptr)
-        plr->addGroupUpdateFlag(isPlayer() ? GROUP_UPDATE_FLAG_MAX_POWER : GROUP_UPDATE_FLAG_PET_MAX_POWER);
+    if (plr == nullptr || !plr->IsInWorld() || plr->getGroup() == nullptr)
+        return;
 
-    if (value < getPower(type))
-        setPower(type, value);
+    plr->addGroupUpdateFlag(isPlayer() ? GROUP_UPDATE_FLAG_MAX_POWER : GROUP_UPDATE_FLAG_PET_MAX_POWER);
 #endif
 }
 
@@ -1010,29 +1232,52 @@ void Unit::setPowerRegenerationWhileInterrupted(PowerType type, float value)
 #endif
 }
 
-uint32_t Unit::getLevel() const { return unitData()->level; }
+uint32_t Unit::getLevel() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.level));
+#else
+    return unitData()->level;
+#endif
+}
 void Unit::setLevel(uint32_t level)
 {
+#if defined(AE_FOREVER)
+    const int32_t value = static_cast<int32_t>(level);
+    if (m_foreverUnitFields.level != value || m_foreverUnitFields.effectiveLevel != value)
+    {
+        m_foreverUnitFields.level = value;
+        m_foreverUnitFields.effectiveLevel = value;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::LevelBit);
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::EffectiveLevelBit);
+        updateObject();
+    }
+#else
     write(unitData()->level, level);
+#endif
+
     if (isPlayer())
         dynamic_cast<Player*>(this)->setNextLevelXp(sMySQLStore.getPlayerXPForLevel(level));
 
 #if VERSION_STRING == TBC
-    // TODO Fix this later
     return;
 #else
-
-    // Update level also to group
     const auto plr = getPlayerOwnerOrSelf();
     if (plr == nullptr || !plr->IsInWorld() || plr->getGroup() == nullptr)
         return;
 
-    //\ todo: missing update flag for pet level
     plr->addGroupUpdateFlag(isPlayer() ? GROUP_UPDATE_FLAG_LEVEL : 0);
 #endif
 }
 
-uint32_t Unit::getFactionTemplate() const { return unitData()->faction_template; }
+uint32_t Unit::getFactionTemplate() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.factionTemplate));
+#else
+    return unitData()->faction_template;
+#endif
+}
 
 void Unit::setFactionTemplate(uint32_t id)
 {
@@ -1040,14 +1285,19 @@ void Unit::setFactionTemplate(uint32_t id)
     if (oldFaction == id)
         return;
 
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.factionTemplate = static_cast<int32_t>(id);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::FactionTemplateBit);
+    updateObject();
+#else
     write(unitData()->faction_template, id);
+#endif
+
     setServersideFaction();
 
     if (!IsInWorld())
         return;
 
-    // A runtime faction change invalidates existing threat relationships and must
-    // also be observed by nearby creature AI in both directions.
     if (AIInterface* ai = getAIInterface())
         ai->eventChangeFaction();
 
@@ -1207,11 +1457,27 @@ unit_virtual_item_info Unit::getVirtualItemInfoFields(uint8_t slot) const { retu
 void Unit::setVirtualItemInfo(uint8_t slot, uint64_t item_info) { write(unitData()->virtual_item_info[slot].raw, item_info); }
 #endif
 
-uint32_t Unit::getUnitFlags() const { return unitData()->unit_flags; }
+uint32_t Unit::getUnitFlags() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.unitFlags69913;
+#else
+    return unitData()->unit_flags;
+#endif
+}
 void Unit::setUnitFlags(uint32_t unitFlags)
 {
     const uint32_t oldFlags = getUnitFlags();
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.unitFlags69913 != unitFlags)
+    {
+        m_foreverUnitFields.unitFlags69913 = unitFlags;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::FlagsBit);
+        updateObject();
+    }
+#else
     write(unitData()->unit_flags, unitFlags);
+#endif
 
     constexpr uint32_t AwarenessRelevantFlags =
         UNIT_FLAG_IGNORE_PLAYER_COMBAT | UNIT_FLAG_IGNORE_CREATURE_COMBAT |
@@ -1248,14 +1514,30 @@ bool Unit::canSwim()
 }
 
 #if VERSION_STRING > Classic
-uint32_t Unit::getUnitFlags2() const { return unitData()->unit_flags_2; }
+uint32_t Unit::getUnitFlags2() const
+{
+#if defined(AE_FOREVER)
+    return m_foreverUnitFields.unitFlags2_69913;
+#else
+    return unitData()->unit_flags_2;
+#endif
+}
 void Unit::setUnitFlags2(uint32_t unitFlags2)
 {
 #if VERSION_STRING >= WotLK
     const uint32_t oldFlags = getUnitFlags2();
 #endif
 
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.unitFlags2_69913 != unitFlags2)
+    {
+        m_foreverUnitFields.unitFlags2_69913 = unitFlags2;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::Flags2Bit);
+        updateObject();
+    }
+#else
     write(unitData()->unit_flags_2, unitFlags2);
+#endif
 
 #if VERSION_STRING >= WotLK
     if (IsInWorld() && ((oldFlags ^ unitFlags2) & UNIT_FLAG2_FEIGN_DEATH) != 0)
@@ -1358,8 +1640,42 @@ void Unit::setAuraState(uint32_t state) { write(unitData()->aura_state, state); 
 void Unit::addAuraState(uint32_t state) { setAuraState(getAuraState() | state); }
 void Unit::removeAuraState(uint32_t state) { setAuraState(getAuraState() & ~state); }
 
-uint32_t Unit::getBaseAttackTime(uint8_t slot) const { return unitData()->base_attack_time[slot]; }
-void Unit::setBaseAttackTime(uint8_t slot, uint32_t time) { write(unitData()->base_attack_time[slot], time); }
+uint32_t Unit::getBaseAttackTime(uint8_t slot) const
+{
+#if defined(AE_FOREVER)
+    if (slot < m_foreverUnitFields.attackRoundBaseTime.size())
+        return m_foreverUnitFields.attackRoundBaseTime[slot];
+    if (slot == 2)
+        return m_foreverUnitFields.rangedAttackRoundBaseTime;
+    return 0;
+#else
+    return unitData()->base_attack_time[slot];
+#endif
+}
+void Unit::setBaseAttackTime(uint8_t slot, uint32_t time)
+{
+#if defined(AE_FOREVER)
+    if (slot < m_foreverUnitFields.attackRoundBaseTime.size())
+    {
+        if (m_foreverUnitFields.attackRoundBaseTime[slot] == time)
+            return;
+
+        m_foreverUnitFields.attackRoundBaseTime[slot] = time;
+        m_foreverUnitFields.markArrayChanged(AscEmu::Version::Forever::Fields::UnitData::AttackRoundBaseTimeGroupBit, AscEmu::Version::Forever::Fields::UnitData::AttackRoundBaseTimeFirstBit + slot);
+        updateObject();
+        return;
+    }
+
+    if (slot == 2 && m_foreverUnitFields.rangedAttackRoundBaseTime != time)
+    {
+        m_foreverUnitFields.rangedAttackRoundBaseTime = time;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::RangedAttackRoundBaseTimeBit);
+        updateObject();
+    }
+#else
+    write(unitData()->base_attack_time[slot], time);
+#endif
+}
 void Unit::modBaseAttackTime(uint8_t slot, int32_t modTime)
 {
     int32_t newAttackTime = getBaseAttackTime(slot);
@@ -1371,16 +1687,70 @@ void Unit::modBaseAttackTime(uint8_t slot, int32_t modTime)
     setBaseAttackTime(slot, newAttackTime);
 }
 
-float Unit::getBoundingRadius() const { return unitData()->bounding_radius; }
-void Unit::setBoundingRadius(float radius) { write(unitData()->bounding_radius, radius); }
+float Unit::getBoundingRadius() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<float>(m_foreverUnitFields.boundingRadius);
+#else
+    return unitData()->bounding_radius;
+#endif
+}
+void Unit::setBoundingRadius(float radius)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.boundingRadius == static_cast<decltype(m_foreverUnitFields.boundingRadius)>(radius))
+        return;
 
-float Unit::getCombatReach() const { return unitData()->combat_reach; }
-void Unit::setCombatReach(float radius) { write(unitData()->combat_reach, radius); }
+    m_foreverUnitFields.boundingRadius = static_cast<decltype(m_foreverUnitFields.boundingRadius)>(radius);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::BoundingRadiusBit);
+    updateObject();
+#else
+    write(unitData()->bounding_radius, radius);
+#endif
+}
 
-uint32_t Unit::getDisplayId() const { return unitData()->display_id; }
+float Unit::getCombatReach() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<float>(m_foreverUnitFields.combatReach);
+#else
+    return unitData()->combat_reach;
+#endif
+}
+void Unit::setCombatReach(float radius)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.combatReach == static_cast<decltype(m_foreverUnitFields.combatReach)>(radius))
+        return;
+
+    m_foreverUnitFields.combatReach = static_cast<decltype(m_foreverUnitFields.combatReach)>(radius);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::CombatReachBit);
+    updateObject();
+#else
+    write(unitData()->combat_reach, radius);
+#endif
+}
+
+uint32_t Unit::getDisplayId() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.displayId));
+#else
+    return unitData()->display_id;
+#endif
+}
 void Unit::setDisplayId(uint32_t id)
 {
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.displayId != static_cast<int32_t>(id))
+    {
+        m_foreverUnitFields.displayId = static_cast<int32_t>(id);
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::DisplayIdBit);
+        updateObject();
+    }
+#else
     write(unitData()->display_id, id);
+#endif
 
 #if VERSION_STRING == TBC
     // TODO Fix this later
@@ -1398,26 +1768,144 @@ void Unit::setDisplayId(uint32_t id)
 }
 void Unit::resetDisplayId()
 {
+#if defined(AE_FOREVER)
+    setDisplayId(getNativeDisplayId());
+#else
     write(unitData()->display_id, unitData()->native_display_id);
+#endif
 }
 
-uint32_t Unit::getNativeDisplayId() const { return unitData()->native_display_id; }
-void Unit::setNativeDisplayId(uint32_t id) { write(unitData()->native_display_id, id); }
+uint32_t Unit::getNativeDisplayId() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(m_foreverUnitFields.nativeDisplayId);
+#else
+    return unitData()->native_display_id;
+#endif
+}
+void Unit::setNativeDisplayId(uint32_t id)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.nativeDisplayId == static_cast<decltype(m_foreverUnitFields.nativeDisplayId)>(id))
+        return;
 
-uint32_t Unit::getMountDisplayId() const { return unitData()->mount_display_id; }
-void Unit::setMountDisplayId(uint32_t id) { write(unitData()->mount_display_id, id); }
+    m_foreverUnitFields.nativeDisplayId = static_cast<decltype(m_foreverUnitFields.nativeDisplayId)>(id);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::NativeDisplayIdBit);
+    updateObject();
+#else
+    write(unitData()->native_display_id, id);
+#endif
+}
 
-float Unit::getMinDamage() const { return unitData()->minimum_damage; }
-void Unit::setMinDamage(float damage) { write(unitData()->minimum_damage, damage); }
+uint32_t Unit::getMountDisplayId() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(m_foreverUnitFields.mountDisplayId);
+#else
+    return unitData()->mount_display_id;
+#endif
+}
+void Unit::setMountDisplayId(uint32_t id)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.mountDisplayId == static_cast<decltype(m_foreverUnitFields.mountDisplayId)>(id))
+        return;
 
-float Unit::getMaxDamage() const { return unitData()->maximum_damage; }
-void Unit::setMaxDamage(float damage) { write(unitData()->maximum_damage, damage); }
+    m_foreverUnitFields.mountDisplayId = static_cast<decltype(m_foreverUnitFields.mountDisplayId)>(id);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::MountDisplayIdBit);
+    updateObject();
+#else
+    write(unitData()->mount_display_id, id);
+#endif
+}
 
-float Unit::getMinOffhandDamage() const { return unitData()->minimum_offhand_damage; }
-void Unit::setMinOffhandDamage(float damage) { write(unitData()->minimum_offhand_damage, damage); }
+float Unit::getMinDamage() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<float>(m_foreverUnitFields.minDamage69913);
+#else
+    return unitData()->minimum_damage;
+#endif
+}
+void Unit::setMinDamage(float damage)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.minDamage69913 == static_cast<decltype(m_foreverUnitFields.minDamage69913)>(damage))
+        return;
 
-float Unit::getMaxOffhandDamage() const { return unitData()->maximum_offhand_damage; }
-void Unit::setMaxOffhandDamage(float damage) { write(unitData()->maximum_offhand_damage, damage); }
+    m_foreverUnitFields.minDamage69913 = static_cast<decltype(m_foreverUnitFields.minDamage69913)>(damage);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::MinDamageBit);
+    updateObject();
+#else
+    write(unitData()->minimum_damage, damage);
+#endif
+}
+
+float Unit::getMaxDamage() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<float>(m_foreverUnitFields.maxDamage69913);
+#else
+    return unitData()->maximum_damage;
+#endif
+}
+void Unit::setMaxDamage(float damage)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.maxDamage69913 == static_cast<decltype(m_foreverUnitFields.maxDamage69913)>(damage))
+        return;
+
+    m_foreverUnitFields.maxDamage69913 = static_cast<decltype(m_foreverUnitFields.maxDamage69913)>(damage);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::MaxDamageBit);
+    updateObject();
+#else
+    write(unitData()->maximum_damage, damage);
+#endif
+}
+
+float Unit::getMinOffhandDamage() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<float>(m_foreverUnitFields.minOffHandDamage69913);
+#else
+    return unitData()->minimum_offhand_damage;
+#endif
+}
+void Unit::setMinOffhandDamage(float damage)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.minOffHandDamage69913 == static_cast<decltype(m_foreverUnitFields.minOffHandDamage69913)>(damage))
+        return;
+
+    m_foreverUnitFields.minOffHandDamage69913 = static_cast<decltype(m_foreverUnitFields.minOffHandDamage69913)>(damage);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::MinOffHandDamageBit);
+    updateObject();
+#else
+    write(unitData()->minimum_offhand_damage, damage);
+#endif
+}
+
+float Unit::getMaxOffhandDamage() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<float>(m_foreverUnitFields.maxOffHandDamage69913);
+#else
+    return unitData()->maximum_offhand_damage;
+#endif
+}
+void Unit::setMaxOffhandDamage(float damage)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.maxOffHandDamage69913 == static_cast<decltype(m_foreverUnitFields.maxOffHandDamage69913)>(damage))
+        return;
+
+    m_foreverUnitFields.maxOffHandDamage69913 = static_cast<decltype(m_foreverUnitFields.maxOffHandDamage69913)>(damage);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::MaxOffHandDamageBit);
+    updateObject();
+#else
+    write(unitData()->maximum_offhand_damage, damage);
+#endif
+}
 
 //bytes_1 begin
 uint32_t Unit::getBytes1() const { return unitData()->field_bytes_1.raw; }
@@ -1495,6 +1983,12 @@ uint8_t Unit::getStandState() const { return unitData()->field_bytes_1.s.stand_s
 void Unit::setStandState(uint8_t standState)
 {
     write(unitData()->field_bytes_1.s.stand_state, standState);
+#if defined(AE_FOREVER)
+    // 1.60.1.69913 create payload: StandState is the first byte after the
+    // owner-only weapon damage fields. Keep the modern create state mirrored
+    // until its standalone value-update ChangeMask bit is capture-verified.
+    m_foreverUnitFields.standState = standState;
+#endif
 
     if (isPlayer())
     {
@@ -1524,13 +2018,27 @@ void Unit::setShapeShiftForm(uint8_t shapeShiftForm) { write(unitData()->field_b
 #endif
 
 uint8_t Unit::getStandStateFlags() const { return unitData()->field_bytes_1.s.stand_state_flag; }
-void Unit::setStandStateFlags(uint8_t standStateFlags) { write(unitData()->field_bytes_1.s.stand_state_flag, standStateFlags); }
+void Unit::setStandStateFlags(uint8_t standStateFlags)
+{
+    write(unitData()->field_bytes_1.s.stand_state_flag, standStateFlags);
+#if defined(AE_FOREVER)
+    // Modern UnitData calls this byte VisFlags.
+    m_foreverUnitFields.visFlags = standStateFlags;
+#endif
+}
 void Unit::addStandStateFlags(uint8_t standStateFlags) { setStandStateFlags(getStandStateFlags() | standStateFlags); }
 void Unit::removeStandStateFlags(uint8_t standStateFlags) { setStandStateFlags(getStandStateFlags() & ~standStateFlags); }
 
 #if VERSION_STRING != Classic
 uint8_t Unit::getAnimationFlags() const { return unitData()->field_bytes_1.s.animation_flag; }
-void Unit::setAnimationFlags(uint8_t animationFlags) { write(unitData()->field_bytes_1.s.animation_flag, animationFlags); }
+void Unit::setAnimationFlags(uint8_t animationFlags)
+{
+    write(unitData()->field_bytes_1.s.animation_flag, animationFlags);
+#if defined(AE_FOREVER)
+    // Modern UnitData calls this byte AnimTier.
+    m_foreverUnitFields.animTier = animationFlags;
+#endif
+}
 #endif
 //bytes_1 end
 
@@ -1572,8 +2080,44 @@ void Unit::setNpcFlags(uint32_t npcFlags) { write(unitData()->npc_flags, npcFlag
 void Unit::addNpcFlags(uint32_t npcFlags) { setNpcFlags(getNpcFlags() | npcFlags); }
 void Unit::removeNpcFlags(uint32_t npcFlags) { setNpcFlags(getNpcFlags() & ~npcFlags); }
 #else
-uint64_t Unit::getNpcFlags() const { return unitData()->npc_flags; }
-void Unit::setNpcFlags(uint64_t npcFlags) { write(unitData()->npc_flags, npcFlags); }
+uint64_t Unit::getNpcFlags() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint64_t>(m_foreverUnitFields.npcFlags)
+        | (static_cast<uint64_t>(m_foreverUnitFields.npcFlags2) << 32);
+#else
+    return unitData()->npc_flags;
+#endif
+}
+
+void Unit::setNpcFlags(uint64_t npcFlags)
+{
+#if defined(AE_FOREVER)
+    const uint32_t low = static_cast<uint32_t>(npcFlags);
+    const uint32_t high = static_cast<uint32_t>(npcFlags >> 32);
+
+    bool changed = false;
+    if (m_foreverUnitFields.npcFlags != low)
+    {
+        m_foreverUnitFields.npcFlags = low;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::NpcFlagsBit);
+        changed = true;
+    }
+
+    if (m_foreverUnitFields.npcFlags2 != high)
+    {
+        m_foreverUnitFields.npcFlags2 = high;
+        m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::NpcFlags2Bit);
+        changed = true;
+    }
+
+    if (changed)
+        updateObject();
+#else
+    write(unitData()->npc_flags, npcFlags);
+#endif
+}
+
 void Unit::addNpcFlags(uint64_t npcFlags) { setNpcFlags(getNpcFlags() | npcFlags); }
 void Unit::removeNpcFlags(uint64_t npcFlags) { setNpcFlags(getNpcFlags() & ~npcFlags); }
 #endif
@@ -1581,19 +2125,95 @@ void Unit::removeNpcFlags(uint64_t npcFlags) { setNpcFlags(getNpcFlags() & ~npcF
 uint32_t Unit::getEmoteState() const { return unitData()->npc_emote_state; }
 void Unit::setEmoteState(uint32_t id) { write(unitData()->npc_emote_state, id); }
 
-uint32_t Unit::getStat(uint8_t stat) const { return unitData()->stat[stat]; }
-void Unit::setStat(uint8_t stat, uint32_t value) { write(unitData()->stat[stat], value); }
+uint32_t Unit::getStat(uint8_t stat) const
+{
+#if defined(AE_FOREVER)
+    return stat < m_foreverUnitFields.stats69913.size() ? static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.stats69913[stat])) : 0;
+#else
+    return unitData()->stat[stat];
+#endif
+}
+void Unit::setStat(uint8_t stat, uint32_t value)
+{
+#if defined(AE_FOREVER)
+    if (stat >= m_foreverUnitFields.stats69913.size() || m_foreverUnitFields.stats69913[stat] == static_cast<int32_t>(value))
+        return;
+
+    m_foreverUnitFields.stats69913[stat] = static_cast<int32_t>(value);
+    m_foreverUnitFields.markArrayChanged(AscEmu::Version::Forever::Fields::UnitData::StatsGroupBit, AscEmu::Version::Forever::Fields::UnitData::StatsFirstBit + stat);
+    updateObject();
+#else
+    write(unitData()->stat[stat], value);
+#endif
+}
 
 #if VERSION_STRING > Classic
-uint32_t Unit::getPosStat(uint8_t stat) const { return unitData()->positive_stat[stat]; }
-void Unit::setPosStat(uint8_t stat, uint32_t value) { write(unitData()->positive_stat[stat], value); }
+uint32_t Unit::getPosStat(uint8_t stat) const
+{
+#if defined(AE_FOREVER)
+    return stat < m_foreverUnitFields.statPosBuff69913.size() ? static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.statPosBuff69913[stat])) : 0;
+#else
+    return unitData()->positive_stat[stat];
+#endif
+}
+void Unit::setPosStat(uint8_t stat, uint32_t value)
+{
+#if defined(AE_FOREVER)
+    if (stat >= m_foreverUnitFields.statPosBuff69913.size() || m_foreverUnitFields.statPosBuff69913[stat] == static_cast<int32_t>(value))
+        return;
 
-uint32_t Unit::getNegStat(uint8_t stat) const { return unitData()->negative_stat[stat]; }
-void Unit::setNegStat(uint8_t stat, uint32_t value) { write(unitData()->negative_stat[stat], value); }
+    m_foreverUnitFields.statPosBuff69913[stat] = static_cast<int32_t>(value);
+    m_foreverUnitFields.markArrayChanged(AscEmu::Version::Forever::Fields::UnitData::StatsGroupBit, AscEmu::Version::Forever::Fields::UnitData::StatPosBuffFirstBit + stat);
+    updateObject();
+#else
+    write(unitData()->positive_stat[stat], value);
+#endif
+}
+
+uint32_t Unit::getNegStat(uint8_t stat) const
+{
+#if defined(AE_FOREVER)
+    return stat < m_foreverUnitFields.statNegBuff69913.size() ? static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.statNegBuff69913[stat])) : 0;
+#else
+    return unitData()->negative_stat[stat];
+#endif
+}
+void Unit::setNegStat(uint8_t stat, uint32_t value)
+{
+#if defined(AE_FOREVER)
+    if (stat >= m_foreverUnitFields.statNegBuff69913.size() || m_foreverUnitFields.statNegBuff69913[stat] == static_cast<int32_t>(value))
+        return;
+
+    m_foreverUnitFields.statNegBuff69913[stat] = static_cast<int32_t>(value);
+    m_foreverUnitFields.markArrayChanged(AscEmu::Version::Forever::Fields::UnitData::StatsGroupBit, AscEmu::Version::Forever::Fields::UnitData::StatNegBuffFirstBit + stat);
+    updateObject();
+#else
+    write(unitData()->negative_stat[stat], value);
+#endif
+}
 #endif
 
-uint32_t Unit::getResistance(uint8_t type) const { return unitData()->resistance[type]; }
-void Unit::setResistance(uint8_t type, uint32_t value) { write(unitData()->resistance[type], value); }
+uint32_t Unit::getResistance(uint8_t type) const
+{
+#if defined(AE_FOREVER)
+    return type < m_foreverUnitFields.resistances69913.size() ? static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.resistances69913[type])) : 0;
+#else
+    return unitData()->resistance[type];
+#endif
+}
+void Unit::setResistance(uint8_t type, uint32_t value)
+{
+#if defined(AE_FOREVER)
+    if (type >= m_foreverUnitFields.resistances69913.size() || m_foreverUnitFields.resistances69913[type] == static_cast<int32_t>(value))
+        return;
+
+    m_foreverUnitFields.resistances69913[type] = static_cast<int32_t>(value);
+    m_foreverUnitFields.markArrayChanged(AscEmu::Version::Forever::Fields::UnitData::ResistancesGroupBit, AscEmu::Version::Forever::Fields::UnitData::ResistancesFirstBit + type);
+    updateObject();
+#else
+    write(unitData()->resistance[type], value);
+#endif
+}
 
 #if VERSION_STRING > Classic
 uint32_t Unit::getResistanceBuffModPositive(uint8_t type) const { return unitData()->resistance_buff_mod_positive[type]; }
@@ -1603,11 +2223,49 @@ uint32_t Unit::getResistanceBuffModNegative(uint8_t type) const { return unitDat
 void Unit::setResistanceBuffModNegative(uint8_t type, uint32_t value) { write(unitData()->resistance_buff_mod_negative[type], value); }
 #endif
 
-uint32_t Unit::getBaseMana() const { return unitData()->base_mana; }
-void Unit::setBaseMana(uint32_t baseMana) { write(unitData()->base_mana, baseMana); }
+uint32_t Unit::getBaseMana() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.baseMana));
+#else
+    return unitData()->base_mana;
+#endif
+}
+void Unit::setBaseMana(uint32_t baseMana)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.baseMana == static_cast<int32_t>(baseMana))
+        return;
 
-uint32_t Unit::getBaseHealth() const { return unitData()->base_health; }
-void Unit::setBaseHealth(uint32_t baseHealth) { write(unitData()->base_health, baseHealth); }
+    m_foreverUnitFields.baseMana = static_cast<int32_t>(baseMana);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::BaseManaBit);
+    updateObject();
+#else
+    write(unitData()->base_mana, baseMana);
+#endif
+}
+
+uint32_t Unit::getBaseHealth() const
+{
+#if defined(AE_FOREVER)
+    return static_cast<uint32_t>(std::max<int32_t>(0, m_foreverUnitFields.baseHealth));
+#else
+    return unitData()->base_health;
+#endif
+}
+void Unit::setBaseHealth(uint32_t baseHealth)
+{
+#if defined(AE_FOREVER)
+    if (m_foreverUnitFields.baseHealth == static_cast<int32_t>(baseHealth))
+        return;
+
+    m_foreverUnitFields.baseHealth = static_cast<int32_t>(baseHealth);
+    m_foreverUnitFields.markChanged(AscEmu::Version::Forever::Fields::UnitData::BaseHealthBit);
+    updateObject();
+#else
+    write(unitData()->base_health, baseHealth);
+#endif
+}
 
 //byte_2 begin
 uint32_t Unit::getBytes2() const { return unitData()->field_bytes_2.raw; }
@@ -1682,7 +2340,13 @@ void Unit::setBytes2ForOffset(uint32_t offset, uint8_t value)
 }
 
 uint8_t Unit::getSheathType() const { return unitData()->field_bytes_2.s.sheath_type; }
-void Unit::setSheathType(uint8_t sheathType) { write(unitData()->field_bytes_2.s.sheath_type, sheathType); }
+void Unit::setSheathType(uint8_t sheathType)
+{
+    write(unitData()->field_bytes_2.s.sheath_type, sheathType);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.sheatheState = sheathType;
+#endif
+}
 
 #if VERSION_STRING == TBC
 uint8_t Unit::getPositiveAuraLimit() const { return unitData()->field_bytes_2.s.positive_aura_limit; }
@@ -1692,6 +2356,9 @@ uint8_t Unit::getPvpFlags() const { return unitData()->field_bytes_2.s.pvp_flag;
 void Unit::setPvpFlags(uint8_t pvpFlags)
 {
     write(unitData()->field_bytes_2.s.pvp_flag, pvpFlags);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.pvpFlags = pvpFlags;
+#endif
 
     // Update pvp flags also to group
     const auto plr = getPlayerOwnerOrSelf();
@@ -1714,12 +2381,24 @@ void Unit::removePvpFlags(uint8_t pvpFlags)
 
 #if VERSION_STRING >= TBC
 uint8_t Unit::getPetFlags() const { return unitData()->field_bytes_2.s.pet_flag; }
-void Unit::setPetFlags(uint8_t petFlags) { write(unitData()->field_bytes_2.s.pet_flag, petFlags); }
+void Unit::setPetFlags(uint8_t petFlags)
+{
+    write(unitData()->field_bytes_2.s.pet_flag, petFlags);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.petFlags = petFlags;
+#endif
+}
 void Unit::addPetFlags(uint8_t petFlags) { setPetFlags(getPetFlags() | petFlags); }
 void Unit::removePetFlags(uint8_t petFlags) { setPetFlags(getPetFlags() & ~petFlags); }
 
 uint8_t Unit::getShapeShiftForm() const { return unitData()->field_bytes_2.s.shape_shift_form; }
-void Unit::setShapeShiftForm(uint8_t shapeShiftForm) { write(unitData()->field_bytes_2.s.shape_shift_form, shapeShiftForm); }
+void Unit::setShapeShiftForm(uint8_t shapeShiftForm)
+{
+    write(unitData()->field_bytes_2.s.shape_shift_form, shapeShiftForm);
+#if defined(AE_FOREVER)
+    m_foreverUnitFields.shapeshiftForm = shapeShiftForm;
+#endif
+}
 #endif
 //bytes_2 end
 

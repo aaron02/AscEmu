@@ -166,7 +166,6 @@ enum ObjectUpdateFlags : uint16_t
 };
 
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
 enum TrainerSpellState : uint8_t
 {
     TRAINER_SPELL_GRAY                  = 0,
@@ -175,6 +174,8 @@ enum TrainerSpellState : uint8_t
     TRAINER_SPELL_GREEN_DISABLED        = 10
 };
 
+// Compatibility only. Forever does not serialize the old descriptor update flags as a uint16 mask.
+// Keep these names while legacy world-object code is migrated to the modern fragment serializer.
 enum ObjectUpdateFlags : uint16_t
 {
     UPDATEFLAG_NONE                     = 0x0000,
@@ -182,11 +183,36 @@ enum ObjectUpdateFlags : uint16_t
     UPDATEFLAG_TRANSPORT                = 0x0002,
     UPDATEFLAG_HAS_TARGET               = 0x0004,
     UPDATEFLAG_LIVING                   = 0x0008,
-    UPDATEFLAG_HAS_POSITION             = 0x0010, //stationary
+    UPDATEFLAG_HAS_POSITION             = 0x0010,
     UPDATEFLAG_VEHICLE                  = 0x0020,
-    UPDATEFLAG_POSITION                 = 0x0040, //transport position
+    UPDATEFLAG_POSITION                 = 0x0040,
     UPDATEFLAG_ROTATION                 = 0x0080,
     UPDATEFLAG_ANIM_KITS                = 0x0100,
+};
+
+enum class ForeverCreateObjectBit : uint8_t
+{
+    HasEntityPosition = 0,
+    NoBirthAnim,
+    EnablePortals,
+    PlayHoverAnim,
+    ThisIsYou,
+    MovementUpdate,
+    MovementTransport,
+    Stationary,
+    CombatVictim,
+    ServerTime,
+    Vehicle,
+    AnimKit,
+    Rotation,
+    GameObject,
+    SmoothPhasing,
+    SceneObject,
+    ActivePlayer,
+    Conversation,
+    Room,
+    Decor,
+    MeshObject
 };
 
 #endif

@@ -689,7 +689,7 @@ bool WorldSocket::initializeVersionedConnection()
     WoW::ClientProtocol protocol;
     protocol.expansion = WoW::Expansion::Unknown;
     protocol.flavor = WoW::ProtocolFlavor::Forever;
-    protocol.realmId = m_foreverRealmId;
+    protocol.realmId = 0;
     setClientProtocol(protocol);
 
     m_foreverClientBuild = AscEmu::Version::Forever::Build;
@@ -1176,7 +1176,6 @@ bool WorldSocket::processForeverAuthSession(
     m_foreverRegionId = regionId;
     m_foreverBattlegroupId = battlegroupId;
     m_foreverRealmId = realmId;
-    m_protocol.realmId = realmId;
 
     std::array<uint8_t, 32> localChallenge{};
     std::memcpy(
@@ -1402,7 +1401,6 @@ bool WorldSocket::processForeverAuthContinuedSession(uint32_t opcode, const std:
     m_foreverRegionId = pending.regionId;
     m_foreverBattlegroupId = pending.battlegroupId;
     m_foreverRealmId = pending.realmId;
-    m_protocol.realmId = pending.realmId;
     m_foreverSessionKey = pending.sessionKey;
     if (!deriveForeverEncryptionKeyFromSession(m_foreverSessionKey, localChallenge, m_foreverServerChallenge, m_foreverEncryptionKey))
         return false;

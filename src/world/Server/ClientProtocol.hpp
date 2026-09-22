@@ -48,7 +48,7 @@ namespace WoW {
     {
         Expansion expansion{Expansion::Unknown};
         ProtocolFlavor flavor{ProtocolFlavor::Legacy};
-        uint32_t realmId{0};
+        uint32_t realmId{0}; // wire GUID realm component for this client protocol
 
         /*[[nodiscard]] constexpr int32_t versionId() const noexcept
         {

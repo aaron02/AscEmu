@@ -44,6 +44,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/EventMgr.h"
 #include "Server/World.h"
 #include "Server/WorldSession.h"
+#include "Server/WorldSocket.hpp"
 #include "Spell/Spell.hpp"
 #include "Spell/SpellAura.hpp"
 #include "Spell/SpellInfo.hpp"
@@ -555,11 +556,10 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
 #if defined(AE_FOREVER_ENABLE_CREATURE_CREATES)
     if (isCreature())
     {
-        const WoWGuid modernGuid = WoWGuid::createModernFromLegacy(
-            m_wowGuid.getRawGuid(),
-            target->getForeverRealmId(),
-            static_cast<uint16_t>(GetMapId()),
-            0);
+        WorldSession* const session = target->getSession();
+        WorldSocket* const socket = session != nullptr ? session->GetSocket() : nullptr;
+        const uint32_t realmId = socket != nullptr ? socket->getClientProtocol().realmId : 0;
+        const WoWGuid modernGuid = WoWGuid::createModernFromLegacy(m_wowGuid.getRawGuid(), realmId, static_cast<uint16_t>(GetMapId()), 0);
         const std::vector<uint8_t> packedGuid = modernGuid.packModern();
         if (packedGuid.empty())
             return 0;

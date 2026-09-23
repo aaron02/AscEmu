@@ -1403,12 +1403,54 @@ uint16_t Player::getSkillInfoCurrentValue(uint32_t index) const { return playerD
 uint16_t Player::getSkillInfoMaxValue(uint32_t index) const { return playerData()->skill_info[index].max_value; }
 uint16_t Player::getSkillInfoBonusTemporary(uint32_t index) const { return playerData()->skill_info[index].bonus_temporary; }
 uint16_t Player::getSkillInfoBonusPermanent(uint32_t index) const { return playerData()->skill_info[index].bonus_permanent; }
-void Player::setSkillInfoId(uint32_t index, uint16_t id) { write(playerData()->skill_info[index].id, id); }
-void Player::setSkillInfoStep(uint32_t index, uint16_t step) { write(playerData()->skill_info[index].step, step); }
-void Player::setSkillInfoCurrentValue(uint32_t index, uint16_t current) { write(playerData()->skill_info[index].current_value, current); }
-void Player::setSkillInfoMaxValue(uint32_t index, uint16_t max) { write(playerData()->skill_info[index].max_value, max); }
-void Player::setSkillInfoBonusTemporary(uint32_t index, uint16_t bonus) { write(playerData()->skill_info[index].bonus_temporary, bonus); }
-void Player::setSkillInfoBonusPermanent(uint32_t index, uint16_t bonus) { write(playerData()->skill_info[index].bonus_permanent, bonus); }
+void Player::setSkillInfoId(uint32_t index, uint16_t id)
+{
+    write(playerData()->skill_info[index].id, id);
+#if defined(AE_FOREVER)
+    if (index < m_foreverActivePlayerFields.skill.skillLineId.size())
+        m_foreverActivePlayerFields.skill.skillLineId[index] = id;
+#endif
+}
+void Player::setSkillInfoStep(uint32_t index, uint16_t step)
+{
+    write(playerData()->skill_info[index].step, step);
+#if defined(AE_FOREVER)
+    if (index < m_foreverActivePlayerFields.skill.skillStep.size())
+        m_foreverActivePlayerFields.skill.skillStep[index] = step;
+#endif
+}
+void Player::setSkillInfoCurrentValue(uint32_t index, uint16_t current)
+{
+    write(playerData()->skill_info[index].current_value, current);
+#if defined(AE_FOREVER)
+    if (index < m_foreverActivePlayerFields.skill.skillRank.size())
+        m_foreverActivePlayerFields.skill.skillRank[index] = current;
+#endif
+}
+void Player::setSkillInfoMaxValue(uint32_t index, uint16_t max)
+{
+    write(playerData()->skill_info[index].max_value, max);
+#if defined(AE_FOREVER)
+    if (index < m_foreverActivePlayerFields.skill.skillMaxRank.size())
+        m_foreverActivePlayerFields.skill.skillMaxRank[index] = max;
+#endif
+}
+void Player::setSkillInfoBonusTemporary(uint32_t index, uint16_t bonus)
+{
+    write(playerData()->skill_info[index].bonus_temporary, bonus);
+#if defined(AE_FOREVER)
+    if (index < m_foreverActivePlayerFields.skill.skillTempBonus.size())
+        m_foreverActivePlayerFields.skill.skillTempBonus[index] = static_cast<int16_t>(bonus);
+#endif
+}
+void Player::setSkillInfoBonusPermanent(uint32_t index, uint16_t bonus)
+{
+    write(playerData()->skill_info[index].bonus_permanent, bonus);
+#if defined(AE_FOREVER)
+    if (index < m_foreverActivePlayerFields.skill.skillPermBonus.size())
+        m_foreverActivePlayerFields.skill.skillPermBonus[index] = bonus;
+#endif
+}
 #else
 uint16_t Player::getSkillInfoId(uint32_t index, uint8_t offset) const { return *(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_line[index]) + offset); }
 uint16_t Player::getSkillInfoStep(uint32_t index, uint8_t offset) const { return *(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_step[index]) + offset); }
@@ -1417,12 +1459,60 @@ uint16_t Player::getSkillInfoMaxValue(uint32_t index, uint8_t offset) const { re
 uint16_t Player::getSkillInfoBonusTemporary(uint32_t index, uint8_t offset) const { return *(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_mod[index]) + offset); }
 uint16_t Player::getSkillInfoBonusPermanent(uint32_t index, uint8_t offset) const { return *(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_talent[index]) + offset); }
 uint32_t Player::getProfessionSkillLine(uint32_t index) const { return playerData()->profession_skill_line[index]; }
-void Player::setSkillInfoId(uint32_t index, uint8_t offset, uint16_t id) { write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_line[index]) + offset), id); }
-void Player::setSkillInfoStep(uint32_t index, uint8_t offset, uint16_t step) { write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_step[index]) + offset), step); }
-void Player::setSkillInfoCurrentValue(uint32_t index, uint8_t offset, uint16_t current) { write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_rank[index]) + offset), current); }
-void Player::setSkillInfoMaxValue(uint32_t index, uint8_t offset, uint16_t max) { write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_max_rank[index]) + offset), max); }
-void Player::setSkillInfoBonusTemporary(uint32_t index, uint8_t offset, uint16_t bonus) { write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_mod[index]) + offset), bonus); }
-void Player::setSkillInfoBonusPermanent(uint32_t index, uint8_t offset, uint16_t bonus) { write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_talent[index]) + offset), bonus); }
+void Player::setSkillInfoId(uint32_t index, uint8_t offset, uint16_t id)
+{
+    write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_line[index]) + offset), id);
+#if defined(AE_FOREVER)
+    const std::size_t slot = static_cast<std::size_t>(index) * 2U + offset;
+    if (slot < m_foreverActivePlayerFields.skill.skillLineId.size())
+        m_foreverActivePlayerFields.skill.skillLineId[slot] = id;
+#endif
+}
+void Player::setSkillInfoStep(uint32_t index, uint8_t offset, uint16_t step)
+{
+    write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_step[index]) + offset), step);
+#if defined(AE_FOREVER)
+    const std::size_t slot = static_cast<std::size_t>(index) * 2U + offset;
+    if (slot < m_foreverActivePlayerFields.skill.skillStep.size())
+        m_foreverActivePlayerFields.skill.skillStep[slot] = step;
+#endif
+}
+void Player::setSkillInfoCurrentValue(uint32_t index, uint8_t offset, uint16_t current)
+{
+    write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_rank[index]) + offset), current);
+#if defined(AE_FOREVER)
+    const std::size_t slot = static_cast<std::size_t>(index) * 2U + offset;
+    if (slot < m_foreverActivePlayerFields.skill.skillRank.size())
+        m_foreverActivePlayerFields.skill.skillRank[slot] = current;
+#endif
+}
+void Player::setSkillInfoMaxValue(uint32_t index, uint8_t offset, uint16_t max)
+{
+    write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_max_rank[index]) + offset), max);
+#if defined(AE_FOREVER)
+    const std::size_t slot = static_cast<std::size_t>(index) * 2U + offset;
+    if (slot < m_foreverActivePlayerFields.skill.skillMaxRank.size())
+        m_foreverActivePlayerFields.skill.skillMaxRank[slot] = max;
+#endif
+}
+void Player::setSkillInfoBonusTemporary(uint32_t index, uint8_t offset, uint16_t bonus)
+{
+    write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_mod[index]) + offset), bonus);
+#if defined(AE_FOREVER)
+    const std::size_t slot = static_cast<std::size_t>(index) * 2U + offset;
+    if (slot < m_foreverActivePlayerFields.skill.skillTempBonus.size())
+        m_foreverActivePlayerFields.skill.skillTempBonus[slot] = static_cast<int16_t>(bonus);
+#endif
+}
+void Player::setSkillInfoBonusPermanent(uint32_t index, uint8_t offset, uint16_t bonus)
+{
+    write(*(((uint16_t*)&playerData()->field_skill_info.skill_info_parts.skill_talent[index]) + offset), bonus);
+#if defined(AE_FOREVER)
+    const std::size_t slot = static_cast<std::size_t>(index) * 2U + offset;
+    if (slot < m_foreverActivePlayerFields.skill.skillPermBonus.size())
+        m_foreverActivePlayerFields.skill.skillPermBonus[slot] = bonus;
+#endif
+}
 void Player::setProfessionSkillLine(uint32_t index, uint32_t value) { write(playerData()->profession_skill_line[index], value); }
 #endif
 
@@ -10605,8 +10695,15 @@ void Player::sendPartyKillLogPacket(uint64_t killedGuid)
 
 void Player::sendDestroyObjectPacket(uint64_t destroyedGuid)
 {
+#if defined(AE_FOREVER)
+    // Modern retail carries explicit destroys inside SMSG_UPDATE_OBJECT.
+    // UpdateManager keeps them separate from ordinary out-of-range removals
+    // and writes destroy GUIDs first in the shared removal list.
+    getUpdateMgr().pushDestroyGuid(WoWGuid(destroyedGuid));
+#else
     SmsgDestroyObject managedPacket(destroyedGuid);
     m_session->sendManagedPacket(managedPacket);
+#endif
 }
 
 void Player::sendEquipmentSetUseResultPacket(uint8_t result)
@@ -15950,10 +16047,6 @@ void Player::loadFromDBProc(QueryResultVector& results)
     // set xp
     const uint32_t dbXp = field[8].asUint32();
     setXp(dbXp);
-#if defined(AE_FOREVER)
-    sLogger.info("Player::Forever: XP load guid={} dbXp={} activeXp={} nextLevelXp={} level={}",
-        getGuidLow(), dbXp, getXp(), getNextLevelXp(), getLevel());
-#endif
 
     // Load active cheats
     uint32_t active_cheats = field[9].asUint32();

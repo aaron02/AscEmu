@@ -357,20 +357,7 @@ namespace {
         auto const* rogueClass = sChrClassesStore.lookupEntry(4);
         auto const* humanFactionTemplate = sFactionTemplateStore.lookupEntry(humanRace ? humanRace->factionId : 0U);
         auto const* humanFaction = humanFactionTemplate ? sFactionStore.lookupEntry(humanFactionTemplate->faction) : nullptr;
-        sLogger.info(
-            "Forever WDC5: loaded ChrModel={} (layout=0x{:08X}), ChrRaceXChrModel={} (layout=0x{:08X}), ChrRaces={} (layout=0x{:08X}), ChrClasses={} (layout=0x{:08X}), Faction={} (layout=0x{:08X}), FactionTemplate={} (layout=0x{:08X}); human female displayId={}, human teamId={}, rogue powerType={}, human factionTemplate={} -> faction={} (loaded={}).",
-            sChrModelStore.getNumRows(), chrModel.getLayoutHash(),
-            sChrRaceXChrModelStore.getNumRows(), chrRaceXChrModel.getLayoutHash(),
-            sChrRacesStore.getNumRows(), chrRaces.getLayoutHash(),
-            sChrClassesStore.getNumRows(), chrClasses.getLayoutHash(),
-            sFactionStore.getNumRows(), faction.getLayoutHash(),
-            sFactionTemplateStore.getNumRows(), factionTemplate.getLayoutHash(),
-            humanFemale ? humanFemale->displayId : 0U,
-            humanRace ? humanRace->teamId : 0U,
-            rogueClass ? rogueClass->powerType : 0U,
-            humanRace ? humanRace->factionId : 0U,
-            humanFactionTemplate ? humanFactionTemplate->faction : 0U,
-            humanFaction != nullptr);
+        sLogger.info("Forever WDC5: loaded ChrModel={} (layout=0x{:08X}), ChrRaceXChrModel={} (layout=0x{:08X}), ChrRaces={} (layout=0x{:08X}), ChrClasses={} (layout=0x{:08X}), Faction={} (layout=0x{:08X}), FactionTemplate={} (layout=0x{:08X}); human female displayId={}, human teamId={}, rogue powerType={}, human factionTemplate={} -> faction={} (loaded={}).", sChrModelStore.getNumRows(), chrModel.getLayoutHash(), sChrRaceXChrModelStore.getNumRows(), chrRaceXChrModel.getLayoutHash(), sChrRacesStore.getNumRows(), chrRaces.getLayoutHash(), sChrClassesStore.getNumRows(), chrClasses.getLayoutHash(), sFactionStore.getNumRows(), faction.getLayoutHash(), sFactionTemplateStore.getNumRows(), factionTemplate.getLayoutHash(), humanFemale ? humanFemale->displayId : 0U, humanRace ? humanRace->teamId : 0U, rogueClass ? rogueClass->powerType : 0U, humanRace ? humanRace->factionId : 0U, humanFactionTemplate ? humanFactionTemplate->faction : 0U, humanFaction != nullptr);
 
         return true;
     }
@@ -381,16 +368,11 @@ namespace {
         WDB::WDC5File creatureDisplayInfoExtra;
         WDB::WDC5File creatureModelData;
 
-        bool const displayInfoLoaded = loadForeverWDC5(
-            creatureDisplayInfo, ForeverFormat::CreatureDisplayInfo, errors, dbcPath);
-        bool const displayInfoExtraLoaded = loadForeverWDC5(
-            creatureDisplayInfoExtra, ForeverFormat::CreatureDisplayInfoExtra, errors, dbcPath);
-        bool const modelDataLoaded = loadForeverWDC5(
-            creatureModelData, ForeverFormat::CreatureModelData, errors, dbcPath);
+        bool const displayInfoLoaded = loadForeverWDC5(creatureDisplayInfo, ForeverFormat::CreatureDisplayInfo, errors, dbcPath);
+        bool const displayInfoExtraLoaded = loadForeverWDC5(creatureDisplayInfoExtra, ForeverFormat::CreatureDisplayInfoExtra, errors, dbcPath);
+        bool const modelDataLoaded = loadForeverWDC5(creatureModelData, ForeverFormat::CreatureModelData, errors, dbcPath);
 
-        sLogger.info(
-            "Forever WDC5 creature load result: CreatureDisplayInfo={} CreatureDisplayInfoExtra={} CreatureModelData={}.",
-            displayInfoLoaded, displayInfoExtraLoaded, modelDataLoaded);
+        sLogger.info("Forever WDC5 creature load result: CreatureDisplayInfo={} CreatureDisplayInfoExtra={} CreatureModelData={}.", displayInfoLoaded, displayInfoExtraLoaded, modelDataLoaded);
 
         if (displayInfoLoaded)
         {
@@ -405,14 +387,11 @@ namespace {
                 sCreatureDisplayInfoStore[entry.id] = std::move(entry);
             }
 
-            sLogger.info(
-                "Forever WDC5: loaded CreatureDisplayInfo={} (records={}, layout=0x{:08X}).",
-                sCreatureDisplayInfoStore.getNumRows(), creatureDisplayInfo.getRecordCount(), creatureDisplayInfo.getLayoutHash());
+            sLogger.info("Forever WDC5: loaded CreatureDisplayInfo={} (records={}, layout=0x{:08X}).", sCreatureDisplayInfoStore.getNumRows(), creatureDisplayInfo.getRecordCount(), creatureDisplayInfo.getLayoutHash());
         }
         else
         {
-            sLogger.failure("Forever WDC5: CreatureDisplayInfo.db2 was not loaded; existing store size={}.",
-                sCreatureDisplayInfoStore.getNumRows());
+            sLogger.failure("Forever WDC5: CreatureDisplayInfo.db2 was not loaded; existing store size={}.", sCreatureDisplayInfoStore.getNumRows());
         }
 
         if (displayInfoExtraLoaded)
@@ -427,14 +406,11 @@ namespace {
                 sCreatureDisplayInfoExtraStore[entry.displayExtraId] = std::move(entry);
             }
 
-            sLogger.info(
-                "Forever WDC5: loaded CreatureDisplayInfoExtra={} (records={}, layout=0x{:08X}).",
-                sCreatureDisplayInfoExtraStore.getNumRows(), creatureDisplayInfoExtra.getRecordCount(), creatureDisplayInfoExtra.getLayoutHash());
+            sLogger.info("Forever WDC5: loaded CreatureDisplayInfoExtra={} (records={}, layout=0x{:08X}).", sCreatureDisplayInfoExtraStore.getNumRows(), creatureDisplayInfoExtra.getRecordCount(), creatureDisplayInfoExtra.getLayoutHash());
         }
         else
         {
-            sLogger.failure("Forever WDC5: CreatureDisplayInfoExtra.db2 was not loaded; existing store size={}.",
-                sCreatureDisplayInfoExtraStore.getNumRows());
+            sLogger.failure("Forever WDC5: CreatureDisplayInfoExtra.db2 was not loaded; existing store size={}.", sCreatureDisplayInfoExtraStore.getNumRows());
         }
 
         if (modelDataLoaded)
@@ -452,14 +428,11 @@ namespace {
                 sCreatureModelDataStore[entry.id] = std::move(entry);
             }
 
-            sLogger.info(
-                "Forever WDC5: loaded CreatureModelData={} (records={}, layout=0x{:08X}).",
-                sCreatureModelDataStore.getNumRows(), creatureModelData.getRecordCount(), creatureModelData.getLayoutHash());
+            sLogger.info("Forever WDC5: loaded CreatureModelData={} (records={}, layout=0x{:08X}).", sCreatureModelDataStore.getNumRows(), creatureModelData.getRecordCount(), creatureModelData.getLayoutHash());
         }
         else
         {
-            sLogger.failure("Forever WDC5: CreatureModelData.db2 was not loaded; existing store size={}.",
-                sCreatureModelDataStore.getNumRows());
+            sLogger.failure("Forever WDC5: CreatureModelData.db2 was not loaded; existing store size={}.", sCreatureModelDataStore.getNumRows());
         }
 
         return displayInfoLoaded && displayInfoExtraLoaded && modelDataLoaded;
@@ -611,14 +584,7 @@ namespace {
             }
         }
 
-        sLogger.info(
-            "Forever WDC5 customizations: ChrCustomization={} BoneSet={} Category={} Choice={} CondModel={} Conversion={} DisplayInfo={} Element={} Geoset={} GlyphPet={} Material={} Option={} Req={} ReqChoice={} SkinnedModel={} VisReq={} Voice={}; typed stores Choice={} Option={} Element={} DisplayInfo={} Req={} ReqChoice={}; human female options={} choices={}.",
-            customization.getRecordCount(), boneSet.getRecordCount(), category.getRecordCount(), choice.getRecordCount(), condModel.getRecordCount(),
-            conversion.getRecordCount(), displayInfo.getRecordCount(), element.getRecordCount(), geoset.getRecordCount(), glyphPet.getRecordCount(),
-            material.getRecordCount(), option.getRecordCount(), req.getRecordCount(), reqChoice.getRecordCount(), skinnedModel.getRecordCount(),
-            visReq.getRecordCount(), voice.getRecordCount(), sChrCustomizationChoiceStore.getNumRows(), sChrCustomizationOptionStore.getNumRows(),
-            sChrCustomizationElementStore.getNumRows(), sChrCustomizationDisplayInfoStore.getNumRows(), sChrCustomizationReqStore.getNumRows(),
-            sChrCustomizationReqChoiceStore.getNumRows(), humanFemaleOptions, humanFemaleChoices);
+        sLogger.info("Forever WDC5 customizations: ChrCustomization={} BoneSet={} Category={} Choice={} CondModel={} Conversion={} DisplayInfo={} Element={} Geoset={} GlyphPet={} Material={} Option={} Req={} ReqChoice={} SkinnedModel={} VisReq={} Voice={}; typed stores Choice={} Option={} Element={} DisplayInfo={} Req={} ReqChoice={}; human female options={} choices={}.", customization.getRecordCount(), boneSet.getRecordCount(), category.getRecordCount(), choice.getRecordCount(), condModel.getRecordCount(), conversion.getRecordCount(), displayInfo.getRecordCount(), element.getRecordCount(), geoset.getRecordCount(), glyphPet.getRecordCount(), material.getRecordCount(), option.getRecordCount(), req.getRecordCount(), reqChoice.getRecordCount(), skinnedModel.getRecordCount(), visReq.getRecordCount(), voice.getRecordCount(), sChrCustomizationChoiceStore.getNumRows(), sChrCustomizationOptionStore.getNumRows(), sChrCustomizationElementStore.getNumRows(), sChrCustomizationDisplayInfoStore.getNumRows(), sChrCustomizationReqStore.getNumRows(), sChrCustomizationReqChoiceStore.getNumRows(), humanFemaleOptions, humanFemaleChoices);
 
         return true;
     }
@@ -684,11 +650,7 @@ namespace {
         }
         sTaxiPathNodeStore.assignEntries(pathNodeEntries);
 
-        sLogger.info(
-            "Forever WDC5 taxi: TaxiNodes={} records (rows={}, layout=0x{:08X}), TaxiPath={} records (rows={}, layout=0x{:08X}), TaxiPathNode={} records (rows={}, layout=0x{:08X}).",
-            taxiNodes.getRecordCount(), sTaxiNodesStore.getNumRows(), taxiNodes.getLayoutHash(),
-            taxiPath.getRecordCount(), sTaxiPathStore.getNumRows(), taxiPath.getLayoutHash(),
-            taxiPathNode.getRecordCount(), sTaxiPathNodeStore.getNumRows(), taxiPathNode.getLayoutHash());
+        sLogger.info("Forever WDC5 taxi: TaxiNodes={} records (rows={}, layout=0x{:08X}), TaxiPath={} records (rows={}, layout=0x{:08X}), TaxiPathNode={} records (rows={}, layout=0x{:08X}).", taxiNodes.getRecordCount(), sTaxiNodesStore.getNumRows(), taxiNodes.getLayoutHash(), taxiPath.getRecordCount(), sTaxiPathStore.getNumRows(), taxiPath.getLayoutHash(), taxiPathNode.getRecordCount(), sTaxiPathNodeStore.getNumRows(), taxiPathNode.getLayoutHash());
 
         return !nodeEntries.empty() && !pathEntries.empty() && !pathNodeEntries.empty();
     }
@@ -759,11 +721,7 @@ namespace {
         sItemRandomPropertiesStore.clear();
         sItemRandomSuffixStore.clear();
 
-        sLogger.info(
-            "Forever WDC5 items: ItemSet={} records (layout=0x{:08X}), ItemSetSpell={} records (layout=0x{:08X}), merged generic bonuses={}, ignored specialization/trait bonuses={}; ItemRandomProperties/ItemRandomSuffix are legacy-only and remain empty.",
-            itemSet.getRecordCount(), itemSet.getLayoutHash(),
-            itemSetSpell.getRecordCount(), itemSetSpell.getLayoutHash(),
-            mergedGenericBonuses, ignoredSpecializedBonuses);
+        sLogger.info("Forever WDC5 items: ItemSet={} records (layout=0x{:08X}), ItemSetSpell={} records (layout=0x{:08X}), merged generic bonuses={}, ignored specialization/trait bonuses={}; ItemRandomProperties/ItemRandomSuffix are legacy-only and remain empty.", itemSet.getRecordCount(), itemSet.getLayoutHash(), itemSetSpell.getRecordCount(), itemSetSpell.getLayoutHash(), mergedGenericBonuses, ignoredSpecializedBonuses);
 
         return true;
     }
@@ -843,15 +801,7 @@ namespace {
 
         auto const* map0 = sMapStore.lookupEntry(0);
         auto const* map1 = sMapStore.lookupEntry(1);
-        sLogger.info(
-            "Forever WDC5 maps: Map={} readable (+{} encrypted skipped, layout=0x{:08X}), MapDifficulty={} readable (+{} encrypted skipped, layout=0x{:08X}), UiMapAssignment={} (layout=0x{:08X}), WorldMapOverlay={} (layout=0x{:08X}); map0={} type={}, map1={} type={}, legacy WorldMapArea={}.",
-            sMapStore.getNumRows(), map.getSkippedEncryptedRecordCount(), map.getLayoutHash(),
-            sMapDifficultyStore.getNumRows(), mapDifficulty.getSkippedEncryptedRecordCount(), mapDifficulty.getLayoutHash(),
-            uiMapAssignment.getRecordCount(), uiMapAssignment.getLayoutHash(),
-            sWorldMapOverlayStore.getNumRows(), worldMapOverlay.getLayoutHash(),
-            map0 != nullptr, map0 ? map0->mapType : 0U,
-            map1 != nullptr, map1 ? map1->mapType : 0U,
-            sWorldMapAreaStore.getNumRows());
+        sLogger.info("Forever WDC5 maps: Map={} readable (+{} encrypted skipped, layout=0x{:08X}), MapDifficulty={} readable (+{} encrypted skipped, layout=0x{:08X}), UiMapAssignment={} (layout=0x{:08X}), WorldMapOverlay={} (layout=0x{:08X}); map0={} type={}, map1={} type={}, legacy WorldMapArea={}.", sMapStore.getNumRows(), map.getSkippedEncryptedRecordCount(), map.getLayoutHash(), sMapDifficultyStore.getNumRows(), mapDifficulty.getSkippedEncryptedRecordCount(), mapDifficulty.getLayoutHash(), uiMapAssignment.getRecordCount(), uiMapAssignment.getLayoutHash(), sWorldMapOverlayStore.getNumRows(), worldMapOverlay.getLayoutHash(), map0 != nullptr, map0 ? map0->mapType : 0U, map1 != nullptr, map1 ? map1->mapType : 0U, sWorldMapAreaStore.getNumRows());
 
         return map0 != nullptr;
     }

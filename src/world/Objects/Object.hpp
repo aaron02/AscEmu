@@ -509,11 +509,7 @@ public:
         }
 
         ////////////////////////////////////////
-        void ClearUpdateMask()
-        {
-            m_updateMask.Clear();
-            m_objectUpdated = false;
-        }
+        void ClearUpdateMask();
 
         bool HasUpdateField(uint32_t index)
         {

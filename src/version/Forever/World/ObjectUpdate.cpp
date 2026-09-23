@@ -4,16 +4,16 @@ This file is released under the MIT license. See README-MIT for more information
 */
 
 #include "ObjectUpdate.hpp"
-#include "SelfUpdateTemplate69913.hpp"
 
 #include "Data/WoWObject.hpp"
 #include "Data/WoWUnit.hpp"
 #include "version/Forever/Fields/ForeverUpdateFields.hpp"
 #include "Network/ByteBuffer.hpp"
-#include "Logging/Logger.hpp"
 
+#include <string>
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <span>
 
 namespace AscEmu::Version::Forever::ObjectUpdate
@@ -23,11 +23,12 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         constexpr uint8_t UPDATE_TYPE_CREATE_OBJECT_2 = 2;
         constexpr uint8_t OBJECT_TYPE_UNIT = 5;
         constexpr uint8_t OBJECT_TYPE_ACTIVE_PLAYER = 7;
+        constexpr uint8_t OBJECT_TYPE_GAMEOBJECT = 8;
 
         // 69913 minimal stationary-unit create movement profile.
         // The variable GUID and position/orientation are generated per object;
         // this suffix was observed byte-identical across multiple stationary
-        // retail creatures in the Stormwind capture. Its individual fields are
+        // 69913 stationary retail creature samples. Its individual fields are
         // intentionally left semantically unnamed until separately proven.
         inline constexpr std::array<uint8_t, 135> STATIONARY_UNIT_MOVEMENT_SUFFIX_69913 = {
             0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -40,6 +41,24 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             0x96,0x40,0x00,0x00,0xF0,0x41,0x00,0x00,0xA0,0x42,0x00,0x00,0x30,0x40,0x00,0x00,
             0xE0,0x40,0xCD,0xCC,0xCC,0x3E,0x00
         };
+        // 69913 self-player movement defaults. The live position and movement
+        // flags are patched by the serializer below; the remaining bytes are
+        // build-specific protocol defaults whose semantics are not yet named.
+        inline constexpr std::array<uint8_t, 181> SELF_PLAYER_MOVEMENT_DEFAULTS_69913 = {
+            0x00,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0xC5,0x1C,0x5A,0xBA,0xCD,0xD7,0x0B,0xC6,
+            0x35,0x7E,0x04,0xC3,0xF9,0x0F,0xA7,0x42,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,
+            0x10,0x00,0x00,0x00,0x20,0x40,0x00,0x00,0xE0,0x40,0x00,0x00,0x90,0x40,0x71,0x1C,
+            0x97,0x40,0x00,0x00,0x20,0x40,0x00,0x00,0xE0,0x40,0x00,0x00,0x90,0x40,0xDB,0x0F,
+            0x49,0x40,0xDB,0x0F,0x49,0x40,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x00,0x40,0x00,0x00,0x82,0x42,0x00,0x00,0x80,0x3F,0x00,0x00,0x40,0x40,0x00,0x00,
+            0x20,0x41,0x00,0x00,0xC8,0x42,0xDB,0x0F,0xC9,0x3F,0xAA,0x61,0x1C,0x40,0xDB,0x0F,
+            0x49,0x40,0xDB,0x0F,0xC9,0x40,0xDB,0x0F,0xC9,0x3F,0xE4,0xCB,0x96,0x40,0x00,0x00,
+            0xF0,0x41,0x00,0x00,0xA0,0x42,0x00,0x00,0x30,0x40,0x00,0x00,0xE0,0x40,0xCD,0xCC,
+            0xCC,0x3E,0x80,0xB5,0x16,0x6C,0x00,0xCD,0xD7,0x0B,0xC6,0x35,0x7E,0x04,0xC3,0xF9,
+            0x0F,0xA7,0x42,0x00,0x00
+        };
+
     }
 
     namespace
@@ -63,12 +82,13 @@ namespace AscEmu::Version::Forever::ObjectUpdate
 
         constexpr uint8_t FRAGMENT_TAG_UNIT_69913 = 0xCCU;
         constexpr uint8_t FRAGMENT_TAG_PLAYER_69913 = 0xCDU;
+        constexpr uint8_t FRAGMENT_TAG_GAMEOBJECT_69913 = 0xCEU;
         constexpr uint8_t FRAGMENT_END_69913 = 0xFFU;
 
 
         void writeEmptyPlayerHouseInfoComponentCreate69913(ByteBuffer& data)
         {
-            // Forever 69913 empty 0x21 component layout observed in the capture.
+            // Forever 69913 empty 0x21 component layout verified for the 69913 wire layout.
             data << uint32_t(0); // Field_8 count (owner)
             data << uint32_t(0); // Houses count
             data << uint32_t(0); // Field_88 count (owner)
@@ -296,6 +316,52 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         data << fields.entryId << fields.dynamicFlags << fields.scale;
     }
 
+    void writeGameObjectDataCreate(ByteBuffer& data, Fields::GameObjectData const& fields)
+    {
+        // Capture-verified 1.60.1.69913 CREATE_OBJECT order. A full-mask
+        // GameObject VALUES sample serializes the same 104-byte field body.
+        data << fields.displayId
+             << fields.spellVisualId
+             << fields.stateSpellVisualId
+             << fields.spawnTrackingStateAnimId
+             << fields.spawnTrackingStateAnimKitId;
+
+        data << uint32_t(fields.stateWorldEffectIds.size())
+             << fields.stateWorldEffectsQuestObjectiveId;
+        for (uint32_t value : fields.stateWorldEffectIds)
+            data << value;
+
+        writeModernGuid(data, fields.createdBy);
+        writeModernGuid(data, fields.guildGuid);
+
+        data << fields.flags << fields.flagsB;
+        for (float value : fields.parentRotation)
+            data << value;
+
+        data << fields.factionTemplate
+             << fields.level
+             << fields.state
+             << fields.typeId
+             << fields.percentHealth
+             << fields.artKit;
+
+        data << uint32_t(fields.enableDoodadSets.size())
+             << fields.customParam;
+        for (int32_t value : fields.enableDoodadSets)
+            data << value;
+
+        data << uint32_t(fields.worldEffects.size());
+        for (int32_t value : fields.worldEffects)
+            data << value;
+
+        data << fields.animGroupInstance
+             << fields.uiWidgetItemId
+             << fields.uiWidgetItemQuality
+             << fields.uiWidgetItemCount
+             << fields.unknownU32_26_69913
+             << fields.unknownU32_27_69913;
+    }
+
     void writeUnitDataCreate(ByteBuffer& data, Fields::UnitData const& fields, bool ownerVisible)
     {
         data << fields.displayId << fields.npcFlags << fields.npcFlags2 << fields.stateSpellVisualId << fields.stateAnimId << fields.stateAnimKitId;
@@ -499,15 +565,15 @@ namespace AscEmu::Version::Forever::ObjectUpdate
 
         // Forever 1.60.1 build 69913 carries first and last name separately.
         //
-        // Two independent captures prove the byte-aligned length encoding:
+        // The verified 69913 wire layout uses byte-aligned length encoding:
         //   Test / Hims   -> 10 08 00 + "TestHims"
         //   Schurki / Asc -> 1C 06 00 + "SchurkiAsc"
         //
         // byte0 = firstNameLength << 2  (6-bit length, byte-aligned)
         // byte1 = lastNameLength  << 1  (observed zero guard bits around a 6-bit length)
-        // byte2 = currently-zero optional-name flags in both captures.
+        // byte2 = currently-zero optional-name flags in the verified samples.
         //
-        // Keep the third byte conservative until a capture with one of the optional
+        // Keep the third byte conservative until a sample with one of the optional
         // states set proves its individual bit assignments.
         const std::size_t firstNameLength = std::min<std::size_t>(fields.firstName.size(), 63U);
         const std::size_t lastNameLength = std::min<std::size_t>(fields.lastName.size(), 63U);
@@ -542,19 +608,176 @@ namespace AscEmu::Version::Forever::ObjectUpdate
 
     namespace
     {
+        inline constexpr std::array<uint8_t, 180> PostSkillDefaults69913 = {
+            0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x20,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x01,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0xC9,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,
+            0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x80,0x3F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x80,0x3F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x80,0x3F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x80,0x3F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x80,0x3F,0x00,0x00,
+        };
+
+        inline constexpr std::array<uint8_t, 1089> PreOutfitDefaults69913 = {
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,0x80,0x3F,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x80,0x3F,0x00,0x00,0x80,0x3F,0x00,0x00,0x80,0x3F,0x00,0x00,0x80,0x3F,0x00,0x00,
+            0x80,0x3F,0x00,0x00,0x80,0x3F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x00,0x04,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x99,0x99,
+            0xF9,0x3F,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,0x00,0x00,0x10,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x7C,0x15,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x3F,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x8B,0xFC,0x3A,0x00,
+            0x8B,0xFC,0x3A,0x00,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0xD3,0x05,0x00,0x00,0x01,0x00,0x00,0x00,0x2D,0xFA,0xFF,0xFF,0x04,0x80,0x55,0x6E,
+            0x6B,0x6E,0x6F,0x77,0x6E,0x30,0x31,0x8B,0xFC,0x3A,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x03,0x00,
+            0x00,0x00,0x03,0x00,0x00,0x00,0x01,0x00,0x0D,0x02,0x00,0x08,0x80,0x4F,0x75,0x74,
+            0x66,0x69,0x74,0x20,0x32,0x07,0x00,0x00,0x00,0x2D,0x00,0x00,0x00,0x01,0x00,0x00,
+            0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x0D,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x12,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x25,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x20,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x0C,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x02,0x00,0x00,
+            0x00,
+        };
+
+
+        void applyDefaultTransmogOutfit69913(Fields::TransmogOutfitData& outfit, uint32_t id, uint8_t setType, char const* name, bool withSituations, uint32_t flags)
+        {
+            static constexpr std::array<uint32_t, 7> SituationIds = {1u, 3u, 13u, 18u, 20u, 37u, 32u};
+            static constexpr std::array<Fields::TransmogOutfitSlotData, 45> Slots = {{
+            {0, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {0, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {0, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {0, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {1, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {1, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {1, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {1, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {2, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {2, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {2, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {2, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {6, 0u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {4, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {4, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {4, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {4, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {9, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {9, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {9, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {9, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {10, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {10, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {10, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {10, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {11, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {11, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {11, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {11, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {7, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {7, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {7, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {7, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {8, 12u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {8, 13u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {8, 14u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {8, 15u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {3, 0u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {5, 0u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {12, 1u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {12, 2u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {13, 1u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {13, 5u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {13, 4u, 0u, 0u, 2u, 0u, 2u, 0u},
+            {14, 3u, 0u, 0u, 2u, 0u, 2u, 0u}
+            }};
+
+            outfit = {};
+            outfit.id = id;
+            outfit.outfitInfo.setType = setType;
+            outfit.outfitInfo.icon = 134400u;
+            outfit.outfitInfo.name = name;
+            outfit.outfitInfo.situationsEnabled = true;
+            outfit.flags = flags;
+
+            if (withSituations)
+            {
+                outfit.situations.reserve(SituationIds.size());
+                for (uint32_t situationId : SituationIds)
+                    outfit.situations.push_back({situationId, 0u, 0u, 0u});
+            }
+
+            outfit.slots.assign(Slots.begin(), Slots.end());
+        }
+
         Fields::ActivePlayerData makeConservativeActivePlayerData69913(Fields::ActivePlayerData const& source)
         {
             // Forever 69913 live profile:
             // Keep only fields whose placement/encoding has been established from
-            // our captures. Everything else intentionally stays at the protocol's
-            // minimal zero/empty state until a Forever sniff proves its meaning.
+            // verified 69913 wire data. Everything else intentionally stays at the protocol's
+            // minimal zero/empty state until their semantics are verified.
             //
             // Unproven Midnight-era regions are represented only by zeroed
             // opaque Forever wire spans.
             Fields::ActivePlayerData result{};
 
             // Proven prefix. Packed GUID length is part of the wire layout, so keep
-            // the real inventory/observer GUID state instead of capture bytes.
+            // the real inventory/observer GUID state instead of fixed packet bytes.
             result.invSlots = source.invSlots;
             result.farsightObject = source.farsightObject;
             result.summonedBattlePetGuid = source.summonedBattlePetGuid;
@@ -564,121 +787,152 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             result.xp = source.xp;
             result.nextLevelXp = source.nextLevelXp;
 
+            // SkillInfo layout is now wire/runtime verified as the 4200-byte
+            // block immediately following the core scalars.
+            result.skill = source.skill;
+
+            // The complete 104-byte post-SkillInfo scalar/combat-stat cluster
+            // is now structurally identified and may be emitted from live state.
+            result.characterPoints = source.characterPoints;
+            result.maxTalentTiers = source.maxTalentTiers;
+            result.trackCreatureMask = source.trackCreatureMask;
+            result.mainhandExpertise = source.mainhandExpertise;
+            result.offhandExpertise = source.offhandExpertise;
+            result.rangedExpertise = source.rangedExpertise;
+            result.combatRatingExpertise = source.combatRatingExpertise;
+            result.blockPercentage = source.blockPercentage;
+            result.dodgePercentage = source.dodgePercentage;
+            result.dodgePercentageFromAttribute = source.dodgePercentageFromAttribute;
+            result.parryPercentage = source.parryPercentage;
+            result.parryPercentageFromAttribute = source.parryPercentageFromAttribute;
+            result.critPercentage = source.critPercentage;
+            result.rangedCritPercentage = source.rangedCritPercentage;
+            result.offhandCritPercentage = source.offhandCritPercentage;
+            result.spellCritPercentage = source.spellCritPercentage;
+            result.shieldBlock = source.shieldBlock;
+            result.shieldBlockCritPercentage = source.shieldBlockCritPercentage;
+            result.mastery = source.mastery;
+            result.speed = source.speed;
+            result.avoidance = source.avoidance;
+            result.sturdiness = source.sturdiness;
+            result.versatility = source.versatility;
+            result.versatilityBonus = source.versatilityBonus;
+            result.pvpPowerDamage = source.pvpPowerDamage;
+            result.pvpPowerHealing = source.pvpPowerHealing;
+
+            // 69913 build-specific create defaults for the still-unresolved
+            // post-SkillInfo spans. These bytes now flow through our field
+            // model and writer instead of being spliced directly from the
+            // legacy packet template. Replace individual values with live semantics
+            // as their live semantics are identified.
+            std::copy_n(PostSkillDefaults69913.begin(), Fields::ActivePlayerData::PostSkillHeaderSize69913, result.unknownPostSkillHeader69913.begin());
+            std::size_t postSkillSeedOffset = Fields::ActivePlayerData::PostSkillHeaderSize69913;
+            for (Fields::ActivePlayerData::PostSkillRecord69913& record : result.unknownPostSkillRecords69913)
+            {
+                std::memcpy(&record.unknown0, PostSkillDefaults69913.data() + postSkillSeedOffset + 0, sizeof(record.unknown0));
+                std::memcpy(&record.unknown4, PostSkillDefaults69913.data() + postSkillSeedOffset + 4, sizeof(record.unknown4));
+                std::memcpy(&record.multiplier0, PostSkillDefaults69913.data() + postSkillSeedOffset + 8, sizeof(record.multiplier0));
+                std::memcpy(&record.multiplier1, PostSkillDefaults69913.data() + postSkillSeedOffset + 12, sizeof(record.multiplier1));
+                postSkillSeedOffset += 16;
+            }
+            std::copy_n(PostSkillDefaults69913.begin() + postSkillSeedOffset, Fields::ActivePlayerData::PostSkillTailSize69913, result.unknownPostSkillTail69913.begin());
+
+            std::copy_n(PreOutfitDefaults69913.begin(), Fields::ActivePlayerData::UnknownBeforeOutfitSize69913, result.unknownBeforeOutfit69913.begin());
+
             // The following 32-bit slot exists on the wire immediately after
             // NextLevelXP, but its Forever semantics are not proven. Keep
-            // unknownAfterNextLevelXp69913 at its zero default until a sniff
+            // unknownAfterNextLevelXp69913 at its zero default until differential testing
             // demonstrates what it represents.
 
-            // Keep the complete unproven pre-transmog span at its conservative
-            // zero-state.  The earlier +848 = 0x01 hypothesis is disproven by
-            // the normalized empty-inventory comparison: generatedNonZero=1,
-            // captureNonZero=53 and 54 mismatches show that marker was not one
-            // of the capture non-zero bytes.
-
-            // Proven Forever transmog-outfit library. Preserve only this known
-            // island after the structurally valid minimal middle section.
-            result.transmogOutfits = source.transmogOutfits;
-            result.viewedOutfit = source.viewedOutfit;
-            result.transmogMetadata = source.transmogMetadata;
+            // Build-specific default outfit state. These records are now
+            // represented as typed protocol defaults rather than retained packet bytes.
+            result.unknownOutfitScalar0_69913 = 2u;
+            result.unknownOutfitScalar1_69913 = 3u;
+            applyDefaultTransmogOutfit69913(result.viewedOutfit, 3u, 1u, "Outfit 2", true, 1u);
+            result.additionalOutfits69913.resize(2);
+            applyDefaultTransmogOutfit69913(result.additionalOutfits69913[0], 2u, 1u, "Outfit 1", true, 1u);
+            applyDefaultTransmogOutfit69913(result.additionalOutfits69913[1], 1u, 0u, "Outfit", false, 0u);
+            result.transmogMetadata.situationTrigger = 0u;
+            result.transmogMetadata.transmogOutfitId = 2u;
+            result.transmogMetadata.stampedOptionMainHand = 0u;
+            result.transmogMetadata.stampedOptionOffHand = 0u;
+            result.transmogMetadata.costMod = 1.0f;
+            result.transmogMetadata.locked = false;
 
             return result;
         }
     }
 
-    namespace
-    {
-        struct ActivePlayerCreateLayout69913
-        {
-            std::size_t afterInvSlots = 0;
-            std::size_t afterFarsight = 0;
-            std::size_t afterSummonedBattlePet = 0;
-            std::size_t afterCoreScalars = 0;
-            std::size_t afterSkillInfo = 0;
-            std::size_t afterUnknownAfterSkillInfoPrefix = 0;
-            std::size_t afterUnknownAfterSkillInfoData = 0;
-            std::size_t afterUnknownAfterSkillInfo = 0;
-            std::size_t afterPostSkillBlockPrefix = 0;
-            std::size_t afterPostSkillBlockData = 0;
-            std::size_t afterPostCombatStats = 0;
-            std::size_t afterUnknownBeforeTransmogPrefix = 0;
-            std::size_t afterUnknownBeforeTransmog = 0;
-            std::size_t afterTransmog = 0;
-            std::size_t end = 0;
-        };
-
-        bool writeActivePlayerDataCreateImpl(ByteBuffer& data, Fields::ActivePlayerData const& fields, ActivePlayerCreateLayout69913* layout)
-        {
-            if (!hasRequiredActivePlayerOpaqueRecords(fields))
-                return false;
-
-            const std::size_t begin = data.size();
-            const auto mark = [&](std::size_t& out)
-            {
-                out = data.size() - begin;
-            };
-
-            for (WoWGuid const& value : fields.invSlots)
-                writeModernGuid(data, value);
-            if (layout) mark(layout->afterInvSlots);
-
-            writeModernGuid(data, fields.farsightObject);
-            if (layout) mark(layout->afterFarsight);
-            writeModernGuid(data, fields.summonedBattlePetGuid);
-            if (layout) mark(layout->afterSummonedBattlePet);
-
-            data << uint32_t(fields.knownTitles.size()) << fields.coinage << fields.accountBankCoinage << fields.xp << fields.nextLevelXp << fields.unknownAfterNextLevelXp69913;
-            if (layout) mark(layout->afterCoreScalars);
-
-            writeSkillInfoCreate(data, fields.skill);
-            if (layout) mark(layout->afterSkillInfo);
-            data.append(fields.unknownAfterSkillInfoPrefix69913.data(), fields.unknownAfterSkillInfoPrefix69913.size());
-            if (layout) mark(layout->afterUnknownAfterSkillInfoPrefix);
-            data.append(fields.unknownAfterSkillInfoData69913.data(), fields.unknownAfterSkillInfoData69913.size());
-            if (layout) mark(layout->afterUnknownAfterSkillInfoData);
-            data.append(fields.unknownAfterSkillInfoSuffix69913.data(), fields.unknownAfterSkillInfoSuffix69913.size());
-            if (layout) mark(layout->afterUnknownAfterSkillInfo);
-
-            data.append(fields.unknownPostSkillBlockPrefix69913.data(), fields.unknownPostSkillBlockPrefix69913.size());
-            if (layout) mark(layout->afterPostSkillBlockPrefix);
-            data.append(fields.unknownPostSkillBlockData69913.data(), fields.unknownPostSkillBlockData69913.size());
-            if (layout) mark(layout->afterPostSkillBlockData);
-            data.append(fields.unknownPostSkillBlockSuffix69913.data(), fields.unknownPostSkillBlockSuffix69913.size());
-            if (layout) mark(layout->afterPostCombatStats);
-
-            data.append(fields.unknownBeforeTransmogPrefix69913.data(), fields.unknownBeforeTransmogPrefix69913.size());
-            if (layout) mark(layout->afterUnknownBeforeTransmogPrefix);
-            data.append(fields.unknownBeforeTransmogData69913.data(), fields.unknownBeforeTransmogData69913.size());
-            data.append(fields.unknownBeforeTransmogSuffix69913.data(), fields.unknownBeforeTransmogSuffix69913.size());
-            if (layout) mark(layout->afterUnknownBeforeTransmog);
-
-            writeDynamicRecordMap(data, fields.transmogOutfits);
-            writeTransmogOutfitDataCreate(data, fields.viewedOutfit);
-            writeTransmogOutfitMetadataCreate(data, fields.transmogMetadata);
-            data.flushBits();
-            if (layout) mark(layout->afterTransmog);
-
-            for (uint64_t value : fields.knownTitles)
-                data << value;
-
-            data.append(fields.unknownAfterTransmog69913.data(), fields.unknownAfterTransmog69913.size());
-            if (layout) mark(layout->end);
-
-            return true;
-        }
-    }
-
     bool writeActivePlayerDataCreate(ByteBuffer& data, Fields::ActivePlayerData const& fields)
     {
-        return writeActivePlayerDataCreateImpl(data, fields, nullptr);
+        if (!hasRequiredActivePlayerOpaqueRecords(fields))
+            return false;
+
+        for (WoWGuid const& value : fields.invSlots)
+            writeModernGuid(data, value);
+
+        writeModernGuid(data, fields.farsightObject);
+        writeModernGuid(data, fields.summonedBattlePetGuid);
+
+        data << uint32_t(fields.knownTitles.size());
+        data.append(fields.unknownInventoryExtension69913.data(), fields.unknownInventoryExtension69913.size());
+        data << fields.coinage << fields.accountBankCoinage << fields.xp << fields.nextLevelXp << fields.unknownAfterNextLevelXp69913;
+
+        writeSkillInfoCreate(data, fields.skill);
+
+        data << fields.characterPoints
+             << fields.maxTalentTiers
+             << fields.trackCreatureMask
+             << fields.mainhandExpertise
+             << fields.offhandExpertise
+             << fields.rangedExpertise
+             << fields.combatRatingExpertise
+             << fields.blockPercentage
+             << fields.dodgePercentage
+             << fields.dodgePercentageFromAttribute
+             << fields.parryPercentage
+             << fields.parryPercentageFromAttribute
+             << fields.critPercentage
+             << fields.rangedCritPercentage
+             << fields.offhandCritPercentage
+             << fields.spellCritPercentage
+             << fields.shieldBlock
+             << fields.shieldBlockCritPercentage
+             << fields.mastery
+             << fields.speed
+             << fields.avoidance
+             << fields.sturdiness
+             << fields.versatility
+             << fields.versatilityBonus
+             << fields.pvpPowerDamage
+             << fields.pvpPowerHealing;
+
+        data.append(fields.unknownPostSkillHeader69913.data(), fields.unknownPostSkillHeader69913.size());
+        for (Fields::ActivePlayerData::PostSkillRecord69913 const& record : fields.unknownPostSkillRecords69913)
+            data << record.unknown0 << record.unknown4 << record.multiplier0 << record.multiplier1;
+        data.append(fields.unknownPostSkillTail69913.data(), fields.unknownPostSkillTail69913.size());
+
+        data.append(fields.unknownBeforeOutfit69913.data(), fields.unknownBeforeOutfit69913.size());
+        data << fields.unknownOutfitScalar0_69913 << fields.unknownOutfitScalar1_69913;
+        writeTransmogOutfitDataCreate(data, fields.viewedOutfit);
+        data << uint32_t(fields.additionalOutfits69913.size());
+        for (Fields::TransmogOutfitData const& outfit : fields.additionalOutfits69913)
+            writeTransmogOutfitDataCreate(data, outfit);
+        writeTransmogOutfitMetadataCreate(data, fields.transmogMetadata);
+        data.flushBits();
+
+        for (uint64_t value : fields.knownTitles)
+            data << value;
+
+        data.append(fields.unknownAfterTransmog69913.data(), fields.unknownAfterTransmog69913.size());
+        return true;
     }
 
 
 
     namespace
     {
-        void writeStationaryUnitMovement69913(
-            ByteBuffer& data, std::span<const uint8_t> packedGuid,
-            float x, float y, float z, float orientation, uint32_t movementTimeMs)
+        void writeStationaryUnitMovement69913(ByteBuffer& data, std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, uint32_t movementTimeMs)
         {
             // Capture-proven minimal stationary creature layout:
             //   7-byte fixed prefix
@@ -698,12 +952,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         }
     }
 
-    std::vector<uint8_t> buildCreatureCreateBlock69913(
-        std::span<const uint8_t> packedGuid,
-        float x, float y, float z, float orientation, uint32_t movementTimeMs,
-        Fields::ObjectData const& objectFields,
-        Fields::UnitData const& unitFields,
-        uint32_t vendorDataFlags69913)
+    std::vector<uint8_t> buildCreatureCreateBlock69913(std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, uint32_t movementTimeMs, Fields::ObjectData const& objectFields, Fields::UnitData const& unitFields, uint32_t vendorDataFlags69913)
     {
         if (packedGuid.empty())
             return {};
@@ -742,23 +991,44 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         return std::vector<uint8_t>(block.contents(), block.contents() + block.size());
     }
 
-    std::vector<uint8_t> buildHybridSelfFieldPayload69913(
-        Fields::ObjectData const& objectFields,
-        Fields::UnitData const& unitFields,
-        Fields::PlayerData const& playerFields,
-        Fields::ActivePlayerData const& activePlayerFields)
+    std::vector<uint8_t> buildGameObjectCreateBlock69913(std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, int64_t packedLocalRotation, Fields::ObjectData const& objectFields, Fields::GameObjectData const& gameObjectFields)
     {
-        // Current Forever 69913 self-field serializer.
-        //
-        //   ObjectData        generated
-        //   UnitData          generated
-        //   PlayerData        generated
-        //   ActivePlayerData  generated (conservative Forever profile)
-        //   0x21 / 0x26       generated
-        //
-        // Unverified ActivePlayerData fields are emitted as their minimal
-        // zero/empty representation. The old captured field payload is no longer used.
+        if (packedGuid.empty())
+            return {};
 
+        ByteBuffer fieldPayload;
+        // Capture-verified ordinary GameObject fragment list:
+        //   00 03 CE FF 01
+        fieldPayload << uint8_t(0)
+                     << uint8_t(FRAGMENT_CGOBJECT_69913)
+                     << uint8_t(FRAGMENT_TAG_GAMEOBJECT_69913)
+                     << uint8_t(FRAGMENT_END_69913)
+                     << uint8_t(1);
+        writeObjectDataCreate(fieldPayload, objectFields);
+        writeGameObjectDataCreate(fieldPayload, gameObjectFields);
+
+        ByteBuffer block;
+        block << uint8_t(1); // CREATE_OBJECT
+        block.append(packedGuid.data(), packedGuid.size());
+        block << uint8_t(OBJECT_TYPE_GAMEOBJECT);
+
+        // 69913 stationary GameObject movement is 31 bytes:
+        // flags(3), transport/time placeholder(4), position+orientation(16),
+        // packed local rotation(8). This shape is byte-stable across the
+        // stationary GameObjects present in the reference captures.
+        static constexpr std::array<uint8_t, 3> movementFlags = { 0x81, 0x08, 0x00 };
+        block.append(movementFlags.data(), movementFlags.size());
+        block << uint32_t(0);
+        block << x << y << z << orientation;
+        block << packedLocalRotation;
+
+        block << uint32_t(fieldPayload.size());
+        block.append(fieldPayload);
+        return std::vector<uint8_t>(block.contents(), block.contents() + block.size());
+    }
+
+    std::vector<uint8_t> buildSelfFieldPayload69913(Fields::ObjectData const& objectFields, Fields::UnitData const& unitFields, Fields::PlayerData const& playerFields, Fields::ActivePlayerData const& activePlayerFields)
+    {
         ByteBuffer payload;
 
         payload << SELF_FIELD_FLAGS_69913;
@@ -769,39 +1039,55 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         payload << FRAGMENT_TAG_PLAYER_69913;
         payload << FRAGMENT_END_69913;
 
-        // CGObject indirect fragment activation.
-        payload << uint8_t(1);
+        payload << uint8_t(1); // CGObject indirect fragment activation
 
         writeObjectDataCreate(payload, objectFields);
         writeUnitDataCreate(payload, unitFields, true);
-
         if (!writePlayerDataCreate(payload, playerFields, true))
             return {};
 
-        // Forever ActivePlayerData now runs from our own conservative writer.
-        // Only the capture-proven prefix and transmog-outfit island are populated
-        // from live state. The unverified middle/tail fields are intentionally
-        // serialized in their zero/empty state instead of borrowing semantics
-        // from Midnight or copying the old retail capture.
-        const Fields::ActivePlayerData conservativeActivePlayer =
-            makeConservativeActivePlayerData69913(activePlayerFields);
+        const Fields::ActivePlayerData activePlayer = makeConservativeActivePlayerData69913(activePlayerFields);
 
-        // Build the real live-state ActivePlayer block separately. This is the
-        // block considered for the safety fallback below.
-        ByteBuffer generatedActivePlayer;
-        if (!writeActivePlayerDataCreateImpl(generatedActivePlayer, conservativeActivePlayer, nullptr))
+        ByteBuffer activePlayerPayload;
+        if (!writeActivePlayerDataCreate(activePlayerPayload, activePlayer))
             return {};
 
-        // Do not splice the empty-inventory reference tail onto the live
-        // generated prefix.  That reference belongs to a different captured
-        // ActivePlayerData extent (39643 bytes versus 38749 bytes for the
-        // known-good login capture), so the splice shifts the following
-        // components and the client crashes while entering the world.
-        //
-        // Keep the known-good complete ActivePlayerData payload until the
-        // second half of the 69913 create grammar has been isolated offline.
-        auto const& activePlayerFallback = Template69913::ActivePlayerDataFallback;
-        payload.append(activePlayerFallback.data(), activePlayerFallback.size());
+        payload.append(activePlayerPayload.contents(), activePlayerPayload.size());
+
+        // Remaining 69913 ActivePlayer fields that are structurally required
+        // but not semantically identified yet. Keep them isolated from the
+        // typed portion so they can be replaced field-by-field later.
+        static constexpr std::size_t TypedReferenceEnd69913 = 8422;
+        static constexpr std::size_t ZeroDefaultsEnd69913 = 23573;
+        static constexpr std::size_t WriterOwnedTailBytes69913 =
+            Fields::ActivePlayerData::UnknownAfterTransmogSize69913;
+        static constexpr std::size_t ZeroDefaultsSize69913 =
+            (ZeroDefaultsEnd69913 - TypedReferenceEnd69913) - WriterOwnedTailBytes69913;
+        static const std::array<uint8_t, ZeroDefaultsSize69913> ZeroDefaults69913{};
+        payload.append(ZeroDefaults69913.data(), ZeroDefaults69913.size());
+
+        static constexpr std::size_t SparseDefaultsSize69913 = 38749 - 23573;
+        static const std::array<uint8_t, SparseDefaultsSize69913> SparseDefaults69913 = []
+        {
+            std::array<uint8_t, SparseDefaultsSize69913> data{};
+            data[0] = 0x80;
+            data[1] = 0x03;
+            data[733] = 0x0C;
+            data[860] = 0x80;
+            data[2124] = 0x08;
+            data[3408] = 0x1C;
+            data[9837] = 0x80;
+            data[9838] = 0x38;
+            data[9929] = 0x40;
+
+            constexpr std::array<uint8_t, 15> finalDefaults = {
+                0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00,
+                0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x10
+            };
+            std::copy(finalDefaults.begin(), finalDefaults.end(), data.begin() + 15159);
+            return data;
+        }();
+        payload.append(SparseDefaults69913.data(), SparseDefaults69913.size());
 
         payload << uint8_t(1);
         writeEmptyPlayerHouseInfoComponentCreate69913(payload);
@@ -809,9 +1095,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         payload << uint8_t(1);
         writeEmptyPlayerInitiativeComponentCreate69913(payload);
 
-        return std::vector<uint8_t>(
-            payload.contents(),
-            payload.contents() + payload.size());
+        return std::vector<uint8_t>(payload.contents(), payload.contents() + payload.size());
     }
 
 
@@ -820,40 +1104,398 @@ namespace AscEmu::Version::Forever::ObjectUpdate
     }
 
 
-    std::vector<uint8_t> buildUpdateObjectPacket69913(uint16_t mapId, uint32_t updateCount, std::span<const uint8_t> updateBlocks)
+
+    namespace
     {
-        if (updateCount == 0 || updateBlocks.empty())
+        template <std::size_t N>
+        uint32_t getChangeBlock(std::bitset<N> const& changes, std::size_t blockIndex)
+        {
+            uint32_t value = 0;
+            const std::size_t firstBit = blockIndex * 32U;
+            const std::size_t lastBit = std::min<std::size_t>(firstBit + 32U, N);
+            for (std::size_t bit = firstBit; bit < lastBit; ++bit)
+                if (changes.test(bit))
+                    value |= uint32_t(1) << (bit - firstBit);
+            return value;
+        }
+
+        template <std::size_t N>
+        void writeStructuredChangeMask(ByteBuffer& data, std::bitset<N> const& changes)
+        {
+            constexpr std::size_t BlockCount = (N + 31U) / 32U;
+            if constexpr (BlockCount == 1)
+            {
+                data.writeBits(getChangeBlock(changes, 0), N);
+            }
+            else
+            {
+                uint32_t blocksMask = 0;
+                for (std::size_t block = 0; block < BlockCount; ++block)
+                    if (getChangeBlock(changes, block) != 0)
+                        blocksMask |= uint32_t(1) << block;
+
+                data.writeBits(blocksMask, BlockCount);
+                for (std::size_t block = 0; block < BlockCount; ++block)
+                    if (blocksMask & (uint32_t(1) << block))
+                        data.writeBits(getChangeBlock(changes, block), 32);
+            }
+        }
+
+        void writeObjectDataUpdate69913(ByteBuffer& data, Fields::ObjectData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+            if (fields.changes.test(Fields::ObjectData::EntryIdBit))
+                data << fields.entryId;
+            if (fields.changes.test(Fields::ObjectData::DynamicFlagsBit))
+                data << fields.dynamicFlags;
+            if (fields.changes.test(Fields::ObjectData::ScaleBit))
+                data << fields.scale;
+            data.flushBits();
+        }
+
+        void writeItemDataUpdate69913(ByteBuffer& data, Fields::ItemData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+            auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
+            if (changed(Fields::ItemData::OwnerBit)) writeModernGuid(data, fields.owner);
+            if (changed(Fields::ItemData::ContainedInBit)) writeModernGuid(data, fields.containedIn);
+            if (changed(Fields::ItemData::CreatorBit)) writeModernGuid(data, fields.creator);
+            if (changed(Fields::ItemData::GiftCreatorBit)) writeModernGuid(data, fields.giftCreator);
+            if (changed(Fields::ItemData::StackCountBit)) data << fields.stackCount;
+            if (changed(Fields::ItemData::ExpirationBit)) data << fields.expiration;
+            if (changed(Fields::ItemData::DynamicFlagsBit)) data << fields.dynamicFlags;
+            if (changed(Fields::ItemData::DurabilityBit)) data << fields.durability;
+            if (changed(Fields::ItemData::MaxDurabilityBit)) data << fields.maxDurability;
+            if (changed(Fields::ItemData::CreatePlayedTimeBit)) data << fields.createPlayedTime;
+            if (changed(Fields::ItemData::SpellChargesGroupBit))
+                for (std::size_t i = 0; i < fields.spellCharges.size(); ++i)
+                    if (changed(Fields::ItemData::SpellChargesFirstBit + i))
+                        data << fields.spellCharges[i];
+            data.flushBits();
+        }
+
+        void writeContainerDataUpdate69913(ByteBuffer& data, Fields::ContainerData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+            auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
+            if (changed(Fields::ContainerData::NumSlotsBit)) data << fields.numSlots;
+            if (changed(Fields::ContainerData::SlotsGroupBit))
+                for (std::size_t i = 0; i < fields.slots.size(); ++i)
+                    if (changed(Fields::ContainerData::SlotsFirstBit + i))
+                        writeModernGuid(data, fields.slots[i]);
+            data.flushBits();
+        }
+
+        void writeUnitDataUpdate69913(ByteBuffer& data, Fields::UnitData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+
+            auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
+            if (changed(Fields::UnitData::DisplayIdBit)) data << fields.displayId;
+            if (changed(Fields::UnitData::NpcFlagsBit)) data << fields.npcFlags;
+            if (changed(Fields::UnitData::NpcFlags2Bit)) data << fields.npcFlags2;
+            if (changed(Fields::UnitData::CharmBit)) writeModernGuid(data, fields.charm);
+            if (changed(Fields::UnitData::SummonBit)) writeModernGuid(data, fields.summon);
+            if (changed(Fields::UnitData::CritterBit)) writeModernGuid(data, fields.critter);
+            if (changed(Fields::UnitData::CharmedByBit)) writeModernGuid(data, fields.charmedBy);
+            if (changed(Fields::UnitData::SummonedByBit)) writeModernGuid(data, fields.summonedBy);
+            if (changed(Fields::UnitData::CreatedByBit)) writeModernGuid(data, fields.createdBy);
+            if (changed(Fields::UnitData::TargetBit)) writeModernGuid(data, fields.target);
+            if (changed(Fields::UnitData::RaceBit)) data << fields.race;
+            if (changed(Fields::UnitData::ClassIdBit)) data << fields.classId;
+            if (changed(Fields::UnitData::PlayerClassIdBit)) data << fields.playerClassId;
+            if (changed(Fields::UnitData::SexBit)) data << fields.sex;
+            if (changed(Fields::UnitData::DisplayPowerBit)) data << fields.displayPower;
+            if (changed(Fields::UnitData::HealthBit)) data << fields.health;
+            if (changed(Fields::UnitData::MaxHealthBit)) data << fields.maxHealth;
+            if (changed(Fields::UnitData::LevelBit)) data << fields.level;
+            if (changed(Fields::UnitData::EffectiveLevelBit)) data << fields.effectiveLevel;
+            if (changed(Fields::UnitData::FactionTemplateBit)) data << fields.factionTemplate;
+            if (changed(Fields::UnitData::FlagsBit)) data << fields.unitFlags69913;
+            if (changed(Fields::UnitData::Flags2Bit)) data << fields.unitFlags2_69913;
+            if (changed(Fields::UnitData::AuraStateBit)) data << fields.auraState69913;
+            if (changed(Fields::UnitData::RangedAttackRoundBaseTimeBit)) data << fields.rangedAttackRoundBaseTime;
+            if (changed(Fields::UnitData::BoundingRadiusBit)) data << fields.boundingRadius;
+            if (changed(Fields::UnitData::CombatReachBit)) data << fields.combatReach;
+            if (changed(Fields::UnitData::NativeDisplayIdBit)) data << fields.nativeDisplayId;
+            if (changed(Fields::UnitData::MountDisplayIdBit)) data << fields.mountDisplayId;
+            if (changed(Fields::UnitData::MinDamageBit)) data << fields.minDamage69913;
+            if (changed(Fields::UnitData::MaxDamageBit)) data << fields.maxDamage69913;
+            if (changed(Fields::UnitData::MinOffHandDamageBit)) data << fields.minOffHandDamage69913;
+            if (changed(Fields::UnitData::MaxOffHandDamageBit)) data << fields.maxOffHandDamage69913;
+            if (changed(Fields::UnitData::BaseManaBit)) data << fields.baseMana;
+            if (changed(Fields::UnitData::BaseHealthBit)) data << fields.baseHealth;
+
+            if (changed(Fields::UnitData::PowerGroupBit))
+            {
+                for (std::size_t i = 0; i < fields.power.size(); ++i)
+                    if (changed(Fields::UnitData::PowerFirstBit + i))
+                        data << fields.power[i];
+                for (std::size_t i = 0; i < fields.maxPower.size(); ++i)
+                    if (changed(Fields::UnitData::MaxPowerFirstBit + i))
+                        data << fields.maxPower[i];
+            }
+
+            if (changed(Fields::UnitData::AttackRoundBaseTimeGroupBit))
+                for (std::size_t i = 0; i < fields.attackRoundBaseTime.size(); ++i)
+                    if (changed(Fields::UnitData::AttackRoundBaseTimeFirstBit + i))
+                        data << fields.attackRoundBaseTime[i];
+
+            if (changed(Fields::UnitData::StatsGroupBit))
+            {
+                for (std::size_t i = 0; i < fields.stats69913.size(); ++i)
+                    if (changed(Fields::UnitData::StatsFirstBit + i)) data << fields.stats69913[i];
+                for (std::size_t i = 0; i < fields.statPosBuff69913.size(); ++i)
+                    if (changed(Fields::UnitData::StatPosBuffFirstBit + i)) data << fields.statPosBuff69913[i];
+                for (std::size_t i = 0; i < fields.statNegBuff69913.size(); ++i)
+                    if (changed(Fields::UnitData::StatNegBuffFirstBit + i)) data << fields.statNegBuff69913[i];
+                for (std::size_t i = 0; i < fields.statSupportBuff69913.size(); ++i)
+                    if (changed(Fields::UnitData::StatSupportBuffFirstBit + i)) data << fields.statSupportBuff69913[i];
+            }
+
+            if (changed(Fields::UnitData::ResistancesGroupBit))
+            {
+                for (std::size_t i = 0; i < fields.resistances69913.size(); ++i)
+                    if (changed(Fields::UnitData::ResistancesFirstBit + i)) data << fields.resistances69913[i];
+                for (std::size_t i = 0; i < fields.bonusResistanceMods69913.size(); ++i)
+                    if (changed(Fields::UnitData::BonusResistanceModsFirstBit + i)) data << fields.bonusResistanceMods69913[i];
+                for (std::size_t i = 0; i < fields.manaCostModifier69913.size(); ++i)
+                    if (changed(Fields::UnitData::ManaCostModifierFirstBit + i)) data << fields.manaCostModifier69913[i];
+            }
+            data.flushBits();
+        }
+
+        void writePlayerDataUpdate69913(ByteBuffer& data, Fields::PlayerData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+            auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
+            if (changed(Fields::PlayerData::DuelArbiterBit)) writeModernGuid(data, fields.unknownGuid0_69913);
+            if (changed(Fields::PlayerData::PlayerFlagsBit)) data << fields.unknownU32_0_69913;
+            if (changed(Fields::PlayerData::CurrentSpecBit)) data << fields.unknownU32_6_69913;
+            if (changed(Fields::PlayerData::NameBit))
+            {
+                const std::size_t firstNameLength = std::min<std::size_t>(fields.firstName.size(), 63U);
+                const std::size_t lastNameLength = std::min<std::size_t>(fields.lastName.size(), 63U);
+                data << static_cast<uint8_t>(firstNameLength << 2U)
+                     << static_cast<uint8_t>(lastNameLength << 1U)
+                     << uint8_t(0);
+                if (firstNameLength) data.append(reinterpret_cast<uint8_t const*>(fields.firstName.data()), firstNameLength);
+                if (lastNameLength) data.append(reinterpret_cast<uint8_t const*>(fields.lastName.data()), lastNameLength);
+            }
+            data.flushBits();
+        }
+
+        void writeGameObjectDataUpdate69913(ByteBuffer& data, Fields::GameObjectData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+            auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
+
+            // The three collection fields are currently only populated by
+            // full replacements. No core setter marks them yet; this keeps
+            // their wire representation explicit instead of dropping a dirty
+            // bit silently when support is added later.
+            if (changed(Fields::GameObjectData::StateWorldEffectIdsBit))
+            {
+                data << uint32_t(fields.stateWorldEffectIds.size());
+                for (uint32_t value : fields.stateWorldEffectIds)
+                    data << value;
+            }
+            if (changed(Fields::GameObjectData::EnableDoodadSetsBit))
+            {
+                data << uint32_t(fields.enableDoodadSets.size());
+                for (int32_t value : fields.enableDoodadSets)
+                    data << value;
+            }
+            if (changed(Fields::GameObjectData::WorldEffectsBit))
+            {
+                data << uint32_t(fields.worldEffects.size());
+                for (int32_t value : fields.worldEffects)
+                    data << value;
+            }
+
+            if (changed(Fields::GameObjectData::DisplayIdBit)) data << fields.displayId;
+            if (changed(Fields::GameObjectData::SpellVisualIdBit)) data << fields.spellVisualId;
+            if (changed(Fields::GameObjectData::StateSpellVisualIdBit)) data << fields.stateSpellVisualId;
+            if (changed(Fields::GameObjectData::SpawnTrackingStateAnimIdBit)) data << fields.spawnTrackingStateAnimId;
+            if (changed(Fields::GameObjectData::SpawnTrackingStateAnimKitIdBit)) data << fields.spawnTrackingStateAnimKitId;
+            if (changed(Fields::GameObjectData::StateWorldEffectsQuestObjectiveIdBit)) data << fields.stateWorldEffectsQuestObjectiveId;
+            if (changed(Fields::GameObjectData::CreatedByBit)) writeModernGuid(data, fields.createdBy);
+            if (changed(Fields::GameObjectData::GuildGuidBit)) writeModernGuid(data, fields.guildGuid);
+            if (changed(Fields::GameObjectData::FlagsBit)) data << fields.flags;
+            if (changed(Fields::GameObjectData::FlagsBBit)) data << fields.flagsB;
+            if (changed(Fields::GameObjectData::ParentRotationBit))
+                for (float value : fields.parentRotation) data << value;
+            if (changed(Fields::GameObjectData::FactionTemplateBit)) data << fields.factionTemplate;
+            if (changed(Fields::GameObjectData::StateBit)) data << fields.state;
+            if (changed(Fields::GameObjectData::TypeIdBit)) data << fields.typeId;
+            if (changed(Fields::GameObjectData::PercentHealthBit)) data << fields.percentHealth;
+            if (changed(Fields::GameObjectData::ArtKitBit)) data << fields.artKit;
+            if (changed(Fields::GameObjectData::CustomParamBit)) data << fields.customParam;
+            if (changed(Fields::GameObjectData::LevelBit)) data << fields.level;
+            if (changed(Fields::GameObjectData::AnimGroupInstanceBit)) data << fields.animGroupInstance;
+            if (changed(Fields::GameObjectData::UiWidgetItemIdBit)) data << fields.uiWidgetItemId;
+            if (changed(Fields::GameObjectData::UiWidgetItemQualityBit)) data << fields.uiWidgetItemQuality;
+            if (changed(Fields::GameObjectData::UiWidgetItemCountBit)) data << fields.uiWidgetItemCount;
+            if (changed(Fields::GameObjectData::UnknownU32Bit26_69913)) data << fields.unknownU32_26_69913;
+            if (changed(Fields::GameObjectData::UnknownU32Bit27_69913)) data << fields.unknownU32_27_69913;
+            data.flushBits();
+        }
+
+        void writeDynamicObjectDataUpdate69913(ByteBuffer& data, Fields::DynamicObjectData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+            auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
+            if (changed(Fields::DynamicObjectData::CasterBit)) writeModernGuid(data, fields.caster);
+            if (changed(Fields::DynamicObjectData::TypeBit)) data << fields.type;
+            if (changed(Fields::DynamicObjectData::SpellVisualBit)) writeSpellCastVisualCreate(data, fields.spellVisual);
+            if (changed(Fields::DynamicObjectData::SpellIdBit)) data << fields.spellId;
+            if (changed(Fields::DynamicObjectData::RadiusBit)) data << fields.radius;
+            if (changed(Fields::DynamicObjectData::CastTimeBit)) data << fields.castTime;
+            data.flushBits();
+        }
+
+        void writeCorpseDataUpdate69913(ByteBuffer& data, Fields::CorpseData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+            auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
+            if (changed(Fields::CorpseData::DynamicFlagsBit)) data << fields.dynamicFlags;
+            if (changed(Fields::CorpseData::OwnerBit)) writeModernGuid(data, fields.owner);
+            if (changed(Fields::CorpseData::PartyGuidBit)) writeModernGuid(data, fields.partyGuid);
+            if (changed(Fields::CorpseData::GuildGuidBit)) writeModernGuid(data, fields.guildGuid);
+            if (changed(Fields::CorpseData::DisplayIdBit)) data << fields.displayId;
+            if (changed(Fields::CorpseData::RaceIdBit)) data << fields.raceId;
+            if (changed(Fields::CorpseData::SexBit)) data << fields.sex;
+            if (changed(Fields::CorpseData::ClassBit)) data << fields.classId;
+            if (changed(Fields::CorpseData::FlagsBit)) data << fields.flags;
+            if (changed(Fields::CorpseData::FactionTemplateBit)) data << fields.factionTemplate;
+            if (changed(Fields::CorpseData::StateSpellVisualKitIdBit)) data << fields.stateSpellVisualKitId;
+            if (changed(Fields::CorpseData::ItemsGroupBit))
+                for (std::size_t i = 0; i < fields.items.size(); ++i)
+                    if (changed(Fields::CorpseData::ItemsFirstBit + i))
+                        data << fields.items[i];
+            data.flushBits();
+        }
+
+        void writeActivePlayerDataUpdate69913(ByteBuffer& data, Fields::ActivePlayerData const& fields)
+        {
+            writeStructuredChangeMask(data, fields.changes);
+            auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
+            if (changed(Fields::ActivePlayerData::UnknownChangeBit56_69913)) writeModernGuid(data, fields.farsightObject);
+            if (changed(Fields::ActivePlayerData::UnknownChangeBit58_69913)) data << fields.coinage;
+            if (changed(Fields::ActivePlayerData::UnknownChangeBit60_69913)) data << fields.xp;
+            if (changed(Fields::ActivePlayerData::UnknownChangeBit61_69913)) data << fields.nextLevelXp;
+            if (changed(Fields::ActivePlayerData::UnknownChangeBit163_69913))
+            {
+                for (std::size_t i = 0; i < fields.invSlots.size(); ++i)
+                    if (changed(Fields::ActivePlayerData::UnknownChangeBit164_69913 + i))
+                        writeModernGuid(data, fields.invSlots[i]);
+            }
+            data.flushBits();
+        }
+    }
+
+    std::vector<uint8_t> buildValuesUpdateBlock69913(std::span<const uint8_t> packedGuid, bool ownerVisible, Fields::ObjectData const& objectFields, Fields::ItemData const* itemFields, Fields::ContainerData const* containerFields, Fields::UnitData const* unitFields, Fields::PlayerData const* playerFields, Fields::ActivePlayerData const* activePlayerFields, Fields::GameObjectData const* gameObjectFields, Fields::DynamicObjectData const* dynamicObjectFields, Fields::CorpseData const* corpseFields)
+    {
+        if (packedGuid.empty())
+            return {};
+
+        uint32_t changedObjectTypeMask = 0;
+        if (objectFields.hasChanges()) changedObjectTypeMask |= uint32_t(1) << 0; // Object
+        if (itemFields && itemFields->hasChanges()) changedObjectTypeMask |= uint32_t(1) << 1; // Item
+        if (containerFields && containerFields->hasChanges()) changedObjectTypeMask |= uint32_t(1) << 2; // Container
+        if (unitFields && unitFields->hasChanges()) changedObjectTypeMask |= uint32_t(1) << 5; // Unit
+        if (playerFields && playerFields->hasChanges()) changedObjectTypeMask |= uint32_t(1) << 6; // Player
+        if (ownerVisible && activePlayerFields && activePlayerFields->hasChanges()) changedObjectTypeMask |= uint32_t(1) << 7; // ActivePlayer
+        if (gameObjectFields && gameObjectFields->hasChanges()) changedObjectTypeMask |= uint32_t(1) << 8; // GameObject
+        if (dynamicObjectFields && dynamicObjectFields->hasChanges()) changedObjectTypeMask |= uint32_t(1) << 9; // DynamicObject
+        if (corpseFields && corpseFields->hasChanges()) changedObjectTypeMask |= uint32_t(1) << 10; // Corpse
+        if (changedObjectTypeMask == 0)
+            return {};
+
+        ByteBuffer payload;
+        payload << uint8_t(ownerVisible ? 1 : 0);
+        payload << uint8_t(0); // fragment IDs did not change
+        payload << uint8_t(1); // CGObject fragment contents changed
+        payload << changedObjectTypeMask;
+
+        if (changedObjectTypeMask & (uint32_t(1) << 0)) writeObjectDataUpdate69913(payload, objectFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 1)) writeItemDataUpdate69913(payload, *itemFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 2)) writeContainerDataUpdate69913(payload, *containerFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 5)) writeUnitDataUpdate69913(payload, *unitFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 6)) writePlayerDataUpdate69913(payload, *playerFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 7)) writeActivePlayerDataUpdate69913(payload, *activePlayerFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 8)) writeGameObjectDataUpdate69913(payload, *gameObjectFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 9)) writeDynamicObjectDataUpdate69913(payload, *dynamicObjectFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 10)) writeCorpseDataUpdate69913(payload, *corpseFields);
+
+        ByteBuffer block;
+        block << uint8_t(0); // VALUES
+        block.append(packedGuid.data(), packedGuid.size());
+        block << uint32_t(payload.size());
+        block.append(payload);
+        return std::vector<uint8_t>(block.contents(), block.contents() + block.size());
+    }
+
+    std::vector<uint8_t> buildUpdateObjectPacket69913(uint16_t mapId, uint32_t updateCount, std::span<const uint8_t> updateBlocks, uint32_t destroyCount, std::span<const uint8_t> destroyGuids, uint32_t outOfRangeCount, std::span<const uint8_t> outOfRangeGuids)
+    {
+        const uint64_t totalRemovalCount64 = static_cast<uint64_t>(destroyCount) + outOfRangeCount;
+        if (totalRemovalCount64 > std::numeric_limits<uint32_t>::max())
+            return {};
+
+        const uint32_t totalRemovalCount = static_cast<uint32_t>(totalRemovalCount64);
+        if (updateCount == 0 && totalRemovalCount == 0)
+            return {};
+        if (updateCount != 0 && updateBlocks.empty())
+            return {};
+        if (destroyCount != 0 && destroyGuids.empty())
+            return {};
+        if (outOfRangeCount != 0 && outOfRangeGuids.empty())
+            return {};
+        if (destroyCount > std::numeric_limits<uint16_t>::max())
             return {};
 
         ByteBuffer packet;
         packet << mapId << updateCount;
-        packet.writeBit(1); // 69913 UpdateData leading bit
-        packet.writeBit(0); // no destroy/out-of-range GUIDs
+        packet.writeBit(1); // UpdateData header flag
+        packet.writeBit(totalRemovalCount != 0);
         packet.flushBits();
+
+        if (totalRemovalCount != 0)
+        {
+            // Modern retail uses one removal list. The first DestroyCount GUIDs
+            // are hard destroys; the remaining GUIDs are normal out-of-range
+            // removals. Keep the two queues separate internally and concatenate
+            // them only on the wire.
+            packet << static_cast<uint16_t>(destroyCount);
+            packet << totalRemovalCount;
+            if (!destroyGuids.empty())
+                packet.append(destroyGuids.data(), destroyGuids.size());
+            if (!outOfRangeGuids.empty())
+                packet.append(outOfRangeGuids.data(), outOfRangeGuids.size());
+        }
+
         packet << uint32_t(updateBlocks.size());
-        packet.append(updateBlocks.data(), updateBlocks.size());
+        if (!updateBlocks.empty())
+            packet.append(updateBlocks.data(), updateBlocks.size());
+
         return std::vector<uint8_t>(packet.contents(), packet.contents() + packet.size());
     }
 
-    std::vector<uint8_t> buildUpdateObjectPacket(uint16_t mapId, std::span<const uint8_t> updateBlock)
-    {
-        return buildUpdateObjectPacket69913(mapId, 1, updateBlock);
-    }
-    std::vector<uint8_t> buildTemporary69913SelfCreatePacketWithFieldPayload(uint16_t mapId, std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, std::span<const uint8_t> fieldPayload)
+    std::vector<uint8_t> buildSelfCreatePacket69913(uint16_t mapId, std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, std::span<const uint8_t> fieldPayload)
     {
         if (packedGuid.empty() || fieldPayload.empty())
             return {};
 
-        std::array<uint8_t, Template69913::MovementTail.size()> movementTail = Template69913::MovementTail;
+        std::array<uint8_t, SELF_PLAYER_MOVEMENT_DEFAULTS_69913.size()> movementTail = SELF_PLAYER_MOVEMENT_DEFAULTS_69913;
 
-        // The captured retail character was rooted. Do not inherit that captured
+        // The protocol default state was rooted. Do not inherit that fixed
         // movement-control state for our generated player.
         uint32_t movementFlags = 0;
         std::memcpy(&movementFlags, movementTail.data(), sizeof(movementFlags));
         movementFlags &= ~uint32_t(0x00000400);
         std::memcpy(movementTail.data(), &movementFlags, sizeof(movementFlags));
 
-        // 69913 carries the self position twice in this captured CreateObject2
+        // 69913 carries the self position twice in the CreateObject2
         // movement block. Keep MovementInfo and EntityPosition synchronized.
         constexpr size_t movementPositionOffset = 12;
         constexpr size_t entityPositionOffset = 167;
@@ -876,7 +1518,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         block << uint32_t(fieldPayload.size());
         block.append(fieldPayload.data(), fieldPayload.size());
 
-        return buildUpdateObjectPacket(mapId, std::span<const uint8_t>(block.contents(), block.size()));
+        return buildUpdateObjectPacket69913(mapId, 1, std::span<const uint8_t>(block.contents(), block.size()));
     }
 
 

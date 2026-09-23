@@ -23,6 +23,9 @@ This file is released under the MIT license. See README-MIT for more information
 #include <Spell/Definitions/AuraInterruptFlags.hpp>
 #include "Spell/SpellTarget.h"
 #include "GameObject.h"
+#include "Item.hpp"
+#include "Container.hpp"
+#include "DynamicObject.hpp"
 #include "GameObjectProperties.hpp"
 #include "Transporter.hpp"
 #include "Data/Flags.hpp"
@@ -532,8 +535,6 @@ void Object::updateObject()
     }
 }
 
-#define AE_FOREVER_ENABLE_CREATURE_CREATES
-
 uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* target)
 {
     if (m_wowGuid.getNewGuidLen() <= 0)
@@ -543,23 +544,15 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
         return 0;
 
 #if defined(AE_FOREVER)
-    // Forever uses a different create grammar from the legacy UpdateMask path.
-    //
-    // IMPORTANT: keep runtime creature visibility disabled until the ordinary
-    // creature CREATE_OBJECT layout is proven against 1.60.1.69913 captures.
-    // Enabling it globally causes every creature in the activated cells to be
-    // serialized immediately during login; one malformed UnitData/movement
-    // block is enough for the client to abort the world bootstrap.
-    //
-    // The serializer is intentionally kept below so it can be exercised again
-    // behind this explicit opt-in while we compare single-creature captures.
-#if defined(AE_FOREVER_ENABLE_CREATURE_CREATES)
+    // Forever uses the modern structured CREATE_OBJECT grammar instead of the
+    // legacy UpdateMask-based object creation path.
     if (isCreature())
     {
-        WorldSession* const session = target->getSession();
-        WorldSocket* const socket = session != nullptr ? session->GetSocket() : nullptr;
-        const uint32_t realmId = socket != nullptr ? socket->getClientProtocol().realmId : 0;
-        const WoWGuid modernGuid = WoWGuid::createModernFromLegacy(m_wowGuid.getRawGuid(), realmId, static_cast<uint16_t>(GetMapId()), 0);
+        const WoWGuid modernGuid = WoWGuid::createModernFromLegacy(
+            m_wowGuid.getRawGuid(),
+            worldConfig.battleNetComm.realmId,
+            static_cast<uint16_t>(GetMapId()),
+            0);
         const std::vector<uint8_t> packedGuid = modernGuid.packModern();
         if (packedGuid.empty())
             return 0;
@@ -567,12 +560,7 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
         Unit* const unit = static_cast<Unit*>(this);
         Creature* const creature = static_cast<Creature*>(this);
         const std::vector<uint8_t> block =
-            AscEmu::Version::Forever::ObjectUpdate::buildCreatureCreateBlock69913(
-                packedGuid,
-                GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(),
-                static_cast<uint32_t>(Util::getMSTime()),
-                foreverObjectFields(), unit->foreverUnitFields(),
-                creature->isVendor() ? 1U : 0U);
+            AscEmu::Version::Forever::ObjectUpdate::buildCreatureCreateBlock69913(packedGuid, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(), static_cast<uint32_t>(Util::getMSTime()), foreverObjectFields(), unit->foreverUnitFields(), creature->isVendor() ? 1U : 0U);
 
         if (block.empty())
             return 0;
@@ -580,10 +568,31 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
         data->append(block.data(), block.size());
         return 1;
     }
-#endif
 
-    // Do not let unsupported Forever object types (including creatures while
-    // the opt-in above is disabled) fall through into the legacy create grammar.
+    if (isGameObject())
+    {
+        const WoWGuid modernGuid = WoWGuid::createModernFromLegacy(
+            m_wowGuid.getRawGuid(),
+            worldConfig.battleNetComm.realmId,
+            static_cast<uint16_t>(GetMapId()),
+            0);
+        const std::vector<uint8_t> packedGuid = modernGuid.packModern();
+        if (packedGuid.empty())
+            return 0;
+
+        GameObject* const gameObject = static_cast<GameObject*>(this);
+        const std::vector<uint8_t> block =
+            AscEmu::Version::Forever::ObjectUpdate::buildGameObjectCreateBlock69913(packedGuid, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(), gameObject->getPackedLocalRotation(), foreverObjectFields(), gameObject->foreverGameObjectFields());
+
+        if (block.empty())
+            return 0;
+
+        data->append(block.data(), block.size());
+        return 1;
+    }
+
+    // Do not let unsupported Forever object types fall through into the legacy
+    // create grammar. Each modern object type gets an explicit serializer.
     return 0;
 #endif
 
@@ -2468,14 +2477,66 @@ void Object::BuildFieldUpdatePacket(ByteBuffer* buf, uint32_t Index, uint32_t Va
     // See the other BuildFieldUpdatePacket() overload above for why this is required.
     *buf << static_cast<uint8_t>(0);
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
-    // See the other BuildFieldUpdatePacket() overload above for why this is required.
+// Forever runtime values are emitted by BuildValuesUpdateBlockForPlayer().
+    // This legacy field-update helper is intentionally unused for Forever.
     *buf << static_cast<uint8_t>(0);
 #endif
 }
 
+void Object::ClearUpdateMask()
+{
+    m_updateMask.Clear();
+#if defined(AE_FOREVER)
+    m_foreverObjectFields.clearChanges();
+    if (m_objectTypeId == TYPEID_ITEM || m_objectTypeId == TYPEID_CONTAINER)
+        static_cast<Item*>(this)->foreverItemFields().clearChanges();
+    if (m_objectTypeId == TYPEID_CONTAINER)
+        static_cast<Container*>(this)->foreverContainerFields().clearChanges();
+    if (Unit* unit = ToUnit())
+        unit->foreverUnitFields().clearChanges();
+    if (Player* player = ToPlayer())
+    {
+        player->foreverPlayerFields().clearChanges();
+        player->foreverActivePlayerFields().clearChanges();
+    }
+    if (m_objectTypeId == TYPEID_GAMEOBJECT)
+        static_cast<GameObject*>(this)->foreverGameObjectFields().clearChanges();
+    if (m_objectTypeId == TYPEID_DYNAMICOBJECT)
+        static_cast<DynamicObject*>(this)->foreverDynamicObjectFields().clearChanges();
+    if (m_objectTypeId == TYPEID_CORPSE)
+        static_cast<Corpse*>(this)->foreverCorpseFields().clearChanges();
+#endif
+    m_objectUpdated = false;
+}
+
 uint32_t Object::BuildValuesUpdateBlockForPlayer(ByteBuffer* data, Player* target)
 {
+#if defined(AE_FOREVER)
+    Unit const* unit = ToUnit();
+    Player const* player = ToPlayer();
+    Item const* item = (m_objectTypeId == TYPEID_ITEM || m_objectTypeId == TYPEID_CONTAINER) ? static_cast<Item const*>(this) : nullptr;
+    Container const* container = m_objectTypeId == TYPEID_CONTAINER ? static_cast<Container const*>(this) : nullptr;
+    GameObject const* gameObject = m_objectTypeId == TYPEID_GAMEOBJECT ? static_cast<GameObject const*>(this) : nullptr;
+    DynamicObject const* dynamicObject = m_objectTypeId == TYPEID_DYNAMICOBJECT ? static_cast<DynamicObject const*>(this) : nullptr;
+    Corpse const* corpse = m_objectTypeId == TYPEID_CORPSE ? static_cast<Corpse const*>(this) : nullptr;
+    const bool ownerVisible = player != nullptr && target == player;
+
+    // target may legitimately be nullptr for non-recipient-specific world updates.
+    // Forever GUID identity must therefore not depend on a Player/Session.
+    const WoWGuid modernGuid = WoWGuid::createModernFromLegacy(
+        m_wowGuid.getRawGuid(),
+        worldConfig.battleNetComm.realmId,
+        static_cast<uint16_t>(GetMapId()),
+        0);
+    const std::vector<uint8_t> packedGuid = modernGuid.packModern();
+    const std::vector<uint8_t> block = AscEmu::Version::Forever::ObjectUpdate::buildValuesUpdateBlock69913(std::span<const uint8_t>(packedGuid.data(), packedGuid.size()), ownerVisible, m_foreverObjectFields, item ? &item->foreverItemFields() : nullptr, container ? &container->foreverContainerFields() : nullptr, unit ? &unit->foreverUnitFields() : nullptr, player ? &player->foreverPlayerFields() : nullptr, ownerVisible ? &player->foreverActivePlayerFields() : nullptr, gameObject ? &gameObject->foreverGameObjectFields() : nullptr, dynamicObject ? &dynamicObject->foreverDynamicObjectFields() : nullptr, corpse ? &corpse->foreverCorpseFields() : nullptr);
+
+    if (block.empty())
+        return 0;
+
+    data->append(block.data(), block.size());
+    return 1;
+#else
     UpdateMask updateMask;
     updateMask.SetCount(m_valuesCount);
     setUpdateBits(&updateMask, target);
@@ -2499,10 +2560,16 @@ uint32_t Object::BuildValuesUpdateBlockForPlayer(ByteBuffer* data, Player* targe
     }
 
     return 0;
+#endif
 }
 
 uint32_t Object::BuildValuesUpdateBlockForPlayer(ByteBuffer* buf, UpdateMask* mask)
 {
+#if defined(AE_FOREVER)
+    (void)buf;
+    (void)mask;
+    return 0;
+#else
     // returns: update count
     // update type == update
     if (m_wowGuid.getNewGuidLen() > 0)
@@ -2518,6 +2585,7 @@ uint32_t Object::BuildValuesUpdateBlockForPlayer(ByteBuffer* buf, UpdateMask* ma
 
     sLogger.failure("Object::BuildValuesUpdateBlockForPlayer tried to add data for invalid guid!");
     return 0;
+#endif
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////

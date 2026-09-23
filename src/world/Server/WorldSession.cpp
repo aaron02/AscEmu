@@ -48,6 +48,9 @@
 #include "Script/HookInterface.hpp"
 #include <cstdarg>
 #include "OpcodeHandlerRegistry.hpp"
+#if defined(AE_FOREVER)
+#include "version/Forever/Opcodes.hpp"
+#endif
 
 using namespace AscEmu::Packets;
 
@@ -257,6 +260,35 @@ uint8_t WorldSession::processQueuedPackets(uint32_t InstanceID)
     return 0;
 }
 
+#if defined(AE_FOREVER)
+bool WorldSession::sendForeverLogoutResponse(uint32_t reason, bool instantLogout)
+{
+    WorldSocket* socket = GetForeverInstanceSocket();
+    if (socket == nullptr || !socket->isConnected())
+        return false;
+
+    ByteBuffer payload;
+    payload << reason;
+    payload.writeBit(instantLogout);
+    payload.flushBits();
+
+    return socket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_LOGOUT_RESPONSE, payload.contents(), static_cast<uint32_t>(payload.size()));
+}
+
+bool WorldSession::sendForeverLogoutComplete()
+{
+    WorldSocket* socket = GetForeverInstanceSocket();
+    if (socket == nullptr || !socket->isConnected())
+        return false;
+
+    ByteBuffer payload;
+    payload.writeBit(false); // verified 69913 payload = 00
+    payload.flushBits();
+
+    return socket->sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_LOGOUT_COMPLETE, payload.contents(), static_cast<uint32_t>(payload.size()));
+}
+#endif
+
 void WorldSession::LogoutPlayer(bool Save)
 {
     Player* pPlayer = _player;
@@ -458,8 +490,18 @@ void WorldSession::LogoutPlayer(bool Save)
             sWorld.addGlobalSession(this);
         }
 
+#if defined(AE_FOREVER)
+        WorldSocket* foreverInstanceSocket = GetForeverInstanceSocket();
+        sendForeverLogoutComplete();
+        if (foreverInstanceSocket != nullptr && foreverInstanceSocket != _socket)
+        {
+            ClearForeverSocket(foreverInstanceSocket);
+            foreverInstanceSocket->disconnect();
+        }
+#else
         SmsgLogoutComplete managedPacket;
         sendManagedPacket(managedPacket);
+#endif
 
         sLogger.debug("SESSION: Sent SMSG_LOGOUT_COMPLETE Message");
     }

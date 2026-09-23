@@ -26,8 +26,45 @@ namespace AscEmu::Version::Forever
         registerOpcode(Opcode::CMSG_DB_QUERY_BULK, &WorldSocket::handleForeverDbQueryBulkOpcode);
         registerOpcode(Opcode::CMSG_HOTFIX_REQUEST, &WorldSocket::handleForeverHotfixRequestOpcode);
         registerOpcode(Opcode::CMSG_QUERY_CREATURE, &WorldSocket::handleForeverQueryCreatureOpcode);
+        registerOpcode(Opcode::CMSG_QUERY_GAME_OBJECT, &WorldSocket::handleForeverQueryGameObjectOpcode);
+        registerOpcode(Opcode::CMSG_UNKNOWN_NPC_INTERACT_003F0029, &WorldSocket::handleForeverUnknownNpcInteract003F0029Opcode);
         registerOpcode(Opcode::CMSG_LIST_INVENTORY, &WorldSocket::handleForeverListInventoryOpcode);
         registerOpcode(Opcode::CMSG_SET_SELECTION, &WorldSocket::handleForeverSetSelectionOpcode);
+
+        registerOpcode(Opcode::CMSG_MOVE_CHANGE_TRANSPORT, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_JUMP, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_DOUBLE_JUMP, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_FALL_LAND, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_FALL_RESET, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_UNKNOWN_003E002D, &WorldSocket::handleForeverUnknown003E002DOpcode);
+        registerOpcode(Opcode::CMSG_MOVE_UPDATE_FALL_SPEED, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_HEARTBEAT, &WorldSocket::handleMovementOpcodes);
+        
+        registerOpcode(Opcode::CMSG_MOVE_SET_ADV_FLY, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_SET_WALK_MODE, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_SET_RUN_MODE, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_SET_FLY, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_SET_PITCH, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_SET_FACING, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_SET_FACING_HEARTBEAT, &WorldSocket::handleMovementOpcodes);
+        
+        registerOpcode(Opcode::CMSG_MOVE_START_ASCEND, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_BACKWARD, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_DESCEND, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_FORWARD, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_PITCH_DOWN, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_PITCH_UP, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_STRAFE_LEFT, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_STRAFE_RIGHT, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_SWIM, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_TURN_LEFT, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_START_TURN_RIGHT, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_STOP, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_STOP_ASCEND, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_STOP_PITCH, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_STOP_STRAFE, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_STOP_SWIM, &WorldSocket::handleMovementOpcodes);
+        registerOpcode(Opcode::CMSG_MOVE_STOP_TURN, &WorldSocket::handleMovementOpcodes);
 
         registerOpcode(Opcode::CMSG_PING, &WorldSocket::handleForeverPingOpcode);
         registerOpcode(Opcode::CMSG_SOCIAL_CONTRACT_REQUEST, &WorldSocket::handleForeverSocialContractOpcode);
@@ -42,6 +79,8 @@ namespace AscEmu::Version::Forever
         registerOpcode(Opcode::CMSG_CHARACTER_SELECT_GATE_ACK, &WorldSocket::handleForeverIgnoredGlueOpcode);
         registerOpcode(Opcode::CMSG_CHARACTER_LIST_ACK, &WorldSocket::handleForeverCharacterListAckOpcode);
         registerOpcode(Opcode::CMSG_UPDATE_ACCOUNT_DATA, &WorldSocket::handleForeverUpdateAccountDataOpcode);
+        registerOpcode(Opcode::CMSG_LOGOUT_REQUEST, &WorldSocket::handleForeverLogoutRequestOpcode);
+        registerOpcode(Opcode::CMSG_LOGOUT_CANCEL, &WorldSocket::handleForeverLogoutCancelOpcode);
 
         m_initialized = true;
     }

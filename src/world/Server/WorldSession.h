@@ -206,6 +206,13 @@ public:
 
         void LogoutPlayer(bool Save);
 
+#if defined(AE_FOREVER)
+        void handleForeverLogoutRequest(bool idleLogout);
+        void handleForeverLogoutCancel();
+        bool sendForeverLogoutResponse(uint32_t reason, bool instantLogout);
+        bool sendForeverLogoutComplete();
+#endif
+
         void QueuePacket(std::unique_ptr<WorldPacket> packet);
 
         void OutPacket(uint16_t opcode, uint16_t len, const void* data);

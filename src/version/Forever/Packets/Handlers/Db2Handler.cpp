@@ -89,15 +89,7 @@ bool WorldSocket::handleForeverDbQueryBulkOpcode(AscEmu::Version::Forever::Packe
         requestedIdText << requestedIds[index];
     }
 
-    sLogger.info("WorldSocket::Forever: CMSG_DB_QUERY_BULK #{} table=0x{:08X} source='{}' records={} served={} missing={} requestedIds(first {})=[{}].",
-        m_foreverDbQueryBulkCount,
-        tableHash,
-        resolvedTable,
-        queryCount,
-        served,
-        missing,
-        requestedIds.size(),
-        requestedIdText.str());
+    sLogger.info("WorldSocket::Forever: CMSG_DB_QUERY_BULK #{} table=0x{:08X} source='{}' records={} served={} missing={} requestedIds(first {})=[{}].", m_foreverDbQueryBulkCount, tableHash, resolvedTable, queryCount, served, missing, requestedIds.size(), requestedIdText.str());
 
     if (m_foreverPostDbEnumRefreshPending && !m_foreverPostDbEnumRefreshSent && m_foreverDbQueryBulkCount >= 2U)
     {

@@ -28,6 +28,10 @@ protected:
     bool dispatchForeverOpcode(uint32_t rawOpcode, const uint8_t* payload, size_t payloadSize);
     bool processForeverGlueState(AscEmu::Version::Forever::Packets::Packet& packet, bool& consumed);
 
+    // Movement handlers.
+    bool handleMovementOpcodes(AscEmu::Version::Forever::Packets::Packet& packet);
+    bool handleForeverUnknown003E002DOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
+
     // Character handlers.
     bool handleForeverCharEnumOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverCheckCharacterNameOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
@@ -42,9 +46,13 @@ protected:
     bool handleForeverDbQueryBulkOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverHotfixRequestOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverQueryCreatureOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
+    bool handleForeverQueryGameObjectOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
+    bool handleForeverUnknownNpcInteract003F0029Opcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverListInventoryOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverSetSelectionOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverPingOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
+    bool handleForeverLogoutRequestOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
+    bool handleForeverLogoutCancelOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverSocialContractOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverSocialContractAcceptOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverServerTimeOffsetOpcode(AscEmu::Version::Forever::Packets::Packet& packet);

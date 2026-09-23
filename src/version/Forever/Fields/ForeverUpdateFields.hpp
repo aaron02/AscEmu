@@ -442,7 +442,7 @@ namespace AscEmu::Version::Forever::Fields
         static inline constexpr std::size_t PetFlagsBit = 89;
         static inline constexpr std::size_t ShapeshiftFormBit = 90;
 
-        // The 69913 differential updates observed in the new retail sniff line up
+        // The verified 69913 differential updates line up
         // with the modern 230-bit grouping (for example bits 48/49/52/90 and
         // the 148..150 power island). Keep the complete array groups aligned.
         static inline constexpr std::size_t PowerGroupBit = 139;
@@ -761,7 +761,7 @@ namespace AscEmu::Version::Forever::Fields
         bool hasChanges() const { return changes.any(); }
 
         // Forever 1.60.1.69913 CREATE wire order.
-        // Only capture-proven semantics keep semantic names. Every other field
+        // Only wire-verified semantics keep semantic names. Every other field
         // intentionally uses an unknown*69913 name, even when an older client
         // gives the slot a plausible semantic meaning.
 
@@ -776,11 +776,11 @@ namespace AscEmu::Version::Forever::Fields
         uint32_t unknownU32_3_69913 = 0;
         int32_t unknownI32_0_69913 = 0;
 
-        // Capture-proven 5-byte structural block immediately before the two
+        // Wire-verified 5-byte structural block immediately before the two
         // customization-count fields. Internal semantics are unknown.
         std::array<uint8_t, 5> unknownBeforeCustomizationCounts69913{};
 
-        // Capture-proven customization list. The second list occupies a proven
+        // Wire-verified customization list. The second list occupies a proven
         // customization-shaped wire slot, but its semantic purpose is not yet proven.
         std::vector<ChrCustomizationChoice> customizations;
         std::vector<ChrCustomizationChoice> unknownCustomizationChoices0_69913;
@@ -828,7 +828,7 @@ namespace AscEmu::Version::Forever::Fields
         CustomTabardInfo unknownCustomTabard0_69913{};
         NpcAsPlayerInfo unknownNpcAsPlayer0_69913{};
 
-        // Capture-proven 33-byte structural block immediately before the
+        // Wire-verified 33-byte structural block immediately before the
         // ChrCustomizationChoice payload. Internal semantics are unknown.
         std::array<uint8_t, 33> unknownBeforeCustomizationPayload69913{
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -838,7 +838,7 @@ namespace AscEmu::Version::Forever::Fields
             0x01
         };
 
-        // Capture-proven 69913 name tail.
+        // Wire-verified 69913 name tail.
         std::string firstName;
         std::string lastName;
 
@@ -853,7 +853,7 @@ namespace AscEmu::Version::Forever::Fields
     {
         static inline constexpr std::size_t ChangeMaskSize = 398;
         // Runtime candidate bit positions retained from the old mapping.
-        // Do not treat these names as 69913 proof until a VALUES sniff confirms them.
+        // These bit positions remain provisional until differential VALUES testing confirms them.
         static inline constexpr std::size_t UnknownChangeBit56_69913 = 56;
         static inline constexpr std::size_t UnknownChangeBit57_69913 = 57;
         static inline constexpr std::size_t UnknownChangeBit58_69913 = 58;
@@ -876,15 +876,25 @@ namespace AscEmu::Version::Forever::Fields
         // Keep this declaration order aligned with writeActivePlayerDataCreate.
         // Names inherited from older layouts are not automatically considered
         // proven Forever semantics; they remain until their regions are replaced
-        // by capture-proven names/unknown blocks.
+        // by wire-verified names/unknown blocks.
         // -----------------------------------------------------------------
 
         std::array<WoWGuid, 105> invSlots{};
         WoWGuid farsightObject;
         WoWGuid summonedBattlePetGuid;
 
-        // Count is written here; payload is emitted in the dynamic payload tail.
-        std::vector<uint64_t> knownTitles;
+        // The uint32 knownTitles count is emitted here on the CREATE wire.
+        // The actual uint64 title payload is emitted later, after the outfit
+        // cluster; keep the member itself at that later declaration position
+        // so this struct mirrors wire payload order instead of count order.
+
+        // WoW 1.60.1.69913: 80-byte zeroed prefix extension observed between
+        // the known-titles count and the fixed core scalars. Its semantics are
+        // intentionally left unknown until differential tests (for example
+        // with the additional Forever bag/inventory state) can prove ownership.
+        static inline constexpr std::size_t UnknownInventoryExtensionSize69913 = 80;
+        std::array<uint8_t, UnknownInventoryExtensionSize69913> unknownInventoryExtension69913{};
+
         uint64_t coinage = 0;
         uint64_t accountBankCoinage = 0;
         int32_t xp = 0;
@@ -893,67 +903,110 @@ namespace AscEmu::Version::Forever::Fields
 
         SkillInfo skill{};
 
-        // WoW 1.60.1.69913: the 104-byte create span immediately after
-        // SkillInfo is structurally capture-proven. Empty-inventory comparison
-        // shows bytes [0,28) and [65,104) matching the minimal zero-state,
-        // while only [28,65) contains capture-specific data. Semantics remain
-        // unknown, so retain neutral names.
-        std::array<uint8_t, 28> unknownAfterSkillInfoPrefix69913{};
-        std::array<uint8_t, 37> unknownAfterSkillInfoData69913{};
-        std::array<uint8_t, 39> unknownAfterSkillInfoSuffix69913{};
+        // WoW 1.60.1.69913: verified wire alignment plus the current retail
+        // ActivePlayerData source layout identifies this 104-byte span exactly
+        // as 26 consecutive 32-bit fields immediately following SkillInfo.
+        int32_t characterPoints = 0;
+        int32_t maxTalentTiers = 0;
+        uint32_t trackCreatureMask = 0;
+        float mainhandExpertise = 0.0f;
+        float offhandExpertise = 0.0f;
+        float rangedExpertise = 0.0f;
+        float combatRatingExpertise = 0.0f;
+        float blockPercentage = 0.0f;
+        float dodgePercentage = 0.0f;
+        float dodgePercentageFromAttribute = 0.0f;
+        float parryPercentage = 0.0f;
+        float parryPercentageFromAttribute = 0.0f;
+        float critPercentage = 0.0f;
+        float rangedCritPercentage = 0.0f;
+        float offhandCritPercentage = 0.0f;
+        float spellCritPercentage = 0.0f;
+        int32_t shieldBlock = 0;
+        float shieldBlockCritPercentage = 0.0f;
+        float mastery = 0.0f;
+        float speed = 0.0f;
+        float avoidance = 0.0f;
+        float sturdiness = 0.0f;
+        int32_t versatility = 0;
+        float versatilityBonus = 0.0f;
+        float pvpPowerDamage = 0.0f;
+        float pvpPowerHealing = 0.0f;
 
-        // WoW 1.60.1.69913: the following 180-byte create span is
-        // structurally capture-proven.  Empty-inventory comparison shows the
-        // first 4 bytes and the final 83 bytes matching the minimal zero-state;
-        // capture-specific bytes occur only inside [4,97).  Semantics are not
-        // proven, so keep neutral names.
-        std::array<uint8_t, 4> unknownPostSkillBlockPrefix69913{};
-        // The retail reference capture contains the visible combat-stat cluster in
-        // this span (including ~4.8%% values seen as Dodge/Crit in the character
-        // sheet). Exact per-field boundaries are intentionally not named yet; a
-        // differential capture is required before assigning 69913 semantics.
-        std::array<uint8_t, 93> unknownPostSkillBlockData69913{};
-        std::array<uint8_t, 83> unknownPostSkillBlockSuffix69913{};
+        // WoW 1.60.1.69913: structurally verified 180-byte create span.
+        // The final 80 bytes form five repeated 16-byte records. Their two trailing
+        // floats are 1.0f in all five entries.
+        // Semantics are intentionally left neutral until differential tests
+        // with different equipment can prove the meaning.
+        struct PostSkillRecord69913
+        {
+            uint32_t unknown0 = 0;
+            uint32_t unknown4 = 0;
+            float multiplier0 = 0.0f;
+            float multiplier1 = 0.0f;
+        };
 
-        // WoW 1.60.1.69913: structurally capture-proven 1089-byte wire span
-        // immediately before the transmog-outfit island.  After normalizing all
-        // preceding capture-specific data, bytes [0,348) and [1070,1089) are
-        // byte-identical to the empty-inventory capture.  Capture-specific data
-        // occurs only in [348,1070).  Semantics remain unknown, so retain neutral
-        // names and do not infer Midnight fields from this split.
-        static inline constexpr std::size_t UnknownBeforeTransmogPrefixSize69913 = 348;
-        static inline constexpr std::size_t UnknownBeforeTransmogDataSize69913 = 722;
-        static inline constexpr std::size_t UnknownBeforeTransmogSuffixSize69913 = 19;
-        std::array<uint8_t, UnknownBeforeTransmogPrefixSize69913> unknownBeforeTransmogPrefix69913{};
-        std::array<uint8_t, UnknownBeforeTransmogDataSize69913> unknownBeforeTransmogData69913{};
-        std::array<uint8_t, UnknownBeforeTransmogSuffixSize69913> unknownBeforeTransmogSuffix69913{};
+        static inline constexpr std::size_t PostSkillHeaderSize69913 = 98;
+        static inline constexpr std::size_t PostSkillRecordCount69913 = 5;
+        static inline constexpr std::size_t PostSkillTailSize69913 = 2;
+        std::array<uint8_t, PostSkillHeaderSize69913> unknownPostSkillHeader69913{};
+        std::array<PostSkillRecord69913, PostSkillRecordCount69913> unknownPostSkillRecords69913{};
+        std::array<uint8_t, PostSkillTailSize69913> unknownPostSkillTail69913{};
 
-        // Capture-proven transmog outfit island.
-        std::map<uint32_t, DynamicRecord> transmogOutfits;
+        // WoW 1.60.1.69913: the first 922 bytes of the former 1089-byte
+        // "pre-transmog" span are still semantically unresolved. They include
+        // one outfit-related record whose exact schema is not yet proven. The
+        // reference-specific text payload is neutralized. Keep only this prefix
+        // opaque; everything after it is now emitted through typed outfit fields.
+        static inline constexpr std::size_t UnknownBeforeOutfitSize69913 = 922;
+        std::array<uint8_t, UnknownBeforeOutfitSize69913> unknownBeforeOutfit69913{};
+
+        // Wire-verified Forever 69913 outfit cluster immediately following the
+        // opaque prefix. The two scalar values precede the currently viewed
+        // outfit in the reference create state; their semantics are not yet
+        // proven, so keep neutral names while still generating them explicitly.
+        uint32_t unknownOutfitScalar0_69913 = 0;
+        uint32_t unknownOutfitScalar1_69913 = 0;
         TransmogOutfitData viewedOutfit{};
+
+        // The reference create state contains two additional complete outfit
+        // records after ViewedOutfit ("Outfit 1" and "Outfit"). Their container
+        // semantics are still under verification, but the count + element wire
+        // encoding and each TransmogOutfitData payload are wire-verified.
+        std::vector<TransmogOutfitData> additionalOutfits69913;
         TransmogOutfitMetadata transmogMetadata{};
 
-        // Opaque minimal tail after the capture-proven transmog metadata.
+        // CREATE wire payload for the title entries. Its uint32 element count
+        // is emitted in the prefix immediately after summonedBattlePetGuid.
+        // Keeping the vector here makes the member declaration order follow
+        // the actual payload order while preserving the split count/payload
+        // encoding used by the wire format.
+        std::vector<uint64_t> knownTitles;
+
+        // Opaque minimal tail after the verified transmog metadata.
         // Current zero-state wire span is 2 bytes; semantics are not proven.
         static inline constexpr std::size_t UnknownAfterTransmogSize69913 = 2;
         std::array<uint8_t, UnknownAfterTransmogSize69913> unknownAfterTransmog69913{};
     };
 
-    struct GameObjectAssistActionData
-    {
-        std::string playerName;
-        std::string monsterName;
-        uint32_t virtualRealmAddress = 0;
-        uint8_t sex = 0;
-        int64_t time = 0;
-        int32_t delveTier = 0;
-    };
-
     struct GameObjectData
     {
-        static inline constexpr std::size_t ChangeMaskSize = 27;
+        // 1.60.1.69913 uses a 28-bit GameObject change mask. The complete
+        // create payload and an all-fields VALUES sample from retail both
+        // serialize 104 bytes after ObjectData. Bits 0..25 are structurally
+        // identified; the final two uint32 values are still semantically
+        // unknown and intentionally kept neutral until a sniff exercises them.
+        static inline constexpr std::size_t ChangeMaskSize = 28;
+        static inline constexpr std::size_t GroupBit = 0;
+        static inline constexpr std::size_t StateWorldEffectIdsBit = 1;
+        static inline constexpr std::size_t EnableDoodadSetsBit = 2;
+        static inline constexpr std::size_t WorldEffectsBit = 3;
         static inline constexpr std::size_t DisplayIdBit = 4;
         static inline constexpr std::size_t SpellVisualIdBit = 5;
+        static inline constexpr std::size_t StateSpellVisualIdBit = 6;
+        static inline constexpr std::size_t SpawnTrackingStateAnimIdBit = 7;
+        static inline constexpr std::size_t SpawnTrackingStateAnimKitIdBit = 8;
+        static inline constexpr std::size_t StateWorldEffectsQuestObjectiveIdBit = 9;
         static inline constexpr std::size_t CreatedByBit = 10;
         static inline constexpr std::size_t GuildGuidBit = 11;
         static inline constexpr std::size_t FlagsBit = 12;
@@ -966,16 +1019,22 @@ namespace AscEmu::Version::Forever::Fields
         static inline constexpr std::size_t ArtKitBit = 19;
         static inline constexpr std::size_t CustomParamBit = 20;
         static inline constexpr std::size_t LevelBit = 21;
+        static inline constexpr std::size_t AnimGroupInstanceBit = 22;
+        static inline constexpr std::size_t UiWidgetItemIdBit = 23;
+        static inline constexpr std::size_t UiWidgetItemQualityBit = 24;
+        static inline constexpr std::size_t UiWidgetItemCountBit = 25;
+        static inline constexpr std::size_t UnknownU32Bit26_69913 = 26;
+        static inline constexpr std::size_t UnknownU32Bit27_69913 = 27;
 
         std::bitset<ChangeMaskSize> changes{};
-        std::vector<uint32_t> stateWorldEffectIds;
-        std::vector<int32_t> enableDoodadSets;
-        std::vector<int32_t> worldEffects;
+
+        // Wire order for CREATE_OBJECT in build 69913.
         int32_t displayId = 0;
         uint32_t spellVisualId = 0;
         uint32_t stateSpellVisualId = 0;
         uint32_t spawnTrackingStateAnimId = 0;
         uint32_t spawnTrackingStateAnimKitId = 0;
+        std::vector<uint32_t> stateWorldEffectIds;
         uint32_t stateWorldEffectsQuestObjectiveId = 0;
         WoWGuid createdBy;
         WoWGuid guildGuid;
@@ -983,19 +1042,22 @@ namespace AscEmu::Version::Forever::Fields
         uint32_t flagsB = 0;
         std::array<float, 4> parentRotation{0.0f, 0.0f, 0.0f, 1.0f};
         int32_t factionTemplate = 0;
+        int32_t level = 0;
         int8_t state = 0;
         int8_t typeId = 0;
-        uint8_t percentHealth = 100;
-        uint32_t artKit = 0;
+        uint8_t percentHealth = 255;
+        uint8_t artKit = 0;
+        std::vector<int32_t> enableDoodadSets;
         uint32_t customParam = 0;
-        int32_t level = 0;
+        std::vector<int32_t> worldEffects;
         uint32_t animGroupInstance = 0;
         uint32_t uiWidgetItemId = 0;
         uint32_t uiWidgetItemQuality = 0;
         uint32_t uiWidgetItemCount = 0;
-        std::optional<GameObjectAssistActionData> assistActionData;
+        uint32_t unknownU32_26_69913 = 0;
+        uint32_t unknownU32_27_69913 = 0;
 
-        void markChanged(std::size_t bit) { changes.set(bit & ~std::size_t(31)); changes.set(bit); }
+        void markChanged(std::size_t bit) { changes.set(GroupBit); changes.set(bit); }
         void clearChanges() { changes.reset(); }
         bool hasChanges() const { return changes.any(); }
     };

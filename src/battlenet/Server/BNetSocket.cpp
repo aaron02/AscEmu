@@ -1008,16 +1008,7 @@ namespace AscEmu::Battlenet
             const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(clientBuild);
             if (foreverProfile.build != 0u)
             {
-                sLogger.info(
-                    "BNet: Forever profile -> build={}, collection={}, superDistrictSet={}, playstyles=[{}:PvP,{}:Normal], cfgTimezonesID={}, cfgContentSetID(current)={}, contentSetKnown={}",
-                    foreverProfile.build,
-                    foreverProfile.collectionId,
-                    foreverProfile.superDistrictSetId,
-                    foreverProfile.pvpAvailableSuperDistrictId,
-                    foreverProfile.normalAvailableSuperDistrictId,
-                    getRealmCfgTimezonesId(clientBuild),
-                    foreverProfile.currentCfgContentSetId,
-                    foreverProfile.contentSetIdKnown ? "yes" : "no");
+                sLogger.info("BNet: Forever profile -> build={}, collection={}, superDistrictSet={}, playstyles=[{}:PvP,{}:Normal], cfgTimezonesID={}, cfgContentSetID(current)={}, contentSetKnown={}", foreverProfile.build, foreverProfile.collectionId, foreverProfile.superDistrictSetId, foreverProfile.pvpAvailableSuperDistrictId, foreverProfile.normalAvailableSuperDistrictId, getRealmCfgTimezonesId(clientBuild), foreverProfile.currentCfgContentSetId, foreverProfile.contentSetIdKnown ? "yes" : "no");
             }
 
             std::ostringstream realmJson;
@@ -2552,22 +2543,12 @@ namespace AscEmu::Battlenet
         const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(m_clientBuild);
         if (foreverProfile.build != 0u)
         {
-            sLogger.info(
-                "BNet: connection #{} Forever SuperDistrict mapping -> collection={}, set={}, playstyles=[{}:PvP,{}:Normal], cfgContentSetID(current)={}, contentSetKnown={}",
-                m_connectionId,
-                foreverProfile.collectionId,
-                foreverProfile.superDistrictSetId,
-                foreverProfile.pvpAvailableSuperDistrictId,
-                foreverProfile.normalAvailableSuperDistrictId,
-                foreverProfile.currentCfgContentSetId,
-                foreverProfile.contentSetIdKnown ? "yes" : "no");
+            sLogger.info("BNet: connection #{} Forever SuperDistrict mapping -> collection={}, set={}, playstyles=[{}:PvP,{}:Normal], cfgContentSetID(current)={}, contentSetKnown={}", m_connectionId, foreverProfile.collectionId, foreverProfile.superDistrictSetId, foreverProfile.pvpAvailableSuperDistrictId, foreverProfile.normalAvailableSuperDistrictId, foreverProfile.currentCfgContentSetId, foreverProfile.contentSetIdKnown ? "yes" : "no");
         }
 
         if (m_clientBuild == 69893u)
         {
-            sLogger.info(
-                "BNet: connection #{} SuperDistrictList -> token={}, command='{}', build={}, schema=ForeverSuperDistrictID, superDistricts={}, json='{}', response={} byte(s)",
-                m_connectionId, token, commandName, m_clientBuild, advertisedCount, json.str(), response.size());
+            sLogger.info("BNet: connection #{} SuperDistrictList -> token={}, command='{}', build={}, schema=ForeverSuperDistrictID, superDistricts={}, json='{}', response={} byte(s)", m_connectionId, token, commandName, m_clientBuild, advertisedCount, json.str(), response.size());
         }
         else
         {
@@ -2589,15 +2570,7 @@ namespace AscEmu::Battlenet
         const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(m_clientBuild);
         if (foreverProfile.build != 0u)
         {
-            sLogger.info(
-                "BNet: connection #{} LastCharPlayed Forever context -> collection={}, set={}, playstyles=[{}:PvP,{}:Normal], cfgContentSetID(current)={}, contentSetKnown={}",
-                m_connectionId,
-                foreverProfile.collectionId,
-                foreverProfile.superDistrictSetId,
-                foreverProfile.pvpAvailableSuperDistrictId,
-                foreverProfile.normalAvailableSuperDistrictId,
-                foreverProfile.currentCfgContentSetId,
-                foreverProfile.contentSetIdKnown ? "yes" : "no");
+            sLogger.info("BNet: connection #{} LastCharPlayed Forever context -> collection={}, set={}, playstyles=[{}:PvP,{}:Normal], cfgContentSetID(current)={}, contentSetKnown={}", m_connectionId, foreverProfile.collectionId, foreverProfile.superDistrictSetId, foreverProfile.pvpAvailableSuperDistrictId, foreverProfile.normalAvailableSuperDistrictId, foreverProfile.currentCfgContentSetId, foreverProfile.contentSetIdKnown ? "yes" : "no");
         }
 
         if (m_clientBuild == 69893u)

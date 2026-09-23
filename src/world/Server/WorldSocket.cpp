@@ -252,7 +252,7 @@ void WorldSocket::onDisconnect()
 
     if (m_session)
     {
-        m_session->SetSocket(nullptr);
+        m_session->ClearForeverSocket(this);
         m_session = nullptr;
     }
 

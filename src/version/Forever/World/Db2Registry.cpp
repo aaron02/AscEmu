@@ -93,12 +93,7 @@ namespace AscEmu::Version::Forever::Db2
                         return false;
                     }
 
-                    sLogger.info("Forever DB2: loaded '{}' table=0x{:08X} layout=0x{:08X} records={} recordSize={}.",
-                        table.name,
-                        tableHash,
-                        table.file->getLayoutHash(),
-                        table.file->getRecordCount(),
-                        table.file->getRecordSize());
+                    sLogger.info("Forever DB2: loaded '{}' table=0x{:08X} layout=0x{:08X} records={} recordSize={}.", table.name, tableHash, table.file->getLayoutHash(), table.file->getRecordCount(), table.file->getRecordSize());
                 }
 
                 if (!table.file)
@@ -156,25 +151,7 @@ namespace AscEmu::Version::Forever::Db2
                             candidateFields << field;
                         }
 
-                        sLogger.warning(
-                            "Forever DB2 ID miss diagnostic: table='{}' hash=0x{:08X} requestedId={} layout=0x{:08X} "
-                            "records={} recordSize={} fieldCount={}/{} headerIndexField={} headerIdRange=[{},{}] "
-                            "indexedIdRange=[{},{}] sampleIds=[{}] requestedIdSeenInField(s)=[{}].",
-                            table.name,
-                            tableHash,
-                            recordId,
-                            table.file->getLayoutHash(),
-                            recordCount,
-                            table.file->getRecordSize(),
-                            table.file->getFieldCount(),
-                            table.file->getTotalFieldCount(),
-                            table.file->getIndexField(),
-                            table.file->getMinId(),
-                            table.file->getMaxId(),
-                            indexedMin == UINT32_MAX ? 0U : indexedMin,
-                            indexedMax,
-                            samples.str(),
-                            candidateFields.str());
+                        sLogger.warning("Forever DB2 ID miss diagnostic: table='{}' hash=0x{:08X} requestedId={} layout=0x{:08X} " "records={} recordSize={} fieldCount={}/{} headerIndexField={} headerIdRange=[{},{}] " "indexedIdRange=[{},{}] sampleIds=[{}] requestedIdSeenInField(s)=[{}].", table.name, tableHash, recordId, table.file->getLayoutHash(), recordCount, table.file->getRecordSize(), table.file->getFieldCount(), table.file->getTotalFieldCount(), table.file->getIndexField(), table.file->getMinId(), table.file->getMaxId(), indexedMin == UINT32_MAX ? 0U : indexedMin, indexedMax, samples.str(), candidateFields.str());
                     }
                     return false;
                 }
@@ -210,11 +187,7 @@ namespace AscEmu::Version::Forever::Db2
                     ++rows;
                 }
 
-                sLogger.info(
-                    "Forever DB2: loaded {} SQL TactKey row(s), {} effective record(s) from `tact_key` for build <= {}.",
-                    rows,
-                    m_tactKeySqlRecords.size(),
-                    AscEmu::Version::Forever::Build);
+                sLogger.info("Forever DB2: loaded {} SQL TactKey row(s), {} effective record(s) from `tact_key` for build <= {}.", rows, m_tactKeySqlRecords.size(), AscEmu::Version::Forever::Build);
             }
 
             static bool readIdentity(std::filesystem::path const& path, HeaderIdentity& identity)
@@ -264,10 +237,7 @@ namespace AscEmu::Version::Forever::Db2
 
                     ++scanned;
                     HeaderIdentity identity;
-                    if (!readIdentity(path, identity)
-                        || identity.signature != Wdc5Signature
-                        || identity.version != Wdc5Version
-                        || identity.tableHash == 0)
+                    if (!readIdentity(path, identity) || identity.signature != Wdc5Signature || identity.version != Wdc5Version || identity.tableHash == 0)
                     {
                         continue;
                     }
@@ -283,10 +253,7 @@ namespace AscEmu::Version::Forever::Db2
                     }
                     else
                     {
-                        sLogger.warning("Forever DB2: duplicate table hash 0x{:08X}: keeping '{}', ignoring '{}'.",
-                            identity.tableHash,
-                            pos->second.path.string(),
-                            path.string());
+                        sLogger.warning("Forever DB2: duplicate table hash 0x{:08X}: keeping '{}', ignoring '{}'.", identity.tableHash, pos->second.path.string(), path.string());
                     }
                 }
 

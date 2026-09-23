@@ -220,10 +220,13 @@ namespace {
     {
         std::string error;
         if (file.load(dbcPath + format.filename, format, &error))
+        {
+            sLogger.info("Loaded {} DB2 table.", format.filename);
             return true;
+        }
 
         errors.push_back("Forever WDC5: " + error);
-        sLogger.failure("Forever WDC5: {}", error);
+        sLogger.failure("Failed to load {} DB2 table.", format.filename);
         return false;
     }
 
@@ -352,13 +355,6 @@ namespace {
             sFactionTemplateStore[entry.id] = std::move(entry);
         }
 
-        auto const* humanFemale = getForeverChrModel(1, 1);
-        auto const* humanRace = sChrRacesStore.lookupEntry(1);
-        auto const* rogueClass = sChrClassesStore.lookupEntry(4);
-        auto const* humanFactionTemplate = sFactionTemplateStore.lookupEntry(humanRace ? humanRace->factionId : 0U);
-        auto const* humanFaction = humanFactionTemplate ? sFactionStore.lookupEntry(humanFactionTemplate->faction) : nullptr;
-        sLogger.info("Forever WDC5: loaded ChrModel={} (layout=0x{:08X}), ChrRaceXChrModel={} (layout=0x{:08X}), ChrRaces={} (layout=0x{:08X}), ChrClasses={} (layout=0x{:08X}), Faction={} (layout=0x{:08X}), FactionTemplate={} (layout=0x{:08X}); human female displayId={}, human teamId={}, rogue powerType={}, human factionTemplate={} -> faction={} (loaded={}).", sChrModelStore.getNumRows(), chrModel.getLayoutHash(), sChrRaceXChrModelStore.getNumRows(), chrRaceXChrModel.getLayoutHash(), sChrRacesStore.getNumRows(), chrRaces.getLayoutHash(), sChrClassesStore.getNumRows(), chrClasses.getLayoutHash(), sFactionStore.getNumRows(), faction.getLayoutHash(), sFactionTemplateStore.getNumRows(), factionTemplate.getLayoutHash(), humanFemale ? humanFemale->displayId : 0U, humanRace ? humanRace->teamId : 0U, rogueClass ? rogueClass->powerType : 0U, humanRace ? humanRace->factionId : 0U, humanFactionTemplate ? humanFactionTemplate->faction : 0U, humanFaction != nullptr);
-
         return true;
     }
 
@@ -372,8 +368,6 @@ namespace {
         bool const displayInfoExtraLoaded = loadForeverWDC5(creatureDisplayInfoExtra, ForeverFormat::CreatureDisplayInfoExtra, errors, dbcPath);
         bool const modelDataLoaded = loadForeverWDC5(creatureModelData, ForeverFormat::CreatureModelData, errors, dbcPath);
 
-        sLogger.info("Forever WDC5 creature load result: CreatureDisplayInfo={} CreatureDisplayInfoExtra={} CreatureModelData={}.", displayInfoLoaded, displayInfoExtraLoaded, modelDataLoaded);
-
         if (displayInfoLoaded)
         {
             sCreatureDisplayInfoStore.clear();
@@ -386,12 +380,6 @@ namespace {
                 entry.extendedDisplayInfoId = creatureDisplayInfo.getUInt32(row, 7);
                 sCreatureDisplayInfoStore[entry.id] = std::move(entry);
             }
-
-            sLogger.info("Forever WDC5: loaded CreatureDisplayInfo={} (records={}, layout=0x{:08X}).", sCreatureDisplayInfoStore.getNumRows(), creatureDisplayInfo.getRecordCount(), creatureDisplayInfo.getLayoutHash());
-        }
-        else
-        {
-            sLogger.failure("Forever WDC5: CreatureDisplayInfo.db2 was not loaded; existing store size={}.", sCreatureDisplayInfoStore.getNumRows());
         }
 
         if (displayInfoExtraLoaded)
@@ -405,12 +393,6 @@ namespace {
                 entry.displaySexId = creatureDisplayInfoExtra.getUInt8(row, 2);
                 sCreatureDisplayInfoExtraStore[entry.displayExtraId] = std::move(entry);
             }
-
-            sLogger.info("Forever WDC5: loaded CreatureDisplayInfoExtra={} (records={}, layout=0x{:08X}).", sCreatureDisplayInfoExtraStore.getNumRows(), creatureDisplayInfoExtra.getRecordCount(), creatureDisplayInfoExtra.getLayoutHash());
-        }
-        else
-        {
-            sLogger.failure("Forever WDC5: CreatureDisplayInfoExtra.db2 was not loaded; existing store size={}.", sCreatureDisplayInfoExtraStore.getNumRows());
         }
 
         if (modelDataLoaded)
@@ -427,12 +409,6 @@ namespace {
                 entry.mountHeight = creatureModelData.getFloat(row, 25);
                 sCreatureModelDataStore[entry.id] = std::move(entry);
             }
-
-            sLogger.info("Forever WDC5: loaded CreatureModelData={} (records={}, layout=0x{:08X}).", sCreatureModelDataStore.getNumRows(), creatureModelData.getRecordCount(), creatureModelData.getLayoutHash());
-        }
-        else
-        {
-            sLogger.failure("Forever WDC5: CreatureModelData.db2 was not loaded; existing store size={}.", sCreatureModelDataStore.getNumRows());
         }
 
         return displayInfoLoaded && displayInfoExtraLoaded && modelDataLoaded;
@@ -565,27 +541,6 @@ namespace {
             sChrCustomizationReqChoiceStore[entry.id] = entry;
         }
 
-        uint32_t humanFemaleOptions = 0;
-        uint32_t humanFemaleChoices = 0;
-        if (auto const* humanFemale = getForeverChrModel(1, 1))
-        {
-            for (auto const& [id, customizationOption] : sChrCustomizationOptionStore)
-            {
-                (void)id;
-                if (customizationOption.chrModelId != humanFemale->id)
-                    continue;
-                ++humanFemaleOptions;
-                for (auto const& [choiceId, customizationChoice] : sChrCustomizationChoiceStore)
-                {
-                    (void)choiceId;
-                    if (customizationChoice.optionId == customizationOption.id)
-                        ++humanFemaleChoices;
-                }
-            }
-        }
-
-        sLogger.info("Forever WDC5 customizations: ChrCustomization={} BoneSet={} Category={} Choice={} CondModel={} Conversion={} DisplayInfo={} Element={} Geoset={} GlyphPet={} Material={} Option={} Req={} ReqChoice={} SkinnedModel={} VisReq={} Voice={}; typed stores Choice={} Option={} Element={} DisplayInfo={} Req={} ReqChoice={}; human female options={} choices={}.", customization.getRecordCount(), boneSet.getRecordCount(), category.getRecordCount(), choice.getRecordCount(), condModel.getRecordCount(), conversion.getRecordCount(), displayInfo.getRecordCount(), element.getRecordCount(), geoset.getRecordCount(), glyphPet.getRecordCount(), material.getRecordCount(), option.getRecordCount(), req.getRecordCount(), reqChoice.getRecordCount(), skinnedModel.getRecordCount(), visReq.getRecordCount(), voice.getRecordCount(), sChrCustomizationChoiceStore.getNumRows(), sChrCustomizationOptionStore.getNumRows(), sChrCustomizationElementStore.getNumRows(), sChrCustomizationDisplayInfoStore.getNumRows(), sChrCustomizationReqStore.getNumRows(), sChrCustomizationReqChoiceStore.getNumRows(), humanFemaleOptions, humanFemaleChoices);
-
         return true;
     }
 
@@ -650,8 +605,6 @@ namespace {
         }
         sTaxiPathNodeStore.assignEntries(pathNodeEntries);
 
-        sLogger.info("Forever WDC5 taxi: TaxiNodes={} records (rows={}, layout=0x{:08X}), TaxiPath={} records (rows={}, layout=0x{:08X}), TaxiPathNode={} records (rows={}, layout=0x{:08X}).", taxiNodes.getRecordCount(), sTaxiNodesStore.getNumRows(), taxiNodes.getLayoutHash(), taxiPath.getRecordCount(), sTaxiPathStore.getNumRows(), taxiPath.getLayoutHash(), taxiPathNode.getRecordCount(), sTaxiPathNodeStore.getNumRows(), taxiPathNode.getLayoutHash());
-
         return !nodeEntries.empty() && !pathEntries.empty() && !pathNodeEntries.empty();
     }
 
@@ -683,8 +636,6 @@ namespace {
             entries.emplace_back(entry.id, entry);
         }
 
-        uint32_t mergedGenericBonuses = 0;
-        uint32_t ignoredSpecializedBonuses = 0;
         std::map<uint32_t, uint32_t> bonusCountBySet;
 
         for (uint32_t row = 0; row < itemSetSpell.getRecordCount(); ++row)
@@ -698,7 +649,6 @@ namespace {
             uint16_t const traitSubTreeId = itemSetSpell.getUInt16(row, 2);
             if (chrSpecId != 0 || traitSubTreeId != 0)
             {
-                ++ignoredSpecializedBonuses;
                 continue;
             }
 
@@ -710,7 +660,6 @@ namespace {
             entry.SpellID[bonusIndex] = itemSetSpell.getUInt32(row, 1);
             entry.itemscount[bonusIndex] = itemSetSpell.getUInt8(row, 3);
             ++bonusIndex;
-            ++mergedGenericBonuses;
         }
 
         sItemSetStore.assignEntries(entries);
@@ -720,8 +669,6 @@ namespace {
         // but intentionally empty instead of reporting missing .dbc files.
         sItemRandomPropertiesStore.clear();
         sItemRandomSuffixStore.clear();
-
-        sLogger.info("Forever WDC5 items: ItemSet={} records (layout=0x{:08X}), ItemSetSpell={} records (layout=0x{:08X}), merged generic bonuses={}, ignored specialization/trait bonuses={}; ItemRandomProperties/ItemRandomSuffix are legacy-only and remain empty.", itemSet.getRecordCount(), itemSet.getLayoutHash(), itemSetSpell.getRecordCount(), itemSetSpell.getLayoutHash(), mergedGenericBonuses, ignoredSpecializedBonuses);
 
         return true;
     }
@@ -800,8 +747,6 @@ namespace {
         }
 
         auto const* map0 = sMapStore.lookupEntry(0);
-        auto const* map1 = sMapStore.lookupEntry(1);
-        sLogger.info("Forever WDC5 maps: Map={} readable (+{} encrypted skipped, layout=0x{:08X}), MapDifficulty={} readable (+{} encrypted skipped, layout=0x{:08X}), UiMapAssignment={} (layout=0x{:08X}), WorldMapOverlay={} (layout=0x{:08X}); map0={} type={}, map1={} type={}, legacy WorldMapArea={}.", sMapStore.getNumRows(), map.getSkippedEncryptedRecordCount(), map.getLayoutHash(), sMapDifficultyStore.getNumRows(), mapDifficulty.getSkippedEncryptedRecordCount(), mapDifficulty.getLayoutHash(), uiMapAssignment.getRecordCount(), uiMapAssignment.getLayoutHash(), sWorldMapOverlayStore.getNumRows(), worldMapOverlay.getLayoutHash(), map0 != nullptr, map0 ? map0->mapType : 0U, map1 != nullptr, map1 ? map1->mapType : 0U, sWorldMapAreaStore.getNumRows());
 
         return map0 != nullptr;
     }
@@ -935,9 +880,7 @@ bool loadDBCs()
                         if (raw.name[i] && raw.name[i][0] != '\0') {
                             uint8_t const detectedLocale = static_cast<uint8_t>(i);
                             sWorld.setDbcLocaleLanguageId(detectedLocale);
-                            sLogger.info("DBC: Auto-detected locale ID {} ({}) from ChrClasses.dbc",
-                                         detectedLocale,
-                                         Util::getLanguagesStringFromId(detectedLocale));
+                            sLogger.info("DBC: Auto-detected locale ID {} ({}) from ChrClasses.dbc", detectedLocale, Util::getLanguagesStringFromId(detectedLocale));
                             break;
                         }
                     }

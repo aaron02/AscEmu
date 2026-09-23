@@ -737,7 +737,6 @@ bool WorldSocket::processVersionedRead()
         }
 
         m_foreverWorldState = ForeverWorldState::AwaitAuthSession;
-        sLogger.info("WorldSocket::Forever: client initializer accepted from {}:{}.", getRemoteIp(), getRemotePort());
 
         if (!sendForeverAuthChallenge())
         {
@@ -746,7 +745,6 @@ bool WorldSocket::processVersionedRead()
             return true;
         }
 
-        sLogger.info("WorldSocket::Forever: sent SMSG_AUTH_CHALLENGE opcode=0x{:08X}, payload={} byte(s).", AscEmu::Version::Forever::WorldProtocol::SMSG_AUTH_CHALLENGE, AscEmu::Version::Forever::WorldProtocol::AuthChallengePayloadSize);
     }
 
     if (m_foreverWorldState == ForeverWorldState::AwaitAuthSession ||
@@ -861,7 +859,6 @@ bool WorldSocket::sendForeverAuthChallenge()
 
     payload.back() = 1; // DosZeroBits
 
-    sLogger.info("WorldSocket::Forever: AUTH_CHALLENGE server_challenge={} dos_challenge={}", AscEmu::Version::Forever::bytesToHex(m_foreverServerChallenge.data(), m_foreverServerChallenge.size()), AscEmu::Version::Forever::bytesToHex(m_foreverDosChallenge.data(), m_foreverDosChallenge.size()));
 
     return sendForeverWorldPacket(WorldProtocol::SMSG_AUTH_CHALLENGE, payload.data(), static_cast<uint32_t>(payload.size()));
 }
@@ -911,10 +908,6 @@ bool WorldSocket::processForeverAuthPacket()
         {
             sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: RX header opcode=0x{:08X}, payload={} byte(s), auth-tag={}.", m_foreverPacketOpcode, m_foreverPacketRemaining, nonZeroAuthTag ? "non-zero" : "zero");
         }
-        else
-        {
-            sLogger.info("WorldSocket::Forever: RX header opcode=0x{:08X}, payload={} byte(s), auth-tag={}.", m_foreverPacketOpcode, m_foreverPacketRemaining, nonZeroAuthTag ? "non-zero" : "zero");
-        }
     }
 
     if (readBuffer.GetSize() < m_foreverPacketRemaining)
@@ -936,13 +929,11 @@ bool WorldSocket::processForeverAuthPacket()
 
     if (opcode == WorldProtocol::CMSG_AUTH_SESSION)
     {
-        sLogger.info("WorldSocket::Forever: RX CMSG_AUTH_SESSION payload={} byte(s).", payload.size());
         return processForeverAuthSession(opcode, payload);
     }
 
     if (opcode == WorldProtocol::CMSG_AUTH_CONTINUED_SESSION)
     {
-        sLogger.info("WorldSocket::Forever: RX CMSG_AUTH_CONTINUED_SESSION payload={} byte(s).", payload.size());
         return processForeverAuthContinuedSession(opcode, payload);
     }
 
@@ -956,10 +947,6 @@ bool WorldSocket::processForeverAuthPacket()
     else if (opcode == WorldProtocol::CMSG_PING)
     {
         sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: RX opcode=0x{:08X}, payload={} byte(s), hex=[{}]", opcode, payload.size(), AscEmu::Version::Forever::bytesToHex(payload.data(), payload.size()));
-    }
-    else
-    {
-        sLogger.info("WorldSocket::Forever: RX opcode=0x{:08X}, payload={} byte(s), hex=[{}]", opcode, payload.size(), AscEmu::Version::Forever::bytesToHex(payload.data(), payload.size()));
     }
 
     if (opcode == WorldProtocol::CMSG_PING)
@@ -1063,7 +1050,6 @@ bool WorldSocket::beginForeverInstanceLogin(uint32_t guidLow)
         return false;
     }
 
-    sLogger.info("WorldSocket::Forever: sent SMSG_CONNECT_TO opcode=0x{:08X} guidLow={} key=0x{:016X} realm=0x{:08X} address={}:{} serial=17.", WorldProtocol::SMSG_CONNECT_TO, guidLow, connectToKey, nativeRealmAddress, connectHost, worldConfig.listen.listenPort);
     return true;
 }
 
@@ -1123,7 +1109,6 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
 
     offset += ticketSize;
 
-    sLogger.info("WorldSocket::Forever: CMSG_AUTH_SESSION parsed: " "dos_response={}, region={}, battlegroup={}, realm={}, ipv6={}, " "ticket_bytes={}, trailing_bytes={}.", dosResponse, regionId, battlegroupId, realmId, useIPv6 ? "yes" : "no", ticketSize, payload.size() - offset);
 
     AscEmu::BattlenetComm::PendingWorldSession pending;
     if (!AscEmu::BattlenetComm::sBattleNetCommClient.getPendingSession(realmJoinTicket, pending, false))
@@ -1167,7 +1152,6 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
         return false;
     }
 
-    sLogger.info("WorldSocket::Forever: CMSG_AUTH_SESSION digest verified for account={} build={}.", pending.accountId, pending.clientBuild);
 
     // Authentication succeeded. Keep session secrets out of normal logs.
 
@@ -1201,7 +1185,6 @@ bool WorldSocket::processForeverAuthSession(uint32_t opcode, const std::vector<u
     }
 
     m_foreverWorldState = ForeverWorldState::AwaitEncryptionAck;
-    sLogger.info("WorldSocket::Forever: CMSG_AUTH_SESSION accepted for build {}; " "SMSG_ENTER_ENCRYPTED_MODE sent, awaiting ACK.", pending.clientBuild);
 
     return true;
 }
@@ -1280,7 +1263,6 @@ bool WorldSocket::processForeverAuthContinuedSession(uint32_t opcode, const std:
         return false;
 
     m_foreverWorldState = ForeverWorldState::AwaitEncryptionAck;
-    sLogger.info("WorldSocket::Forever: CMSG_AUTH_CONTINUED_SESSION accepted key=0x{:016X} account={} guidLow={} dos_response={}; awaiting encrypted-mode ACK.", connectToKey, pending.session->GetAccountId(), pending.guidLow, dosResponse);
     return true;
 }
 
@@ -1309,7 +1291,6 @@ bool WorldSocket::sendForeverEnterEncryptedMode()
 
     if (sent)
     {
-        sLogger.info("WorldSocket::Forever: sent SMSG_ENTER_ENCRYPTED_MODE " "opcode=0x{:08X}, RegionGroup={}, payload={} byte(s).", WorldProtocol::SMSG_ENTER_ENCRYPTED_MODE, WorldProtocol::EnterEncryptedModeRegionGroup, payload.size());
     }
 
     return sent;
@@ -1339,7 +1320,6 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std
     m_foreverEncryptedOpcode.fill(0);
     m_foreverWorldState = ForeverWorldState::Encrypted;
 
-    sLogger.info("WorldSocket::Forever: CMSG_ENTER_ENCRYPTED_MODE_ACK accepted; " "AES-256-GCM enabled (send_counter={}, recv_counter={}).", m_foreverCryptoSendCounter, m_foreverCryptoRecvCounter);
 
     if (m_foreverContinuedSession)
     {
@@ -1372,7 +1352,7 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std
         if (!sendForeverWorldPacket(WorldProtocol::SMSG_RESUME_COMMS, nullptr, 0))
             return false;
 
-        sLogger.info("WorldSocket::Forever: instance connection attached account={} key=0x{:016X}; SMSG_RESUME_COMMS sent, continuing player login guidLow={}.", m_session->GetAccountId(), m_foreverConnectToKey, m_foreverPendingLoginGuid);
+        sLogger.info("WorldSocket::Forever: instance connection attached for account {}.", m_session->GetAccountId());
         m_session->beginForeverPlayerLogin(m_foreverPendingLoginGuid);
         return true;
     }
@@ -1395,7 +1375,6 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std
 
     if (WorldSession* existing = sWorld.getSessionByAccountId(m_foreverGameAccountId))
     {
-        sLogger.info("WorldSocket::Forever: replacing existing WorldSession for WoW game account {}.", m_foreverGameAccountId);
         existing->Disconnect();
     }
 
@@ -1422,7 +1401,7 @@ bool WorldSocket::processForeverEnterEncryptedModeAck(uint32_t opcode, const std
     sWorld.addSession(std::move(sessionHolder), false);
     isAuthenticated = true;
 
-    sLogger.info("WorldSocket::Forever: WorldSession handoff complete for battlenet_account={} game_account={} name='{}' build={}; modern encrypted session is active.", m_foreverBattleNetAccountId, m_foreverGameAccountId, m_foreverGameAccountName, m_foreverClientBuild);
+    sLogger.info("WorldSocket::Forever: session ready for game account {}.", m_foreverGameAccountId);
 
     return true;
 }
@@ -1471,14 +1450,12 @@ bool WorldSocket::sendForeverPostAuthBootstrap()
 
     for (const PacketView& packet : authPackets)
     {
-        const uint64_t counterBefore = m_foreverCryptoSendCounter;
         if (!sendForeverWorldPacket(packet.opcode, packet.data, packet.size))
         {
             sLogger.failure("WorldSocket::Forever: failed to send {} opcode=0x{:08X}, payload={} byte(s).", packet.name, packet.opcode, packet.size);
             return false;
         }
 
-        sLogger.info("WorldSocket::Forever: sent encrypted {} opcode=0x{:08X}, payload={} byte(s), crypto_counter={} -> {}.", packet.name, packet.opcode, packet.size, counterBefore, m_foreverCryptoSendCounter);
     }
 
     // Match the official 69893 pre-enum glue sequence, while using the same
@@ -1490,14 +1467,12 @@ bool WorldSocket::sendForeverPostAuthBootstrap()
 
     auto sendGluePacket = [this](uint32_t opcode, const uint8_t* data, uint32_t size, const char* name) -> bool
     {
-        const uint64_t counterBefore = m_foreverCryptoSendCounter;
         if (!sendForeverWorldPacket(opcode, data, size))
         {
             sLogger.failure("WorldSocket::Forever: failed to send {} opcode=0x{:08X}, payload={} byte(s).", name, opcode, size);
             return false;
         }
 
-        sLogger.info("WorldSocket::Forever: sent encrypted {} opcode=0x{:08X}, payload={} byte(s), crypto_counter={} -> {}.", name, opcode, size, counterBefore, m_foreverCryptoSendCounter);
         return true;
     };
 
@@ -1519,8 +1494,6 @@ bool WorldSocket::sendForeverPostAuthBootstrap()
 
     if (!sendGluePacket(WorldProtocol::SMSG_TUTORIAL_FLAGS, tutorialFlags460268.data(), static_cast<uint32_t>(tutorialFlags460268.size()), "SMSG_TUTORIAL_FLAGS"))
         return false;
-
-    sLogger.info("WorldSocket::Forever: 69893 post-auth/bootstrap sent with Midnight-core glue serializers " "(AuthResponse unix_time={}, AccountDataTimes pre-enum, TutorialFlags pre-enum); " "waiting for first encrypted client glue request.", authResponseUnixTime);
 
     return true;
 }

@@ -109,7 +109,7 @@ bool WorldSocket::handleForeverSocialContractAcceptOpcode(AscEmu::Version::Forev
     if (packet.remaining() != 0)
         sLogger.warning("WorldSocket::Forever: CMSG_SOCIAL_CONTRACT_ACCEPT expected empty payload.");
 
-    sLogger.info("WorldSocket::Forever: CMSG_SOCIAL_CONTRACT_ACCEPT received; no response required.");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: CMSG_SOCIAL_CONTRACT_ACCEPT.");
     return true;
 }
 
@@ -150,7 +150,7 @@ bool WorldSocket::handleForeverQueryCreatureOpcode(AscEmu::Version::Forever::Pac
 
     if (creature == nullptr)
     {
-        sLogger.info("WorldSocket::Forever: CMSG_QUERY_CREATURE entry={} -> not found; sending Allow=0.", creatureId);
+        sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: CMSG_QUERY_CREATURE entry={} not found.", creatureId);
         return sendForeverPacket(Opcode::SMSG_QUERY_CREATURE_RESPONSE, response.contents(), static_cast<uint32_t>(response.size()));
     }
 
@@ -255,7 +255,7 @@ bool WorldSocket::handleForeverQueryCreatureOpcode(AscEmu::Version::Forever::Pac
                 response << static_cast<int32_t>(questItem);
     }
 
-    sLogger.info("WorldSocket::Forever: CMSG_QUERY_CREATURE entry={} name='{}' title='{}' displays={} -> SMSG_QUERY_CREATURE_RESPONSE opcode=0x004A0006 payload={} byte(s).", creatureId, name, title, displayCount, response.size());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: CMSG_QUERY_CREATURE entry={} served.", creatureId);
 
     return sendForeverPacket(Opcode::SMSG_QUERY_CREATURE_RESPONSE, response.contents(), static_cast<uint32_t>(response.size()));
 }
@@ -338,7 +338,7 @@ bool WorldSocket::handleForeverListInventoryOpcode(AscEmu::Version::Forever::Pac
 
     const uint64_t legacyGuid = modernGuid.toLegacyRaw();
 
-    sLogger.info("WorldSocket::Forever: CMSG_LIST_INVENTORY target entry={} counter={} modernLow=0x{:016X} modernHigh=0x{:016X} -> legacyGuid=0x{:016X}.", modernGuid.getModernEntry(), modernGuid.getModernCounter(), modernGuid.getModernLow(), modernGuid.getModernHigh(), legacyGuid);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: CMSG_LIST_INVENTORY entry={} counter={}.", modernGuid.getModernEntry(), modernGuid.getModernCounter());
 
     m_session->handleListInventoryGuid(legacyGuid);
     return true;

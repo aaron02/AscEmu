@@ -18,7 +18,6 @@ bool WorldSocket::handleForeverUpdateAccountDataOpcode(AscEmu::Version::Forever:
         return true;
     }
 
-    sLogger.info("WorldSocket::Forever: CMSG_UPDATE_ACCOUNT_DATA type={} time={} decompressed={} compressed={}.", request.dataType, request.time, request.decompressedSize, request.compressedData.size());
 
     if (request.dataType != 16)
         return true;
@@ -35,7 +34,6 @@ bool WorldSocket::handleForeverUpdateAccountDataOpcode(AscEmu::Version::Forever:
     {
         CharacterDatabase.waitExecute("INSERT INTO character_list_order (acct, guid, listPosition) " "VALUES (%u, %llu, %u) " "ON DUPLICATE KEY UPDATE listPosition=VALUES(listPosition)", accountId, static_cast<unsigned long long>(entry.guidLow), static_cast<uint32_t>(entry.position));
 
-        sLogger.info("WorldSocket::Forever: character order account={} guid={} -> position={}.", accountId, entry.guidLow, entry.position);
     }
 
     // Official 69913 sends SMSG 0x004601B4 after CMSG_UPDATE_ACCOUNT_DATA
@@ -56,7 +54,6 @@ bool WorldSocket::handleForeverUpdateAccountDataOpcode(AscEmu::Version::Forever:
     if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_UPDATE_ACCOUNT_DATA_COMPLETE, complete.data(), static_cast<uint32_t>(complete.size())))
         return false;
 
-    sLogger.info("WorldSocket::Forever: sent SMSG_UPDATE_ACCOUNT_DATA_COMPLETE type=16 result=0.");
 
     return true;
 }

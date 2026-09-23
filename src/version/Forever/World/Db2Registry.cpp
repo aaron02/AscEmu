@@ -88,12 +88,12 @@ namespace AscEmu::Version::Forever::Db2
                     std::string error;
                     if (!table.file->loadGeneric(table.path.string(), &error))
                     {
-                        sLogger.failure("Forever DB2: failed to load '{}' for table=0x{:08X}: {}", table.path.string(), tableHash, error);
+                        sLogger.failure("Failed to load {} DB2 table.", table.name);
                         table.file.reset();
                         return false;
                     }
 
-                    sLogger.info("Forever DB2: loaded '{}' table=0x{:08X} layout=0x{:08X} records={} recordSize={}.", table.name, tableHash, table.file->getLayoutHash(), table.file->getRecordCount(), table.file->getRecordSize());
+                    sLogger.info("Loaded {} DB2 table.", table.name);
                 }
 
                 if (!table.file)
@@ -180,14 +180,12 @@ namespace AscEmu::Version::Forever::Db2
                 // active Forever build wins; VerifiedBuild=0 is the generic base.
                 auto const records = AscEmu::World::Storage::loadForeverTactKeys(AscEmu::Version::Forever::Build);
 
-                uint32_t rows = 0;
                 for (auto const& record : records)
                 {
                     m_tactKeySqlRecords[record.id] = record.key;
-                    ++rows;
                 }
 
-                sLogger.info("Forever DB2: loaded {} SQL TactKey row(s), {} effective record(s) from `tact_key` for build <= {}.", rows, m_tactKeySqlRecords.size(), AscEmu::Version::Forever::Build);
+                sLogger.info("Loaded TactKey SQL data.");
             }
 
             static bool readIdentity(std::filesystem::path const& path, HeaderIdentity& identity)
@@ -224,7 +222,6 @@ namespace AscEmu::Version::Forever::Db2
                     return;
                 }
 
-                uint32_t scanned = 0;
                 uint32_t indexed = 0;
                 for (std::filesystem::directory_iterator itr(dbcPath, ec), end; itr != end && !ec; itr.increment(ec))
                 {
@@ -235,7 +232,6 @@ namespace AscEmu::Version::Forever::Db2
                     if (path.extension() != ".db2" && path.extension() != ".DB2")
                         continue;
 
-                    ++scanned;
                     HeaderIdentity identity;
                     if (!readIdentity(path, identity) || identity.signature != Wdc5Signature || identity.version != Wdc5Version || identity.tableHash == 0)
                     {
@@ -260,7 +256,7 @@ namespace AscEmu::Version::Forever::Db2
                 if (ec)
                     sLogger.failure("Forever DB2: directory scan of '{}' stopped: {}.", dbcPath.string(), ec.message());
 
-                sLogger.info("Forever DB2: indexed {} WDC5 table(s) from '{}' ({} .db2 file(s) scanned).", indexed, dbcPath.string(), scanned);
+                sLogger.info("Indexed {} Forever DB2 tables.", indexed);
             }
 
             std::mutex m_mutex;

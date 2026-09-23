@@ -1005,12 +1005,6 @@ namespace AscEmu::Battlenet
                 }
             }
 
-            const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(clientBuild);
-            if (foreverProfile.build != 0u)
-            {
-                sLogger.info("BNet: Forever profile -> build={}, collection={}, superDistrictSet={}, playstyles=[{}:PvP,{}:Normal], cfgTimezonesID={}, cfgContentSetID(current)={}, contentSetKnown={}", foreverProfile.build, foreverProfile.collectionId, foreverProfile.superDistrictSetId, foreverProfile.pvpAvailableSuperDistrictId, foreverProfile.normalAvailableSuperDistrictId, getRealmCfgTimezonesId(clientBuild), foreverProfile.currentCfgContentSetId, foreverProfile.contentSetIdKnown ? "yes" : "no");
-            }
-
             std::ostringstream realmJson;
             realmJson << "JSONRealmListUpdates:{\"updates\":[";
 
@@ -1088,17 +1082,13 @@ namespace AscEmu::Battlenet
                         << "{\"wowRealmAddress\":" << address << ','
                         << "\"count\":" << characterCount << '}';
 
-                    sLogger.debug(
-                        "BNet: RealmList character count account={} realm={} address=0x{:08X} count={}",
-                        accountId, realm.id, address, characterCount);
+                    sLogger.debug( "BNet: RealmList character count account={} realm={} address=0x{:08X} count={}", accountId, realm.id, address, characterCount);
                 }
             }
 
             countJson << "]}";
 
-            sLogger.debug(
-                "BNet: RealmList JSON account={} realms={} realm_json='{}' character_count_json='{}'",
-                accountId, realms.size(), realmJson.str(), countJson.str());
+            sLogger.debug( "BNet: RealmList JSON account={} realms={} realm_json='{}' character_count_json='{}'", accountId, realms.size(), realmJson.str(), countJson.str());
 
             const std::vector<uint8_t> realmList = compressGameUtilitiesJson(realmJson.str());
             const std::vector<uint8_t> characterCounts = compressGameUtilitiesJson(countJson.str());
@@ -1583,11 +1573,7 @@ namespace AscEmu::Battlenet
         const int written = BIO_write(readBio, encryptedData.data(), static_cast<int>(encryptedData.size()));
         if (written <= 0 || static_cast<size_t>(written) != encryptedData.size())
         {
-            sLogger.failure(
-                "BNet: connection #{} failed to pass {} TLS byte(s) to OpenSSL",
-                m_connectionId,
-                encryptedData.size()
-            );
+            sLogger.failure( "BNet: connection #{} failed to pass {} TLS byte(s) to OpenSSL", m_connectionId, encryptedData.size() );
             disconnect();
             return;
         }
@@ -1607,10 +1593,7 @@ namespace AscEmu::Battlenet
         if (m_delayCloseAfterReadCallback)
         {
             m_delayCloseAfterReadCallback = false;
-            sLogger.info(
-                "BNet: connection #{} current TLS read completed; arming delayed socket close.",
-                m_connectionId
-            );
+            sLogger.info( "BNet: connection #{} current TLS read completed; arming delayed socket close.", m_connectionId );
             delayedDisconnect();
         }
     }
@@ -1637,14 +1620,7 @@ namespace AscEmu::Battlenet
                         ? std::string(reinterpret_cast<const char*>(alpn), alpnLength)
                         : "<none>";
 
-                sLogger.info(
-                    "BNet: connection #{} TLS handshake complete (version: {}, cipher: {}, SNI: '{}', ALPN: '{}')",
-                    m_connectionId,
-                    SSL_get_version(m_ssl),
-                    SSL_get_cipher_name(m_ssl),
-                    sni,
-                    alpnProtocol
-                );
+                sLogger.info( "BNet: connection #{} TLS handshake complete (version: {}, cipher: {}, SNI: '{}', ALPN: '{}')", m_connectionId, SSL_get_version(m_ssl), SSL_get_cipher_name(m_ssl), sni, alpnProtocol );
             }
             else
             {
@@ -1696,21 +1672,11 @@ namespace AscEmu::Battlenet
 
     bool BNetSocket::processPlainText(const uint8_t* data, size_t size)
     {
-        sLogger.debug(
-            "BNet: connection #{} decrypted RX {} byte(s)\n{}",
-            m_connectionId,
-            size,
-            makeHexDump(data, std::min(size, MAX_DIAGNOSTIC_DUMP_SIZE))
-        );
+        sLogger.debug( "BNet: connection #{} decrypted RX {} byte(s)\n{}", m_connectionId, size, makeHexDump(data, std::min(size, MAX_DIAGNOSTIC_DUMP_SIZE)) );
 
         if (size > MAX_DIAGNOSTIC_DUMP_SIZE)
         {
-            sLogger.debug(
-                "BNet: connection #{} decrypted RX dump truncated ({} of {} byte(s) shown)",
-                m_connectionId,
-                MAX_DIAGNOSTIC_DUMP_SIZE,
-                size
-            );
+            sLogger.debug( "BNet: connection #{} decrypted RX dump truncated ({} of {} byte(s) shown)", m_connectionId, MAX_DIAGNOSTIC_DUMP_SIZE, size );
         }
 
         m_plainTextBuffer.insert(m_plainTextBuffer.end(), data, data + size);
@@ -1728,12 +1694,7 @@ namespace AscEmu::Battlenet
 
             if (headerSize == 0 || headerSize > MAX_RPC_HEADER_SIZE)
             {
-                sLogger.failure(
-                    "BNet: connection #{} invalid RPC header length {} (buffered: {} byte(s))",
-                    m_connectionId,
-                    headerSize,
-                    m_plainTextBuffer.size()
-                );
+                sLogger.failure( "BNet: connection #{} invalid RPC header length {} (buffered: {} byte(s))", m_connectionId, headerSize, m_plainTextBuffer.size() );
                 return false;
             }
 
@@ -1744,23 +1705,14 @@ namespace AscEmu::Battlenet
             const RpcHeaderDiagnostic header = parseRpcHeader(headerData, headerSize);
             if (!header.valid)
             {
-                sLogger.failure(
-                    "BNet: connection #{} could not decode {} byte RPC protobuf header\n{}",
-                    m_connectionId,
-                    headerSize,
-                    makeHexDump(headerData, headerSize)
-                );
+                sLogger.failure( "BNet: connection #{} could not decode {} byte RPC protobuf header\n{}", m_connectionId, headerSize, makeHexDump(headerData, headerSize) );
                 return false;
             }
 
             const size_t payloadSize = header.hasSize ? static_cast<size_t>(header.size) : 0;
             if (payloadSize > MAX_RPC_PAYLOAD_SIZE)
             {
-                sLogger.failure(
-                    "BNet: connection #{} RPC payload too large: {} byte(s)",
-                    m_connectionId,
-                    payloadSize
-                );
+                sLogger.failure( "BNet: connection #{} RPC payload too large: {} byte(s)", m_connectionId, payloadSize );
                 return false;
             }
 
@@ -1770,37 +1722,18 @@ namespace AscEmu::Battlenet
 
             if (header.hasServiceHash && header.hasMethodId)
             {
-                sLogger.info(
-                    "BNet RX {}::{} size={} token={}",
-                    Protocol::getServiceName(header.serviceHash),
-                    Protocol::getMethodName(header.serviceHash, header.methodId),
-                    payloadSize,
-                    header.hasToken ? header.token : 0u
-                );
+                sLogger.info( "BNet RX {}::{} size={} token={}", Protocol::getServiceName(header.serviceHash), Protocol::getMethodName(header.serviceHash, header.methodId), payloadSize, header.hasToken ? header.token : 0u );
             }
             else
             {
-                sLogger.debug(
-                    "BNet: connection #{} incomplete RPC header: service_hash={}, method_id={}, token={}, payload={} byte(s)",
-                    m_connectionId,
-                    header.hasServiceHash ? "present" : "missing",
-                    header.hasMethodId ? "present" : "missing",
-                    header.hasToken ? "present" : "missing",
-                    payloadSize
-                );
+                sLogger.debug( "BNet: connection #{} incomplete RPC header: service_hash={}, method_id={}, token={}, payload={} byte(s)", m_connectionId, header.hasServiceHash ? "present" : "missing", header.hasMethodId ? "present" : "missing", header.hasToken ? "present" : "missing", payloadSize );
             }
 
             if (payloadSize > 0)
             {
                 const uint8_t* const payload = m_plainTextBuffer.data() + 2 + headerSize;
                 const size_t dumpSize = std::min(payloadSize, MAX_DIAGNOSTIC_DUMP_SIZE);
-                sLogger.debug(
-                    "BNet RX payload service=0x{:08X} method={} size={}\n{}",
-                    header.hasServiceHash ? header.serviceHash : 0u,
-                    header.hasMethodId ? header.methodId : 0u,
-                    payloadSize,
-                    makeHexDump(payload, dumpSize)
-                );
+                sLogger.debug( "BNet RX payload service=0x{:08X} method={} size={}\n{}", header.hasServiceHash ? header.serviceHash : 0u, header.hasMethodId ? header.methodId : 0u, payloadSize, makeHexDump(payload, dumpSize) );
             }
 
             const uint8_t* const payload = payloadSize > 0
@@ -1809,13 +1742,7 @@ namespace AscEmu::Battlenet
 
             if (!header.hasServiceHash || !header.hasMethodId || !header.hasToken)
             {
-                sLogger.info(
-                    "BNet: connection #{} RPC frame cannot be dispatched: service_hash={}, method_id={}, token={}",
-                    m_connectionId,
-                    header.hasServiceHash ? "present" : "missing",
-                    header.hasMethodId ? "present" : "missing",
-                    header.hasToken ? "present" : "missing"
-                );
+                sLogger.info( "BNet: connection #{} RPC frame cannot be dispatched: service_hash={}, method_id={}, token={}", m_connectionId, header.hasServiceHash ? "present" : "missing", header.hasMethodId ? "present" : "missing", header.hasToken ? "present" : "missing" );
             }
             else
             {
@@ -1902,24 +1829,12 @@ namespace AscEmu::Battlenet
         const std::string_view serviceName = Protocol::getServiceName(serviceHash);
         const std::string_view methodName = Protocol::getMethodName(serviceHash, methodId);
 
-        sLogger.info(
-            "BNet UNHANDLED {}::{} size={} token={} (service=0x{:08X}, method={})",
-            serviceName,
-            methodName,
-            payloadSize,
-            token,
-            serviceHash,
-            methodId
-        );
+        sLogger.info( "BNet UNHANDLED {}::{} size={} token={} (service=0x{:08X}, method={})", serviceName, methodName, payloadSize, token, serviceHash, methodId );
 
         if (payload != nullptr && payloadSize != 0)
         {
             const size_t dumpSize = std::min(payloadSize, MAX_DIAGNOSTIC_DUMP_SIZE);
-            sLogger.debug(
-                "BNet: connection #{} unhandled RPC payload\n{}",
-                m_connectionId,
-                makeHexDump(payload, dumpSize)
-            );
+            sLogger.debug( "BNet: connection #{} unhandled RPC payload\n{}", m_connectionId, makeHexDump(payload, dumpSize) );
         }
     }
 
@@ -1965,19 +1880,7 @@ namespace AscEmu::Battlenet
         // This field was added after the older public protocol snapshots.
         appendStringField(response, 9, clientInstanceId);
 
-        sLogger.debug(
-            "BNet: connection #{} ConnectionService.Connect -> status=0, token={}, bindless={}, "
-            "server_id={:08X}:{:08X}, client_id={:08X}:{:08X}, ciid='{}', server_time={}",
-            m_connectionId,
-            token,
-            useBindlessRpc ? "true" : "false",
-            serverLabel,
-            serverEpoch,
-            clientLabel,
-            clientEpoch,
-            clientInstanceId,
-            serverTime
-        );
+        sLogger.debug( "BNet: connection #{} ConnectionService.Connect -> status=0, token={}, bindless={}, " "server_id={:08X}:{:08X}, client_id={:08X}:{:08X}, ciid='{}', server_time={}", m_connectionId, token, useBindlessRpc ? "true" : "false", serverLabel, serverEpoch, clientLabel, clientEpoch, clientInstanceId, serverTime );
 
         return sendRpcResponse(token, response);
     }
@@ -1989,18 +1892,10 @@ namespace AscEmu::Battlenet
     {
         if (payloadSize != 0)
         {
-            sLogger.debug(
-                "BNet: connection #{} ConnectionService.KeepAlive received {} payload byte(s)",
-                m_connectionId,
-                payloadSize
-            );
+            sLogger.debug( "BNet: connection #{} ConnectionService.KeepAlive received {} payload byte(s)", m_connectionId, payloadSize );
         }
 
-        sLogger.debug(
-            "BNet: connection #{} ConnectionService.KeepAlive -> status=0, token={}",
-            m_connectionId,
-            token
-        );
+        sLogger.debug( "BNet: connection #{} ConnectionService.KeepAlive -> status=0, token={}", m_connectionId, token );
 
         const std::vector<uint8_t> noData;
         return sendRpcResponse(token, noData);
@@ -2022,13 +1917,7 @@ namespace AscEmu::Battlenet
                 errorCode = value;
         }
 
-        sLogger.debug(
-            "BNet: connection #{} ConnectionService.RequestDisconnect -> token={}, error_code={}, payload={} byte(s)",
-            m_connectionId,
-            token,
-            errorCode,
-            payloadSize
-        );
+        sLogger.debug( "BNet: connection #{} ConnectionService.RequestDisconnect -> token={}, error_code={}, payload={} byte(s)", m_connectionId, token, errorCode, payloadSize );
 
         // Match Midnight protocol reference's ConnectionService::HandleRequestDisconnect:
         // first issue ForceDisconnect(DisconnectNotification), then return the
@@ -2043,20 +1932,14 @@ namespace AscEmu::Battlenet
                 forceDisconnectServerToken,
                 notification))
         {
-            sLogger.failure(
-                "BNet: connection #{} failed to send ConnectionService.ForceDisconnect",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} failed to send ConnectionService.ForceDisconnect", m_connectionId );
             return false;
         }
 
         if (!sendRpcResponse(token, std::vector<uint8_t>{}))
             return false;
 
-        sLogger.info(
-            "BNet: connection #{} RequestDisconnect response queued; delayed close will be armed after the current TLS read callback finishes.",
-            m_connectionId
-        );
+        sLogger.info( "BNet: connection #{} RequestDisconnect response queued; delayed close will be armed after the current TLS read callback finishes.", m_connectionId );
 
         // Do not call delayedDisconnect() from inside the RPC/TLS stack. If the
         // socket write queue is already empty it may close synchronously, and
@@ -2073,10 +1956,7 @@ namespace AscEmu::Battlenet
     {
         if (payload == nullptr)
         {
-            sLogger.failure(
-                "BNet: connection #{} AuthenticationServiceV2.Logon has no payload",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} AuthenticationServiceV2.Logon has no payload", m_connectionId );
             return false;
         }
 
@@ -2085,10 +1965,7 @@ namespace AscEmu::Battlenet
 
         if (!request.valid)
         {
-            sLogger.failure(
-                "BNet: connection #{} could not decode AuthenticationServiceV2.LogonRequest",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} could not decode AuthenticationServiceV2.LogonRequest", m_connectionId );
             return false;
         }
 
@@ -2099,28 +1976,12 @@ namespace AscEmu::Battlenet
         title.push_back(static_cast<char>((request.titleId >> 8) & 0xFFu));
         title.push_back(static_cast<char>((request.titleId >> 16) & 0xFFu));
 
-        sLogger.debug(
-            "BNet: connection #{} AuthenticationServiceV2.Logon -> "
-            "title='{}' (0x{:08X}), platform='{}', locale='{}', build={}, "
-            "device_id={} byte(s), cached_auth_token={}",
-            m_connectionId,
-            title,
-            request.titleId,
-            request.platform,
-            request.locale,
-            request.applicationVersion,
-            request.deviceId.size(),
-            request.authToken.empty() ? "no" : "yes"
-        );
+        sLogger.debug( "BNet: connection #{} AuthenticationServiceV2.Logon -> " "title='{}' (0x{:08X}), platform='{}', locale='{}', build={}, " "device_id={} byte(s), cached_auth_token={}", m_connectionId, title, request.titleId, request.platform, request.locale, request.applicationVersion, request.deviceId.size(), request.authToken.empty() ? "no" : "yes" );
 
         if (!request.deviceId.empty())
         {
             const size_t maxLength = 1024;
-            sLogger.debug(
-                "BNet: connection #{} AuthenticationServiceV2 device_id: {}",
-                m_connectionId,
-                request.deviceId.substr(0, maxLength)
-            );
+            sLogger.debug( "BNet: connection #{} AuthenticationServiceV2 device_id: {}", m_connectionId, request.deviceId.substr(0, maxLength) );
         }
 
         const std::vector<uint8_t> noData;
@@ -2138,25 +1999,14 @@ namespace AscEmu::Battlenet
         std::string loginTicket;
         if (!parseSingleStringFieldOne(payload, payloadSize, loginTicket))
         {
-            sLogger.failure(
-                "BNet: connection #{} AuthenticationServiceV2 method 2 "
-                "could not decode login ticket",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} AuthenticationServiceV2 method 2 " "could not decode login ticket", m_connectionId );
             return false;
         }
 
         std::string login;
         const bool valid = consumeWebAuthTicket(loginTicket, login);
 
-        sLogger.debug(
-            "BNet: connection #{} AuthenticationServiceV2 method 2 -> "
-            "login_ticket='{}', valid={}, login='{}'",
-            m_connectionId,
-            loginTicket,
-            valid ? "true" : "false",
-            valid ? login : std::string()
-        );
+        sLogger.debug( "BNet: connection #{} AuthenticationServiceV2 method 2 -> " "login_ticket='{}', valid={}, login='{}'", m_connectionId, loginTicket, valid ? "true" : "false", valid ? login : std::string() );
 
         if (!valid)
         {
@@ -2170,11 +2020,7 @@ namespace AscEmu::Battlenet
         if (!sendRpcResponse(token, noData))
             return false;
 
-        sLogger.debug(
-            "BNet: connection #{} AuthenticationServiceV2 method 2 accepted; "
-            "sending AuthenticationListenerV2.OnLogonComplete",
-            m_connectionId
-        );
+        sLogger.debug( "BNet: connection #{} AuthenticationServiceV2 method 2 accepted; " "sending AuthenticationListenerV2.OnLogonComplete", m_connectionId );
 
         return sendLogonComplete(login, loginTicket);
     }
@@ -2185,11 +2031,7 @@ namespace AscEmu::Battlenet
     {
         if (!sBNetLogonSQL)
         {
-            sLogger.failure(
-                "BNet: connection #{} cannot build OnLogonComplete: "
-                "logon database is unavailable",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} cannot build OnLogonComplete: " "logon database is unavailable", m_connectionId );
             return false;
         }
 
@@ -2205,12 +2047,7 @@ namespace AscEmu::Battlenet
 
         if (!result)
         {
-            sLogger.failure(
-                "BNet: connection #{} cannot build OnLogonComplete: "
-                "Battle.net account '{}' has no linked WoW game accounts",
-                m_connectionId,
-                login
-            );
+            sLogger.failure( "BNet: connection #{} cannot build OnLogonComplete: " "Battle.net account '{}' has no linked WoW game accounts", m_connectionId, login );
             return false;
         }
 
@@ -2253,10 +2090,7 @@ namespace AscEmu::Battlenet
                 sessionKey.data(),
                 static_cast<int>(sessionKey.size())) != 1)
         {
-            sLogger.failure(
-                "BNet: connection #{} could not generate BNet session key",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} could not generate BNet session key", m_connectionId );
             return false;
         }
 
@@ -2301,20 +2135,7 @@ namespace AscEmu::Battlenet
             accountList << m_linkedGameAccounts[index].id << ':' << m_linkedGameAccounts[index].name;
         }
 
-        sLogger.info(
-            "BNet: connection #{} AuthenticationListenerV2.OnLogonComplete -> "
-            "token={}, battlenet_account_id={}, game_accounts=[{}], title_id={}, region={}, "
-            "battle_tag='{}', country='{}', session_key={} byte(s)",
-            m_connectionId,
-            serverToken,
-            battleNetAccountId,
-            accountList.str(),
-            Protocol::WoW::TitleId,
-            Protocol::WoW::EuropeRegion,
-            battleTag,
-            country,
-            sessionKey.size()
-        );
+        sLogger.info( "BNet: connection #{} AuthenticationListenerV2.OnLogonComplete -> " "token={}, battlenet_account_id={}, game_accounts=[{}], title_id={}, region={}, " "battle_tag='{}', country='{}', session_key={} byte(s)", m_connectionId, serverToken, battleNetAccountId, accountList.str(), Protocol::WoW::TitleId, Protocol::WoW::EuropeRegion, battleTag, country, sessionKey.size() );
 
         return sendRpcRequest(
             Protocol::AuthenticationListenerV2::Hash,
@@ -2332,21 +2153,8 @@ namespace AscEmu::Battlenet
     {
         const std::string commandName = findCommandName(payload, payloadSize);
 
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG RX method={}, token={}, command='{}', payload={} byte(s), hex=[{}]",
-            m_connectionId,
-            methodId,
-            token,
-            commandName.empty() ? std::string("<unnamed>") : commandName,
-            payloadSize,
-            makeCompactHex(payload, payloadSize)
-        );
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG ATTR token={}: {}",
-            m_connectionId,
-            token,
-            describeGameUtilitiesAttributes(payload, payloadSize)
-        );
+        sLogger.info( "BNet: connection #{} GameUtilities DIAG RX method={}, token={}, command='{}', payload={} byte(s), hex=[{}]", m_connectionId, methodId, token, commandName.empty() ? std::string("<unnamed>") : commandName, payloadSize, makeCompactHex(payload, payloadSize) );
+        sLogger.info( "BNet: connection #{} GameUtilities DIAG ATTR token={}: {}", m_connectionId, token, describeGameUtilitiesAttributes(payload, payloadSize) );
 
         if (methodId == Protocol::GameUtilitiesService::GetAllValuesForAttribute)
             return handleGameUtilitiesGetAllValues(token, commandName, payload, payloadSize);
@@ -2375,17 +2183,11 @@ namespace AscEmu::Battlenet
         if (commandMatches(commandName, Protocol::GameUtilitiesCommands::LastCharPlayedPrefix))
             return handleLastCharPlayedRequest(token, commandName);
 
-        sLogger.debug(
-            "BNet: connection #{} GameUtilitiesService.ProcessClientRequest unhandled command='{}', token={}, payload={} byte(s); replying NoData",
+        sLogger.debug( "BNet: connection #{} GameUtilitiesService.ProcessClientRequest unhandled command='{}', token={}, payload={} byte(s); replying NoData",
             m_connectionId,
             commandName.empty() ? std::string("<unnamed>") : commandName,
             token,
             payloadSize
-        );
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG TX token={}, response=0 byte(s), hex=[<empty>]",
-            m_connectionId,
-            token
         );
         return sendRpcResponse(token, std::vector<uint8_t>{});
     }
@@ -2407,35 +2209,15 @@ namespace AscEmu::Battlenet
             const std::vector<std::string> subRegions{ std::string(subRegion) };
             const std::vector<uint8_t> response = makeGameUtilitiesStringVariantList(subRegions);
 
-            sLogger.debug(
-                "BNet: connection #{} GameUtilitiesService.GetAllValuesForAttribute -> token={}, key='{}', subregion='{}', response={} byte(s)",
-                m_connectionId,
-                token,
-                attributeName,
-                subRegion,
-                response.size()
-            );
-            sLogger.info(
-                "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
-                m_connectionId,
-                token,
-                response.size(),
-                makeCompactHex(response.data(), response.size())
-            );
+            sLogger.debug( "BNet: connection #{} GameUtilitiesService.GetAllValuesForAttribute -> token={}, key='{}', subregion='{}', response={} byte(s)", m_connectionId, token, attributeName, subRegion, response.size() );
             return sendRpcResponse(token, response);
         }
 
-        sLogger.debug(
-            "BNet: connection #{} GameUtilitiesService.GetAllValuesForAttribute unknown key='{}', token={}, payload={} byte(s); replying NoData",
+        sLogger.debug( "BNet: connection #{} GameUtilitiesService.GetAllValuesForAttribute unknown key='{}', token={}, payload={} byte(s); replying NoData",
             m_connectionId,
             attributeName.empty() ? std::string("<unnamed>") : attributeName,
             token,
             payloadSize
-        );
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG TX token={}, response=0 byte(s), hex=[<empty>]",
-            m_connectionId,
-            token
         );
         return sendRpcResponse(token, std::vector<uint8_t>{});
     }
@@ -2453,21 +2235,15 @@ namespace AscEmu::Battlenet
         if (!blob.empty())
             appendGameUtilitiesBlobAttribute(response, "Param_BleepProxyList", blob);
 
-        sLogger.info(
-            "BNet: connection #{} FetchBleepProxies -> token={}, command='{}', proxies=0, response={} byte(s)",
-            m_connectionId, token, commandName, response.size());
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
-            m_connectionId, token, response.size(),
-            response.empty() ? std::string("<empty>") : makeCompactHex(response.data(), response.size()));
+        sLogger.info( "BNet: connection #{} FetchBleepProxies -> token={}, command='{}', proxies=0, response={} byte(s)", m_connectionId, token, commandName, response.size());
 
         return sendRpcResponse(token, response);
     }
 
     bool BNetSocket::handleSuperDistrictListRequest(uint32_t token, const std::string& commandName)
     {
+        (void)commandName;
         std::ostringstream json;
-        size_t advertisedCount = 0;
 
         if (m_clientBuild == 69893u)
         {
@@ -2480,7 +2256,6 @@ namespace AscEmu::Battlenet
                 << "{\"superDistrictID\":1,\"disallowLogin\":false},"
                 << "{\"superDistrictID\":5,\"disallowLogin\":false}"
                 << "]}";
-            advertisedCount = 3u;
         }
         else
         {
@@ -2528,7 +2303,6 @@ namespace AscEmu::Battlenet
                     << "\"useBleepChance\":0.0,"
                     << "\"cfgTimezonesID\":" << getRealmCfgTimezonesId(m_clientBuild) << '}';
 
-                ++advertisedCount;
             }
 
             json << "]}";
@@ -2540,39 +2314,12 @@ namespace AscEmu::Battlenet
         if (!blob.empty())
             appendGameUtilitiesBlobAttribute(response, "Param_SuperDistrictList", blob);
 
-        const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(m_clientBuild);
-        if (foreverProfile.build != 0u)
-        {
-            sLogger.info("BNet: connection #{} Forever SuperDistrict mapping -> collection={}, set={}, playstyles=[{}:PvP,{}:Normal], cfgContentSetID(current)={}, contentSetKnown={}", m_connectionId, foreverProfile.collectionId, foreverProfile.superDistrictSetId, foreverProfile.pvpAvailableSuperDistrictId, foreverProfile.normalAvailableSuperDistrictId, foreverProfile.currentCfgContentSetId, foreverProfile.contentSetIdKnown ? "yes" : "no");
-        }
-
-        if (m_clientBuild == 69893u)
-        {
-            sLogger.info("BNet: connection #{} SuperDistrictList -> token={}, command='{}', build={}, schema=ForeverSuperDistrictID, superDistricts={}, json='{}', response={} byte(s)", m_connectionId, token, commandName, m_clientBuild, advertisedCount, json.str(), response.size());
-        }
-        else
-        {
-            sLogger.info(
-                "BNet: connection #{} SuperDistrictList -> token={}, command='{}', build={}, cfgTimezonesID={}, superDistricts={}, json='{}', response={} byte(s)",
-                m_connectionId, token, commandName, m_clientBuild, getRealmCfgTimezonesId(m_clientBuild), advertisedCount, json.str(), response.size());
-        }
-
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
-            m_connectionId, token, response.size(),
-            response.empty() ? std::string("<empty>") : makeCompactHex(response.data(), response.size()));
-
         return sendRpcResponse(token, response);
     }
 
     bool BNetSocket::handleLastCharPlayedRequest(uint32_t token, const std::string& commandName)
     {
-        const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(m_clientBuild);
-        if (foreverProfile.build != 0u)
-        {
-            sLogger.info("BNet: connection #{} LastCharPlayed Forever context -> collection={}, set={}, playstyles=[{}:PvP,{}:Normal], cfgContentSetID(current)={}, contentSetKnown={}", m_connectionId, foreverProfile.collectionId, foreverProfile.superDistrictSetId, foreverProfile.pvpAvailableSuperDistrictId, foreverProfile.normalAvailableSuperDistrictId, foreverProfile.currentCfgContentSetId, foreverProfile.contentSetIdKnown ? "yes" : "no");
-        }
-
+        (void)commandName;
         if (m_clientBuild == 69893u)
         {
             // Forever/Camelot 1.60.1.69893:
@@ -2634,23 +2381,10 @@ namespace AscEmu::Battlenet
             if (!utilityInfo.empty())
                 appendGameUtilitiesBlobAttribute(response, "Param_UtilityInfo", utilityInfo);
 
-            sLogger.info(
-                "BNet: connection #{} LastCharPlayed -> token={}, command='{}', build=69893, exact beta no-character shape, realm='Classic Beta PvE', cfgContentSetID=137, superDistrictID=2, characterName=<empty>, characterGuid=0000, lastPlayedTime=1, response={} byte(s)",
-                m_connectionId, token, commandName, response.size());
-            sLogger.info(
-                "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
-                m_connectionId, token, response.size(),
-                response.empty() ? std::string("<empty>") : makeCompactHex(response.data(), response.size()));
 
             return sendRpcResponse(token, response);
         }
 
-        sLogger.info(
-            "BNet: connection #{} LastCharPlayed -> token={}, command='{}', no cached last-played character; response=0 byte(s)",
-            m_connectionId, token, commandName);
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG TX token={}, response=0 byte(s), hex=[<empty>]",
-            m_connectionId, token);
 
         return sendRpcResponse(token, std::vector<uint8_t>{});
     }
@@ -2665,10 +2399,7 @@ namespace AscEmu::Battlenet
         if (!readGameUtilitiesUintAttribute(payload, payloadSize, "Param_RealmAddress", realmAddressValue) ||
             realmAddressValue > std::numeric_limits<uint32_t>::max())
         {
-            sLogger.failure(
-                "BNet: connection #{} RealmJoin request is missing a valid Param_RealmAddress",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} RealmJoin request is missing a valid Param_RealmAddress", m_connectionId );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
@@ -2679,19 +2410,13 @@ namespace AscEmu::Battlenet
 
         if (m_selectedGameAccountId == 0 || m_selectedGameAccountName.empty())
         {
-            sLogger.failure(
-                "BNet: connection #{} RealmJoin attempted before a WoW game account was selected by RealmListTicket",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} RealmJoin attempted before a WoW game account was selected by RealmListTicket", m_connectionId );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
         if (!m_realmListClientSecretValid)
         {
-            sLogger.failure(
-                "BNet: connection #{} RealmJoin has no captured RealmList client secret; refusing to create unusable world auth KeyData",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} RealmJoin has no captured RealmList client secret; refusing to create unusable world auth KeyData", m_connectionId );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
@@ -2726,21 +2451,7 @@ namespace AscEmu::Battlenet
             sessionQueued = sBattleNetCommManager.sendPendingSession(pending);
         }
 
-        sLogger.debug(
-            "BNet: connection #{} RealmJoin -> token={}, realm_address=0x{:08X} (region={}, site={}, external_realm={}), local_realm={}, world={}:{}, game_account='{}', pending_session={}, response={} byte(s)",
-            m_connectionId,
-            token,
-            realmAddress,
-            region,
-            site,
-            realmId,
-            localRealmId,
-            bnetConfig.world.host,
-            bnetConfig.world.port,
-            m_selectedGameAccountName,
-            sessionQueued ? "queued" : "missing-world",
-            response.size()
-        );
+        sLogger.debug( "BNet: connection #{} RealmJoin -> token={}, realm_address=0x{:08X} (region={}, site={}, external_realm={}), local_realm={}, world={}:{}, game_account='{}', pending_session={}, response={} byte(s)", m_connectionId, token, realmAddress, region, site, realmId, localRealmId, bnetConfig.world.host, bnetConfig.world.port, m_selectedGameAccountName, sessionQueued ? "queued" : "missing-world", response.size() );
 
         if (response.empty())
         {
@@ -2750,22 +2461,10 @@ namespace AscEmu::Battlenet
 
         if (!sessionQueued)
         {
-            sLogger.failure(
-                "BNet: connection #{} cannot complete RealmJoin: local realm {} (external realm {}) has no authenticated BattleNetComm world connection",
-                m_connectionId,
-                localRealmId,
-                realmId
-            );
+            sLogger.failure( "BNet: connection #{} cannot complete RealmJoin: local realm {} (external realm {}) has no authenticated BattleNetComm world connection", m_connectionId, localRealmId, realmId );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
-            m_connectionId,
-            token,
-            response.size(),
-            makeCompactHex(response.data(), response.size())
-        );
         return sendRpcResponse(token, response);
     }
 
@@ -2773,10 +2472,7 @@ namespace AscEmu::Battlenet
     {
         if (m_selectedGameAccountId == 0)
         {
-            sLogger.failure(
-                "BNet: connection #{} RealmList requested before RealmListTicket selected a WoW game account",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} RealmList requested before RealmListTicket selected a WoW game account", m_connectionId );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
@@ -2785,26 +2481,11 @@ namespace AscEmu::Battlenet
         const uint32_t clientBuild = m_clientBuild;
         const std::vector<uint8_t> response = makeRealmListResponse(clientBuild, m_selectedGameAccountId);
 
-        sLogger.debug(
-            "BNet: connection #{} RealmList -> token={}, command='{}', build={}, account={}, response={} byte(s)",
-            m_connectionId,
-            token,
-            commandName,
-            clientBuild,
-            m_selectedGameAccountId,
-            response.size()
-        );
+        sLogger.debug( "BNet: connection #{} RealmList -> token={}, command='{}', build={}, account={}, response={} byte(s)", m_connectionId, token, commandName, clientBuild, m_selectedGameAccountId, response.size() );
 
         if (response.empty())
             sLogger.failure("BNet: connection #{} failed to build RealmList response", m_connectionId);
 
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
-            m_connectionId,
-            token,
-            response.size(),
-            makeCompactHex(response.data(), response.size())
-        );
         return sendRpcResponse(token, response);
     }
 
@@ -2822,11 +2503,7 @@ namespace AscEmu::Battlenet
             if (readGameUtilitiesBlobAttribute(payload, payloadSize, "Param_Identity", identityDiagnostic) && !identityDiagnostic.empty())
                 identityText.assign(reinterpret_cast<const char*>(identityDiagnostic.data()), identityDiagnostic.size());
 
-            sLogger.failure(
-                "BNet: connection #{} RealmListTicket request did not contain a valid Param_Identity gameAccountID; identity='{}'",
-                m_connectionId,
-                identityText
-            );
+            sLogger.failure( "BNet: connection #{} RealmListTicket request did not contain a valid Param_Identity gameAccountID; identity='{}'", m_connectionId, identityText );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
@@ -2840,12 +2517,7 @@ namespace AscEmu::Battlenet
 
         if (linkedAccount == m_linkedGameAccounts.end())
         {
-            sLogger.failure(
-                "BNet: connection #{} RealmListTicket requested game account {} which is not linked to Battle.net account {}",
-                m_connectionId,
-                requestedGameAccountId,
-                m_battleNetAccountId
-            );
+            sLogger.failure( "BNet: connection #{} RealmListTicket requested game account {} which is not linked to Battle.net account {}", m_connectionId, requestedGameAccountId, m_battleNetAccountId );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
@@ -2855,10 +2527,7 @@ namespace AscEmu::Battlenet
         m_realmListClientSecretValid = extractRealmListClientSecret(payload, payloadSize, m_realmListClientSecret);
         if (!m_realmListClientSecretValid)
         {
-            sLogger.failure(
-                "BNet: connection #{} RealmListTicket request did not contain a valid 32-byte client secret",
-                m_connectionId
-            );
+            sLogger.failure( "BNet: connection #{} RealmListTicket request did not contain a valid 32-byte client secret", m_connectionId );
             return sendRpcResponse(token, std::vector<uint8_t>{});
         }
 
@@ -2866,23 +2535,7 @@ namespace AscEmu::Battlenet
             "Param_RealmListTicket",
             "AuthRealmListTicket");
 
-        sLogger.debug(
-            "BNet: connection #{} RealmListTicket -> token={}, command='{}', battlenet_account={}, selected_game_account={} ('{}'), response={} byte(s), client_secret=32 byte(s)",
-            m_connectionId,
-            token,
-            commandName,
-            m_battleNetAccountId,
-            m_selectedGameAccountId,
-            m_selectedGameAccountName,
-            response.size()
-        );
-        sLogger.info(
-            "BNet: connection #{} GameUtilities DIAG TX token={}, response={} byte(s), hex=[{}]",
-            m_connectionId,
-            token,
-            response.size(),
-            makeCompactHex(response.data(), response.size())
-        );
+        sLogger.debug( "BNet: connection #{} RealmListTicket -> token={}, command='{}', battlenet_account={}, selected_game_account={} ('{}'), response={} byte(s), client_secret=32 byte(s)", m_connectionId, token, commandName, m_battleNetAccountId, m_selectedGameAccountId, m_selectedGameAccountName, response.size() );
         return sendRpcResponse(token, response);
     }
 
@@ -2959,18 +2612,14 @@ namespace AscEmu::Battlenet
                 std::vector<uint8_t> response;
                 appendMessageField(response, 1, info);
 
-                sLogger.info(
-                    "BNet: connection #{} AccountServiceV2.GetAccountInfo -> token={}, battlenet_account={}, response={} byte(s)",
-                    m_connectionId, token, m_battleNetAccountId, response.size());
+                sLogger.info( "BNet: connection #{} AccountServiceV2.GetAccountInfo -> token={}, battlenet_account={}, response={} byte(s)", m_connectionId, token, m_battleNetAccountId, response.size());
                 return sendRpcResponse(token, response);
             }
 
             case Protocol::AccountServiceV2::GetRestriction:
             {
                 // No account-level restrictions for local development accounts.
-                sLogger.info(
-                    "BNet: connection #{} AccountServiceV2.GetRestriction -> token={}, restrictions=0",
-                    m_connectionId, token);
+                sLogger.info( "BNet: connection #{} AccountServiceV2.GetRestriction -> token={}, restrictions=0", m_connectionId, token);
                 return sendRpcResponse(token, std::vector<uint8_t>{});
             }
 
@@ -2990,9 +2639,7 @@ namespace AscEmu::Battlenet
                 std::vector<uint8_t> response;
                 appendMessageField(response, 1, links);
 
-                sLogger.info(
-                    "BNet: connection #{} AccountServiceV2.GetGameAccountLinks -> token={}, game_accounts={}, response={} byte(s)",
-                    m_connectionId, token, m_linkedGameAccounts.size(), response.size());
+                sLogger.info( "BNet: connection #{} AccountServiceV2.GetGameAccountLinks -> token={}, game_accounts={}, response={} byte(s)", m_connectionId, token, m_linkedGameAccounts.size(), response.size());
                 return sendRpcResponse(token, response);
             }
 
@@ -3003,9 +2650,7 @@ namespace AscEmu::Battlenet
                 uint32_t region = 0;
                 if (!parseGameAccountHandle(accountId, titleId, region))
                 {
-                    sLogger.failure(
-                        "BNet: connection #{} AccountServiceV2.GetGameAccountInfo could not decode GameAccountHandle",
-                        m_connectionId);
+                    sLogger.failure( "BNet: connection #{} AccountServiceV2.GetGameAccountInfo could not decode GameAccountHandle", m_connectionId);
                     return sendRpcResponse(token, std::vector<uint8_t>{});
                 }
 
@@ -3017,9 +2662,7 @@ namespace AscEmu::Battlenet
                     titleId != Protocol::WoW::TitleId ||
                     region != Protocol::WoW::EuropeRegion)
                 {
-                    sLogger.failure(
-                        "BNet: connection #{} AccountServiceV2.GetGameAccountInfo rejected handle id={}, title_id={}, region={}",
-                        m_connectionId, accountId, titleId, region);
+                    sLogger.failure( "BNet: connection #{} AccountServiceV2.GetGameAccountInfo rejected handle id={}, title_id={}, region={}", m_connectionId, accountId, titleId, region);
                     return sendRpcResponse(token, std::vector<uint8_t>{});
                 }
 
@@ -3035,9 +2678,7 @@ namespace AscEmu::Battlenet
                 std::vector<uint8_t> response;
                 appendMessageField(response, 1, info);
 
-                sLogger.info(
-                    "BNet: connection #{} AccountServiceV2.GetGameAccountInfo -> token={}, game_account={}, name='{}', response={} byte(s)",
-                    m_connectionId, token, linked->id, displayName, response.size());
+                sLogger.info( "BNet: connection #{} AccountServiceV2.GetGameAccountInfo -> token={}, game_account={}, name='{}', response={} byte(s)", m_connectionId, token, linked->id, displayName, response.size());
                 return sendRpcResponse(token, response);
             }
 
@@ -3048,9 +2689,7 @@ namespace AscEmu::Battlenet
                 uint32_t region = 0;
                 if (!parseGameAccountHandle(accountId, titleId, region))
                 {
-                    sLogger.failure(
-                        "BNet: connection #{} AccountServiceV2.GetGameAccountRestriction could not decode GameAccountHandle",
-                        m_connectionId);
+                    sLogger.failure( "BNet: connection #{} AccountServiceV2.GetGameAccountRestriction could not decode GameAccountHandle", m_connectionId);
                     return sendRpcResponse(token, std::vector<uint8_t>{});
                 }
 
@@ -3060,16 +2699,12 @@ namespace AscEmu::Battlenet
 
                 if (!linked || titleId != Protocol::WoW::TitleId || region != Protocol::WoW::EuropeRegion)
                 {
-                    sLogger.failure(
-                        "BNet: connection #{} AccountServiceV2.GetGameAccountRestriction rejected handle id={}, title_id={}, region={}",
-                        m_connectionId, accountId, titleId, region);
+                    sLogger.failure( "BNet: connection #{} AccountServiceV2.GetGameAccountRestriction rejected handle id={}, title_id={}, region={}", m_connectionId, accountId, titleId, region);
                     return sendRpcResponse(token, std::vector<uint8_t>{});
                 }
 
                 // Empty response means no restrictions, matching reference implementation for an unbanned account.
-                sLogger.info(
-                    "BNet: connection #{} AccountServiceV2.GetGameAccountRestriction -> token={}, game_account={}, restrictions=0",
-                    m_connectionId, token, accountId);
+                sLogger.info( "BNet: connection #{} AccountServiceV2.GetGameAccountRestriction -> token={}, game_account={}, restrictions=0", m_connectionId, token, accountId);
                 return sendRpcResponse(token, std::vector<uint8_t>{});
             }
 
@@ -3077,8 +2712,7 @@ namespace AscEmu::Battlenet
                 break;
         }
 
-        sLogger.debug(
-            "BNet: connection #{} AccountServiceV2 method {} -> token={}, payload={} byte(s); replying NoData",
+        sLogger.debug( "BNet: connection #{} AccountServiceV2 method {} -> token={}, payload={} byte(s); replying NoData",
             m_connectionId,
             methodId,
             token,
@@ -3101,13 +2735,7 @@ namespace AscEmu::Battlenet
         // server-initiated request on a connection.
         constexpr uint32_t serverToken = 1u;
 
-        sLogger.debug(
-            "BNet: connection #{} AuthenticationListenerV2.OnExternalChallenge -> "
-            "token={}, payload_type='web_auth_url', payload='{}'",
-            m_connectionId,
-            serverToken,
-            WEB_AUTH_URL
-        );
+        sLogger.debug( "BNet: connection #{} AuthenticationListenerV2.OnExternalChallenge -> " "token={}, payload_type='web_auth_url', payload='{}'", m_connectionId, serverToken, WEB_AUTH_URL );
 
         return sendRpcRequest(
             Protocol::AuthenticationListenerV2::Hash,
@@ -3145,21 +2773,8 @@ namespace AscEmu::Battlenet
         frame.insert(frame.end(), header.begin(), header.end());
         frame.insert(frame.end(), payload.begin(), payload.end());
 
-        sLogger.info(
-            "BNet TX {}::{} size={} token={}",
-            Protocol::getServiceName(serviceHash),
-            Protocol::getMethodName(serviceHash, methodId),
-            payload.size(),
-            token
-        );
-        sLogger.debug(
-            "BNet TX frame service=0x{:08X} method={} header={} payload={}\n{}",
-            serviceHash,
-            methodId,
-            header.size(),
-            payload.size(),
-            makeHexDump(frame.data(), std::min(frame.size(), MAX_DIAGNOSTIC_DUMP_SIZE))
-        );
+        sLogger.info( "BNet TX {}::{} size={} token={}", Protocol::getServiceName(serviceHash), Protocol::getMethodName(serviceHash, methodId), payload.size(), token );
+        sLogger.debug( "BNet TX frame service=0x{:08X} method={} header={} payload={}\n{}", serviceHash, methodId, header.size(), payload.size(), makeHexDump(frame.data(), std::min(frame.size(), MAX_DIAGNOSTIC_DUMP_SIZE)) );
 
         return writeTlsPlainText(frame.data(), frame.size());
     }
@@ -3185,26 +2800,14 @@ namespace AscEmu::Battlenet
 
         if (m_currentRpcServiceHash != 0)
         {
-            sLogger.info(
-                "BNet TX {}::{}Response size={} token={}",
-                Protocol::getServiceName(m_currentRpcServiceHash),
-                Protocol::getMethodName(m_currentRpcServiceHash, m_currentRpcMethodId),
-                payload.size(),
-                token
-            );
+            sLogger.info( "BNet TX {}::{}Response size={} token={}", Protocol::getServiceName(m_currentRpcServiceHash), Protocol::getMethodName(m_currentRpcServiceHash, m_currentRpcMethodId), payload.size(), token );
         }
         else
         {
             sLogger.info("BNet TX Response size={} token={}", payload.size(), token);
         }
 
-        sLogger.debug(
-            "BNet TX response frame header={} payload={} token={}\n{}",
-            header.size(),
-            payload.size(),
-            token,
-            makeHexDump(frame.data(), std::min(frame.size(), MAX_DIAGNOSTIC_DUMP_SIZE))
-        );
+        sLogger.debug( "BNet TX response frame header={} payload={} token={}\n{}", header.size(), payload.size(), token, makeHexDump(frame.data(), std::min(frame.size(), MAX_DIAGNOSTIC_DUMP_SIZE)) );
 
         return writeTlsPlainText(frame.data(), frame.size());
     }
@@ -3262,11 +2865,7 @@ namespace AscEmu::Battlenet
 
             if (!send(encryptedData.data(), static_cast<uint32_t>(bytesRead)))
             {
-                sLogger.failure(
-                    "BNet: connection #{} failed to queue {} TLS byte(s) for sending",
-                    m_connectionId,
-                    bytesRead
-                );
+                sLogger.failure( "BNet: connection #{} failed to queue {} TLS byte(s) for sending", m_connectionId, bytesRead );
                 return false;
             }
 
@@ -3283,24 +2882,13 @@ namespace AscEmu::Battlenet
 
         if (openSslError == 0)
         {
-            sLogger.failure(
-                "BNet: connection #{} TLS {} failed (SSL error {})",
-                m_connectionId,
-                operation,
-                sslError
-            );
+            sLogger.failure( "BNet: connection #{} TLS {} failed (SSL error {})", m_connectionId, operation, sslError );
             return;
         }
 
         char errorBuffer[256]{};
         ERR_error_string_n(openSslError, errorBuffer, sizeof(errorBuffer));
-        sLogger.failure(
-            "BNet: connection #{} TLS {} failed (SSL error {}): {}",
-            m_connectionId,
-            operation,
-            sslError,
-            errorBuffer
-        );
+        sLogger.failure( "BNet: connection #{} TLS {} failed (SSL error {}): {}", m_connectionId, operation, sslError, errorBuffer );
     }
 
     void BNetSocket::releaseTls()
@@ -3320,15 +2908,7 @@ namespace AscEmu::Battlenet
             std::chrono::steady_clock::now() - m_connectedAt
         );
 
-        sLogger.info(
-            "BNet: connection #{} disconnected {}:{} after {} ms (received: {} byte(s), sent: {} byte(s))",
-            m_connectionId,
-            getRemoteIp(),
-            getRemotePort(),
-            connectedFor.count(),
-            m_receivedBytes,
-            m_sentBytes
-        );
+        sLogger.info( "BNet: connection #{} disconnected {}:{} after {} ms (received: {} byte(s), sent: {} byte(s))", m_connectionId, getRemoteIp(), getRemotePort(), connectedFor.count(), m_receivedBytes, m_sentBytes );
 
         releaseTls();
     }

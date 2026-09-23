@@ -36,7 +36,6 @@ bool WorldSocket::processForeverGlueState(AscEmu::Version::Forever::Packets::Pac
             ++m_foreverSecondEnumStep;
             consumed = true;
 
-            sLogger.info("WorldSocket::Forever: enum #2 glue prefix step {}/4 matched {}.", m_foreverSecondEnumStep, sOpcodeTable.getNameForInternalId(opcode));
 
             if (m_foreverSecondEnumStep == RequiredPrefix.size() && !sendForeverHotfixBootstrap())
                 return false;
@@ -50,7 +49,6 @@ bool WorldSocket::processForeverGlueState(AscEmu::Version::Forever::Packets::Pac
             {
                 m_foreverSecondEnumSocialContractSeen = true;
                 consumed = true;
-                sLogger.info("WorldSocket::Forever: enum #2 optional social-contract request deferred to completion block.");
                 return true;
             }
 
@@ -61,7 +59,6 @@ bool WorldSocket::processForeverGlueState(AscEmu::Version::Forever::Packets::Pac
                     return false;
 
                 m_foreverSecondEnumGateSent = true;
-                sLogger.info("WorldSocket::Forever: enum #2 glue gate sent; waiting for CMSG_CHARACTER_SELECT_GATE_ACK.");
                 return true;
             }
         }
@@ -70,7 +67,6 @@ bool WorldSocket::processForeverGlueState(AscEmu::Version::Forever::Packets::Pac
     if (opcode == Opcode::CMSG_CHARACTER_SELECT_GATE_ACK)
     {
         consumed = true;
-        sLogger.info("WorldSocket::Forever: CMSG_CHARACTER_SELECT_GATE_ACK payload={} byte(s), bytes=[{}].", packet.size(), bytesToHex(packet.contents(), packet.size()));
 
         if (!sendForeverSecondEnumCompletion())
             return false;
@@ -89,7 +85,6 @@ bool WorldSocket::processForeverGlueState(AscEmu::Version::Forever::Packets::Pac
         {
             m_foreverBufferedEnumRequest = false;
 
-            sLogger.info("WorldSocket::Forever: enum #2 completion finished with buffered CMSG_ENUM_CHARACTERS #3; flushing DB-backed character enum.");
 
             if (!sendForeverCharacterEnumFromDatabase(true))
                 return false;
@@ -113,7 +108,6 @@ bool WorldSocket::handleForeverIgnoredGlueOpcode(AscEmu::Version::Forever::Packe
 {
     using namespace AscEmu::Version::Forever;
 
-    sLogger.info("WorldSocket::Forever: {} received; intentionally ignored by minimal glue path.", sOpcodeTable.getNameForInternalId(packet.getOpcode()));
 
     return true;
 }
@@ -121,7 +115,6 @@ bool WorldSocket::handleForeverIgnoredGlueOpcode(AscEmu::Version::Forever::Packe
 bool WorldSocket::handleForeverQuickJoinOpcode(AscEmu::Version::Forever::Packets::Packet& packet)
 {
     using namespace AscEmu::Version::Forever;
-    sLogger.info("WorldSocket::Forever: CMSG_QUICK_JOIN_AUTO_ACCEPT_REQUESTS payload={} byte(s), bytes=[{}].", packet.size(), bytesToHex(packet.contents(), packet.size()));
     return true;
 }
 
@@ -161,7 +154,6 @@ bool WorldSocket::sendForeverHotfixBootstrap()
         if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_AVAILABLE_HOTFIXES, availableHotfixes.contents(), static_cast<uint32_t>(availableHotfixes.size())))
             return false;
 
-        sLogger.info("WorldSocket::Forever: sent Midnight-core hotfix bootstrap: CACHE_VERSION=0, AVAILABLE_HOTFIXES empty, virtual_realm=0x{:08X} (region={}, battlegroup={}, realm={}).", virtualRealmAddress, m_foreverRegionId, m_foreverBattlegroupId, m_foreverRealmId);
     }
 
     m_foreverHotfixBootstrapSent = true;
@@ -222,6 +214,5 @@ bool WorldSocket::sendForeverSecondEnumCompletion()
     if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ACCOUNT_ITEM_COLLECTION_DATA, CharacterSelectBootstrap::AccountItemCollection460362.data(), static_cast<uint32_t>(CharacterSelectBootstrap::AccountItemCollection460362.size())))
         return false;
 
-    sLogger.info("WorldSocket::Forever: sent exact-69893 enum #2 completion A/B block; " "social_contract_response={}, unix_time={}, collection=capture, crypto_counter={} -> {}.", m_foreverSecondEnumSocialContractSeen ? "yes" : "no", now, counterBefore, m_foreverCryptoSendCounter);
     return true;
 }

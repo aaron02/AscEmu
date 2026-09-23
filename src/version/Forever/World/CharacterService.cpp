@@ -74,7 +74,6 @@ bool WorldSocket::sendForeverEmptyCharacterList()
         return false;
     }
 
-    sLogger.info("WorldSocket::Forever: sent request-driven empty character enum: enum={} byte(s), collection={} byte(s), crypto_counter={} -> {}.", CharacterSelectBootstrap::EmptyCharacterList.size(), collection.size(), counterBefore, m_foreverCryptoSendCounter);
     return true;
 }
 
@@ -87,7 +86,6 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
         const uint32_t foreverResult = AscEmu::Version::Forever::Packets::toCharacterResult(code);
         ByteBuffer wire = AscEmu::Version::Forever::Packets::buildCreateCharacterResponse(foreverResult, m_foreverRealmId, guid);
 
-        sLogger.info("WorldSocket::Forever: sending SMSG_CREATE_CHAR result={} coreResult={} guid={} payload={} byte(s), hex=[{}].", foreverResult, static_cast<uint32_t>(code), guid, wire.size(), AscEmu::Version::Forever::bytesToHex(wire.contents(), wire.size()));
 
         return sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_CREATE_CHAR, wire.contents(), static_cast<uint32_t>(wire.size()));
     };
@@ -105,51 +103,40 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
         return sendResult(E_CHAR_CREATE_FAILED);
     }
 
-    sLogger.info("WorldSocket::Forever: create character name='{}' race={} class={} sex={} customizations={} timerunning={} templateSet={}.", request.name, request.race, request.charClass, request.sex, request.customizationCount, request.timerunningSeasonId, request.templateSet);
 
     const CharacterErrorCodes nameResult = VerifyName(request.name);
     if (nameResult != E_CHAR_NAME_SUCCESS)
     {
-        sLogger.info("WorldSocket::Forever: create rejected by VerifyName name='{}' result={}.", request.name, static_cast<uint32_t>(nameResult));
         return sendResult(nameResult);
     }
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: VerifyName passed.");
 
     if (sObjectMgr.getCachedCharacterInfoByName(request.name) != nullptr)
     {
-        sLogger.info("WorldSocket::Forever: create rejected: name '{}' already exists in character cache.", request.name);
         return sendResult(E_CHAR_CREATE_NAME_IN_USE);
     }
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: cached-name check passed.");
 
     if (!isForeverRaceClassAvailableInDatabase(request.race, request.charClass))
     {
-        sLogger.info("WorldSocket::Forever: create rejected by playercreateinfo race/class check race={} class={} build<={}.", request.race, request.charClass, VERSION_STRING);
         return sendResult(E_CHAR_CREATE_RESTRICTED_RACECLASS);
     }
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: playercreateinfo race/class check passed for race={} class={}.", request.race, request.charClass);
 
     const auto bannedNamesQuery = CharacterDatabase.query("SELECT COUNT(*) FROM banned_names WHERE name = '%s'", CharacterDatabase.escapeString(request.name).c_str());
     if (bannedNamesQuery && bannedNamesQuery->fetch()[0].asUint32() > 0U)
     {
-        sLogger.info("WorldSocket::Forever: create rejected: name '{}' is present in banned_names.", request.name);
         return sendResult(E_CHAR_NAME_PROFANE);
     }
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: banned-name check passed.");
 
     const auto charactersQuery = CharacterDatabase.query("SELECT COUNT(*) FROM characters WHERE acct = %u", m_session->GetAccountId());
 
     if (charactersQuery && charactersQuery->fetch()[0].asUint32() >= 60U)
     {
-        sLogger.info("WorldSocket::Forever: create rejected: account character limit reached.");
         return sendResult(E_CHAR_CREATE_SERVER_LIMIT);
     }
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: account character-count check passed.");
 
     CharCreate createInfo{};
     createInfo.name = request.name;
@@ -163,7 +150,6 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
     createInfo.facialHair = 0;
     createInfo.outfitId = 0;
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: calling ObjectMgr::createPlayer(class={}).", createInfo._class);
     Player* newPlayer = sObjectMgr.createPlayer(createInfo._class);
     if (newPlayer == nullptr)
     {
@@ -171,7 +157,6 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
         return sendResult(E_CHAR_CREATE_FAILED);
     }
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: Player allocated; calling Player::create().");
     newPlayer->setSession(m_session);
     if (!newPlayer->create(createInfo))
     {
@@ -181,12 +166,10 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
         return sendResult(E_CHAR_CREATE_FAILED);
     }
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: Player::create succeeded guid={}; saving to DB.", newPlayer->getGuidLow());
 
     newPlayer->unsetBanned();
     newPlayer->saveToDB(true);
 
-    sLogger.info("WorldSocket::Forever: create checkpoint: saveToDB completed; updating character cache.");
 
     const uint64_t createdGuid = newPlayer->getGuidLow();
 
@@ -198,7 +181,6 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
         CharacterDatabase.waitExecute("INSERT INTO `character_customizations` " "(`guid`, `chrCustomizationOptionID`, `chrCustomizationChoiceID`) " "VALUES (%llu, %u, %u)", static_cast<unsigned long long>(createdGuid), customization.optionId, customization.choiceId);
     }
 
-    sLogger.info("WorldSocket::Forever: stored {} customization choice(s) for guid={}.", request.customizations.size(), createdGuid);
 
     // Official Forever inserts a newly created character at the top of the
     // visible list and shifts the existing characters down by one.
@@ -249,7 +231,6 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
         auto playerInfo = std::make_unique<CachedCharacterInfo>(cacheResult->fetch());
         sObjectMgr.addCachedCharacterInfo(std::move(playerInfo));
 
-        sLogger.info("WorldSocket::Forever: create checkpoint: character cache reloaded from DB using the same CachedCharacterInfo layout as ObjectMgr::loadCharacters().");
     }
     else
     {
@@ -259,7 +240,6 @@ bool WorldSocket::handleForeverCreateCharacter(const uint8_t* payload, uint32_t 
     newPlayer->m_isReadyToBeRemoved = true;
     delete newPlayer;
 
-    sLogger.info("WorldSocket::Forever: character '{}' created successfully guid={} account={}; sending SMSG_CREATE_CHAR.", request.name, createdGuid, m_session->GetAccountId());
 
     // The client asks for the character list again immediately after create.
     // The first refresh can still render the pre-create list until another
@@ -305,7 +285,6 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
 
             CharacterDatabase.waitExecute("INSERT IGNORE INTO character_list_order (acct, guid, listPosition) " "VALUES (%u, %llu, %u)", accountId, static_cast<unsigned long long>(guid), nextPosition);
 
-            sLogger.info("WorldSocket::Forever: seeded character order account={} guid={} -> position={}.", accountId, guid, nextPosition);
 
             ++nextPosition;
         }
@@ -316,7 +295,6 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
 
     if (result == nullptr)
     {
-        sLogger.info("WorldSocket::Forever: account {} has no DB characters; sending the known-good empty enum.", accountId);
         return sendForeverEmptyCharacterList();
     }
 
@@ -392,13 +370,6 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
     const auto& raceClassAvailability = AscEmu::Version::Forever::Packets::getRaceClassAvailability69913();
     ByteBuffer wire = AscEmu::Version::Forever::Packets::buildCharacterEnumResponse(virtualRealmAddress, m_foreverRealmId, characters, raceClassAvailability);
 
-    for (size_t index = 0; index < characters.size(); ++index)
-    {
-        const auto& character = characters[index];
-        const std::vector<uint8_t> packedGuid = WoWGuid::createModernPlayer(m_foreverRealmId, character.guid).packModern();
-        sLogger.info("WorldSocket::Forever: enum character #{} guid={} first='{}' last='{}' race={} class={} gender={} level={} map={} zone={} customizations={} packed_guid={} byte(s).", index + 1U, character.guid, character.firstName, character.lastName, character.race, character.charClass, character.gender, character.level, character.mapId, character.zoneId, character.customizations.size(), packedGuid.size());
-    }
-
     if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ENUM_CHARACTERS_RESULT, wire.contents(), static_cast<uint32_t>(wire.size())))
         return false;
 
@@ -422,7 +393,6 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
     if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_CHARACTER_LIST_STATE, characterListState.contents(), static_cast<uint32_t>(characterListState.size())))
         return false;
 
-    sLogger.info("WorldSocket::Forever: sent SMSG_CHARACTER_LIST_STATE characters={} payload={} byte(s).", characters.size(), characterListState.size());
 
     if (includeCollection)
     {
@@ -430,7 +400,6 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
             return false;
     }
 
-    sLogger.info("WorldSocket::Forever: sent DB-backed character enum account={} characters={} payload={} byte(s), races={} collection={}.", accountId, characters.size(), wire.size(), raceClassAvailability.size(), includeCollection ? "yes" : "no");
 
     return true;
 }

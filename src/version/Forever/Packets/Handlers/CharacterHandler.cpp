@@ -27,13 +27,11 @@ bool WorldSocket::handleForeverCharEnumOpcode(AscEmu::Version::Forever::Packets:
     if (m_foreverSecondEnumPending && m_foreverCharacterEnumRequests > 2U)
     {
         m_foreverBufferedEnumRequest = true;
-        sLogger.info("WorldSocket::Forever: CMSG_ENUM_CHARACTERS #{} received while enum #2 is still deferred; buffering request.", m_foreverCharacterEnumRequests);
         return true;
     }
 
     if (m_foreverCharacterEnumRequests == 1U)
     {
-        sLogger.info("WorldSocket::Forever: CMSG_ENUM_CHARACTERS #1 -> known-good empty bootstrap enum.");
         return sendForeverEmptyCharacterList();
     }
 
@@ -44,11 +42,9 @@ bool WorldSocket::handleForeverCharEnumOpcode(AscEmu::Version::Forever::Packets:
         m_foreverSecondEnumSocialContractSeen = false;
         m_foreverSecondEnumStep = 0;
 
-        sLogger.info("WorldSocket::Forever: CMSG_ENUM_CHARACTERS #2 deferred for glue transition.");
         return true;
     }
 
-    sLogger.info("WorldSocket::Forever: CMSG_ENUM_CHARACTERS #{} -> DB-backed enum.", m_foreverCharacterEnumRequests);
 
     if (!sendForeverCharacterEnumFromDatabase(true))
         return false;
@@ -58,7 +54,6 @@ bool WorldSocket::handleForeverCharEnumOpcode(AscEmu::Version::Forever::Packets:
         m_foreverPostCreateEnumRefreshPending = false;
         m_foreverPostCreateEnumRefreshArmed = true;
 
-        sLogger.info("WorldSocket::Forever: first post-create character enum sent; armed one follow-up refresh on the next glue request.");
     }
 
     return true;
@@ -84,7 +79,6 @@ bool WorldSocket::handleForeverCheckCharacterNameOpcode(AscEmu::Version::Forever
     ByteBuffer response;
     response << request.sequenceIndex << result;
 
-    sLogger.info("WorldSocket::Forever: CMSG_CHECK_CHARACTER_NAME_AVAILABILITY seq={} name='{}' -> result={}.", request.sequenceIndex, request.name, result);
 
     return sendForeverPacket(Opcode::SMSG_CHECK_CHARACTER_NAME_AVAILABILITY_RESULT, response.contents(), static_cast<uint32_t>(response.size()));
 }
@@ -107,9 +101,6 @@ bool WorldSocket::handleForeverPlayerLoginOpcode(AscEmu::Version::Forever::Packe
         return true;
     }
 
-    float farClip = 0.0f;
-    std::memcpy(&farClip, packet.contents() + consumed, sizeof(farClip));
-    const uint8_t unknown = packet.contents()[consumed + sizeof(farClip)];
     const uint32_t guidLow = static_cast<uint32_t>(guid.getModernLow());
 
     if (m_session == nullptr)
@@ -122,7 +113,6 @@ bool WorldSocket::handleForeverPlayerLoginOpcode(AscEmu::Version::Forever::Packe
         return true;
     }
 
-    sLogger.info("WorldSocket::Forever: CMSG_PLAYER_LOGIN guidLow={} realm={} farClip={} unknown={}; starting instance connection handoff.", guidLow, guid.getModernRealmId(), farClip, unknown);
     return beginForeverInstanceLogin(guidLow);
 }
 
@@ -151,7 +141,6 @@ bool WorldSocket::handleForeverCharDeleteOpcode(AscEmu::Version::Forever::Packet
     if (session == nullptr)
         return false;
 
-    sLogger.info("WorldSocket::Forever: CMSG_CHAR_DELETE guidLow={} realm={} payload=[{}].", guidLow, m_foreverRealmId, bytesToHex(packet.contents(), packet.size()));
 
     const CharacterErrorCodes coreResult = static_cast<CharacterErrorCodes>(session->deleteCharacter(WoWGuid(guidLow)));
     const uint32_t result = AscEmu::Version::Forever::Packets::toDeleteCharacterResult(coreResult);
@@ -167,7 +156,6 @@ bool WorldSocket::handleForeverCharDeleteOpcode(AscEmu::Version::Forever::Packet
     ByteBuffer response;
     response << result;
 
-    sLogger.info("WorldSocket::Forever: SMSG_DELETE_CHAR guidLow={} coreResult={} result={} payload=[{}].", guidLow, static_cast<uint32_t>(coreResult), result, bytesToHex(response.contents(), response.size()));
 
     return sendForeverPacket(Opcode::SMSG_DELETE_CHAR, response.contents(), static_cast<uint32_t>(response.size()));
 }
@@ -186,7 +174,6 @@ bool WorldSocket::handleForeverCharacterListAckOpcode(AscEmu::Version::Forever::
 {
     using namespace AscEmu::Version::Forever;
 
-    sLogger.info("WorldSocket::Forever: CMSG_CHARACTER_LIST_ACK received size={} bytes=[{}].", packet.size(), bytesToHex(packet.contents(), packet.size()));
 
     // In the observed 69893 flow the payload is:
     //   uint32 characterCount
@@ -199,7 +186,6 @@ bool WorldSocket::handleForeverCharacterListAckOpcode(AscEmu::Version::Forever::
     {
         m_foreverPostCreateEnumRefreshArmed = false;
 
-        sLogger.info("WorldSocket::Forever: post-create character-list ACK reached; sending one DB-backed enum refresh after client-side list commit.");
 
         if (!sendForeverCharacterEnumFromDatabase(true))
             return false;

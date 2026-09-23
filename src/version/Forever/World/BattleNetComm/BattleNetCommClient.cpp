@@ -315,7 +315,6 @@ namespace AscEmu::BattlenetComm
             pendingCount = m_pendingSessions.size();
         }
 
-        sLogger.info("BattleNetCommClient: received pending world session ticket_bytes={} (pending={})", ticket.size(), pendingCount);
     }
 
     bool BattleNetCommClientManager::getPendingSession(const std::string& realmJoinTicket, PendingWorldSession& session, bool consume)

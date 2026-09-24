@@ -367,7 +367,7 @@ bool WorldSocket::sendForeverCharacterEnumFromDatabase(bool includeCollection)
     }
 
     const uint32_t virtualRealmAddress = ((m_foreverRegionId & 0xFFU) << 24U) | ((m_foreverBattlegroupId & 0xFFU) << 16U) | (m_foreverRealmId & 0xFFFFU);
-    const auto& raceClassAvailability = AscEmu::Version::Forever::Packets::getRaceClassAvailability69913();
+    const auto& raceClassAvailability = AscEmu::Version::Forever::Packets::getRaceClassAvailability();
     ByteBuffer wire = AscEmu::Version::Forever::Packets::buildCharacterEnumResponse(virtualRealmAddress, m_foreverRealmId, characters, raceClassAvailability);
 
     if (!sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ENUM_CHARACTERS_RESULT, wire.contents(), static_cast<uint32_t>(wire.size())))

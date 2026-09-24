@@ -660,7 +660,7 @@ bool WorldSocket::initializeVersionedConnection()
     WoW::ClientProtocol protocol;
     protocol.expansion = WoW::Expansion::Unknown;
     protocol.flavor = WoW::ProtocolFlavor::Forever;
-    protocol.realmId = 0;
+    protocol.realmId = worldConfig.battleNetComm.realmId;
     setClientProtocol(protocol);
 
     m_foreverClientBuild = AscEmu::Version::Forever::Build;
@@ -902,7 +902,6 @@ bool WorldSocket::processForeverAuthPacket()
 
         if (isForeverMovementWireOpcode(m_foreverPacketOpcode))
         {
-            sLogger.debugFlag(AscEmu::Logging::LF_MOVE, "WorldSocket::Forever: RX header opcode=0x{:08X}, payload={} byte(s), auth-tag={}.", m_foreverPacketOpcode, m_foreverPacketRemaining, nonZeroAuthTag ? "non-zero" : "zero");
         }
         else if (m_foreverPacketOpcode == WorldProtocol::CMSG_PING)
         {
@@ -942,7 +941,6 @@ bool WorldSocket::processForeverAuthPacket()
 
     if (isForeverMovementWireOpcode(opcode))
     {
-        sLogger.debugFlag(AscEmu::Logging::LF_MOVE, "WorldSocket::Forever: RX opcode=0x{:08X}, payload={} byte(s), hex=[{}]", opcode, payload.size(), AscEmu::Version::Forever::bytesToHex(payload.data(), payload.size()));
     }
     else if (opcode == WorldProtocol::CMSG_PING)
     {
@@ -1669,6 +1667,8 @@ bool WorldSocket::setVersionedClientProtocolByBuild(uint32_t build)
 
     WoW::ClientProtocol protocol;
     protocol.expansion = WoW::Expansion::Unknown;
+    protocol.flavor = WoW::ProtocolFlavor::Forever;
+    protocol.realmId = worldConfig.battleNetComm.realmId;
     setClientProtocol(protocol);
     return true;
 }
@@ -1687,6 +1687,9 @@ bool WorldSocket::sendVersionedPacket(WorldPacket* packet)
         {
             case SMSG_LIST_INVENTORY:
                 return sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_VENDOR_INVENTORY, packet->contents(), static_cast<uint32_t>(packet->size()));
+            case SMSG_MONSTER_MOVE:
+            case SMSG_MONSTER_MOVE_TRANSPORT:
+                return sendForeverPacket(AscEmu::Version::Forever::Opcode::SMSG_ON_MONSTER_MOVE, packet->contents(), static_cast<uint32_t>(packet->size()));
             default:
                 sLogger.debug("WorldSocket::Forever: blocked unmapped managed packet opcode={} payload={}.", packet->getOpcode(), packet->size());
                 return true;

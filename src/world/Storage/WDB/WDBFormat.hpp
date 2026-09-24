@@ -1181,7 +1181,6 @@ static std::map<std::string, MultiversionFormatTable> dbcFieldDefines =
     }
 };
 
-
 namespace WDB
 {
     struct WDC5FieldSchema
@@ -1217,23 +1216,18 @@ namespace WDB
         inline const WDC5TableSchema ChrModel = makeSchemaWithArrays("ChrModel.db2", 0x03FAB755, 2, 17, {{0, 3}, {1, 3}});
         inline const WDC5TableSchema ChrRaceXChrModel = makeScalarSchema("ChrRaceXChrModel.db2", 0xA203BC29, -1, 4);
         inline const WDC5TableSchema ChrClasses = makeScalarSchema("ChrClasses.db2", 0xAFC9B0C2, 29, 43);
-        inline const WDC5TableSchema ChrRaces = makeSchemaWithArrays("ChrRaces.db2", 0x4F44C796, -1, 51,
-            {{23, 3}, {24, 3}, {30, 3}, {32, 3}, {33, 3}});
+        inline const WDC5TableSchema ChrRaces = makeSchemaWithArrays("ChrRaces.db2", 0x4F44C796, -1, 51, {{23, 3}, {24, 3}, {30, 3}, {32, 3}, {33, 3}});
         inline const WDC5TableSchema Faction = makeScalarSchema("Faction.db2", 0x6D443C38, -1, 21);
-        inline const WDC5TableSchema FactionTemplate = makeSchemaWithArrays("FactionTemplate.db2", 0x22B6DC22, -1, 7,
-            {{5, 8}, {6, 8}});
+        inline const WDC5TableSchema FactionTemplate = makeSchemaWithArrays("FactionTemplate.db2", 0x22B6DC22, -1, 7, {{5, 8}, {6, 8}});
 
         // Creature/model data. These Forever layouts use external/non-inline IDs,
         // so the runtime key comes from WDC5File::getRecordId(). Keep the layout
         // hash open (0) here: the field layout is verified for 1.60.1.69876,
         // 1.60.1.69893 and 1.60.1.69913, while the actual hash is still read and
         // reported by WDC5File at runtime.
-        inline const WDC5TableSchema CreatureDisplayInfo = makeSchemaWithArrays(
-            "CreatureDisplayInfo.db2", 0x7275F5F6, 0, 28, {{27, 4}});
-        inline const WDC5TableSchema CreatureDisplayInfoExtra = makeScalarSchema(
-            "CreatureDisplayInfoExtra.db2", 0x4D9FE25C, 0, 7);
-        inline const WDC5TableSchema CreatureModelData = makeSchemaWithArrays(
-            "CreatureModelData.db2", 0, -1, 34, {{0, 6}, {33, 2}});
+        inline const WDC5TableSchema CreatureDisplayInfo = makeSchemaWithArrays("CreatureDisplayInfo.db2", 0x7275F5F6, 0, 28, {{27, 4}});
+        inline const WDC5TableSchema CreatureDisplayInfoExtra = makeScalarSchema("CreatureDisplayInfoExtra.db2", 0x4D9FE25C, 0, 7);
+        inline const WDC5TableSchema CreatureModelData = makeSchemaWithArrays("CreatureModelData.db2", 0, -1, 34, {{0, 6}, {33, 2}});
 
         // Character customization
         inline const WDC5TableSchema ChrCustomization = makeSchemaWithArrays("ChrCustomization.db2", 0x2FBC8BC5, -1, 6, {{5, 3}});
@@ -1255,8 +1249,7 @@ namespace WDB
         inline const WDC5TableSchema ChrCustomizationVoice = makeScalarSchema("ChrCustomizationVoice.db2", 0x03684BD2, -1, 1);
 
         // Taxi
-        inline const WDC5TableSchema TaxiNodes = makeSchemaWithArrays("TaxiNodes.db2", 0xE7B597F0, 4, 15,
-            {{1, 3}, {2, 2}, {3, 2}, {14, 2}});
+        inline const WDC5TableSchema TaxiNodes = makeSchemaWithArrays("TaxiNodes.db2", 0xE7B597F0, 4, 15, {{1, 3}, {2, 2}, {3, 2}, {14, 2}});
         inline const WDC5TableSchema TaxiPath = makeScalarSchema("TaxiPath.db2", 0xA303DE51, 0, 4);
         inline const WDC5TableSchema TaxiPathNode = makeSchemaWithArrays("TaxiPathNode.db2", 0xFE362E70, 1, 9, {{0, 3}});
 
@@ -1264,11 +1257,16 @@ namespace WDB
         inline const WDC5TableSchema ItemSet = makeSchemaWithArrays("ItemSet.db2", 0xF79068A4, -1, 5, {{4, 17}});
         inline const WDC5TableSchema ItemSetSpell = makeScalarSchema("ItemSetSpell.db2", 0x2666A73F, -1, 4);
 
-        // Maps
+        // Maps / terrain
         inline const WDC5TableSchema Map = makeSchemaWithArrays("Map.db2", 0xD43AFAC3, -1, 26, {{6, 2}, {25, 3}});
         inline const WDC5TableSchema MapDifficulty = makeScalarSchema("MapDifficulty.db2", 0x24A16AD3, 1, 11);
-        inline const WDC5TableSchema UiMapAssignment = makeSchemaWithArrays("UiMapAssignment.db2", 0xC9CC8DFB, 3, 11,
-            {{0, 2}, {1, 2}, {2, 6}});
+        inline const WDC5TableSchema UiMapAssignment = makeSchemaWithArrays("UiMapAssignment.db2", 0xC9CC8DFB, 3, 11, {{0, 2}, {1, 2}, {2, 6}});
         inline const WDC5TableSchema WorldMapOverlay = makeSchemaWithArrays("WorldMapOverlay.db2", 0x9A196494, 0, 13, {{12, 4}});
+
+        // 1.60.1.69876/69893/69913/69977. AreaTable and LiquidType use
+        // non-inline IDs; WMOAreaTable keeps its ID as field 1.
+        inline const WDC5TableSchema AreaTable = makeSchemaWithArrays("AreaTable.db2", 0x9995B797, -1, 24, {{22, 2}, {23, 4}});
+        inline const WDC5TableSchema LiquidType = makeSchemaWithArrays("LiquidType.db2", 0xD1ECEEC9, -1, 21, {{1, 6}, {16, 6}, {17, 3}, {18, 38}, {19, 4}, {20, 4}});
+        inline const WDC5TableSchema WMOAreaTable = makeScalarSchema("WMOAreaTable.db2", 0xC5A7B977, 1, 15);
     }
 }

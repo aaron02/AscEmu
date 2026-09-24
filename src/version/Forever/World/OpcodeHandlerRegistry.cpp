@@ -27,7 +27,9 @@ namespace AscEmu::Version::Forever
         registerOpcode(Opcode::CMSG_HOTFIX_REQUEST, &WorldSocket::handleForeverHotfixRequestOpcode);
         registerOpcode(Opcode::CMSG_QUERY_CREATURE, &WorldSocket::handleForeverQueryCreatureOpcode);
         registerOpcode(Opcode::CMSG_QUERY_GAME_OBJECT, &WorldSocket::handleForeverQueryGameObjectOpcode);
+        registerOpcode(Opcode::CMSG_UNKNOWN_PLAYER_GUID_003E002D, &WorldSocket::handleForeverUnknown003E002DOpcode);
         registerOpcode(Opcode::CMSG_UNKNOWN_NPC_INTERACT_003F0029, &WorldSocket::handleForeverUnknownNpcInteract003F0029Opcode);
+        registerOpcode(Opcode::CMSG_CLOSE_INTERACTION, &WorldSocket::handleCloseInteraction);
         registerOpcode(Opcode::CMSG_LIST_INVENTORY, &WorldSocket::handleForeverListInventoryOpcode);
         registerOpcode(Opcode::CMSG_SET_SELECTION, &WorldSocket::handleForeverSetSelectionOpcode);
 
@@ -36,7 +38,6 @@ namespace AscEmu::Version::Forever
         registerOpcode(Opcode::CMSG_MOVE_DOUBLE_JUMP, &WorldSocket::handleMovementOpcodes);
         registerOpcode(Opcode::CMSG_MOVE_FALL_LAND, &WorldSocket::handleMovementOpcodes);
         registerOpcode(Opcode::CMSG_MOVE_FALL_RESET, &WorldSocket::handleMovementOpcodes);
-        registerOpcode(Opcode::CMSG_UNKNOWN_003E002D, &WorldSocket::handleForeverUnknown003E002DOpcode);
         registerOpcode(Opcode::CMSG_MOVE_UPDATE_FALL_SPEED, &WorldSocket::handleMovementOpcodes);
         registerOpcode(Opcode::CMSG_MOVE_HEARTBEAT, &WorldSocket::handleMovementOpcodes);
         

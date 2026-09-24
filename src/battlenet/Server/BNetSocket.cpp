@@ -305,188 +305,6 @@ namespace AscEmu::Battlenet
             return out.str();
         }
 
-        std::string makeCompactHex(const uint8_t* data, size_t size, size_t maxBytes = MAX_DIAGNOSTIC_DUMP_SIZE)
-        {
-            if (data == nullptr || size == 0)
-                return "<empty>";
-
-            const size_t dumpSize = std::min(size, maxBytes);
-            std::ostringstream out;
-            out << std::hex << std::uppercase << std::setfill('0');
-            for (size_t index = 0; index < dumpSize; ++index)
-            {
-                if (index != 0)
-                    out << ' ';
-                out << std::setw(2) << static_cast<unsigned>(data[index]);
-            }
-
-            if (dumpSize < size)
-                out << " ... (" << std::dec << (size - dumpSize) << " more byte(s))";
-
-            return out.str();
-        }
-
-        std::string makePrintableDiagnostic(const uint8_t* data, size_t size, size_t maxBytes = 256u)
-        {
-            if (data == nullptr || size == 0)
-                return "<empty>";
-
-            const size_t textSize = std::min(size, maxBytes);
-            bool printable = true;
-            for (size_t index = 0; index < textSize; ++index)
-            {
-                const unsigned char c = data[index];
-                if (std::isprint(c) == 0 && std::isspace(c) == 0)
-                {
-                    printable = false;
-                    break;
-                }
-            }
-
-            if (!printable)
-                return makeCompactHex(data, size, maxBytes);
-
-            std::string text(reinterpret_cast<const char*>(data), textSize);
-            if (textSize < size)
-                text += "...";
-            return '"' + jsonEscape(text) + '"';
-        }
-
-        std::string describeGameUtilitiesAttributes(const uint8_t* payload, size_t payloadSize)
-        {
-            if (payload == nullptr || payloadSize == 0)
-                return "<none>";
-
-            std::ostringstream out;
-            const uint8_t* cursor = payload;
-            const uint8_t* const end = payload + payloadSize;
-            size_t attributeIndex = 0;
-
-            while (cursor < end)
-            {
-                uint64_t key = 0;
-                if (!readVarInt(cursor, end, key))
-                {
-                    out << " [parse-error: outer tag]";
-                    break;
-                }
-
-                const uint32_t fieldNumber = static_cast<uint32_t>(key >> 3);
-                const uint32_t wireType = static_cast<uint32_t>(key & 0x07u);
-                if (fieldNumber != 1u || wireType != 2u)
-                {
-                    if (!skipProtobufField(wireType, cursor, end))
-                    {
-                        out << " [parse-error: outer field " << fieldNumber << ']';
-                        break;
-                    }
-                    continue;
-                }
-
-                const uint8_t* attributeData = nullptr;
-                size_t attributeSize = 0;
-                if (!readLengthDelimited(cursor, end, attributeData, attributeSize))
-                {
-                    out << " [parse-error: attribute length]";
-                    break;
-                }
-
-                std::string name;
-                const uint8_t* variantData = nullptr;
-                size_t variantSize = 0;
-                const uint8_t* attributeCursor = attributeData;
-                const uint8_t* const attributeEnd = attributeData + attributeSize;
-
-                while (attributeCursor < attributeEnd)
-                {
-                    uint64_t attributeKey = 0;
-                    if (!readVarInt(attributeCursor, attributeEnd, attributeKey))
-                        break;
-
-                    const uint32_t attributeField = static_cast<uint32_t>(attributeKey >> 3);
-                    const uint32_t attributeWire = static_cast<uint32_t>(attributeKey & 0x07u);
-                    if (attributeField == 1u && attributeWire == 2u)
-                    {
-                        const uint8_t* data = nullptr;
-                        size_t size = 0;
-                        if (!readLengthDelimited(attributeCursor, attributeEnd, data, size))
-                            break;
-                        name.assign(reinterpret_cast<const char*>(data), size);
-                    }
-                    else if (attributeField == 2u && attributeWire == 2u)
-                    {
-                        if (!readLengthDelimited(attributeCursor, attributeEnd, variantData, variantSize))
-                            break;
-                    }
-                    else if (!skipProtobufField(attributeWire, attributeCursor, attributeEnd))
-                    {
-                        break;
-                    }
-                }
-
-                if (attributeIndex++ != 0)
-                    out << " | ";
-                out << '#' << attributeIndex << " name='" << (name.empty() ? "<unnamed>" : name) << "'";
-
-                if (variantData == nullptr)
-                {
-                    out << " value=<missing>";
-                    continue;
-                }
-
-                const uint8_t* variantCursor = variantData;
-                const uint8_t* const variantEnd = variantData + variantSize;
-                bool wroteValue = false;
-                while (variantCursor < variantEnd)
-                {
-                    uint64_t variantKey = 0;
-                    if (!readVarInt(variantCursor, variantEnd, variantKey))
-                        break;
-
-                    const uint32_t variantField = static_cast<uint32_t>(variantKey >> 3);
-                    const uint32_t variantWire = static_cast<uint32_t>(variantKey & 0x07u);
-
-                    if (variantWire == 0u)
-                    {
-                        uint64_t value = 0;
-                        if (!readVarInt(variantCursor, variantEnd, value))
-                            break;
-                        out << (wroteValue ? ", " : " value=")
-                            << (variantField == 6u ? "uint" : "varint")
-                            << "(field " << variantField << ")=" << value;
-                        wroteValue = true;
-                        continue;
-                    }
-
-                    if (variantWire == 2u)
-                    {
-                        const uint8_t* data = nullptr;
-                        size_t size = 0;
-                        if (!readLengthDelimited(variantCursor, variantEnd, data, size))
-                            break;
-
-                        const char* typeName = variantField == 4u ? "string" : (variantField == 5u ? "blob" : "bytes");
-                        out << (wroteValue ? ", " : " value=") << typeName << "(field " << variantField << ", " << size << "B)="
-                            << makePrintableDiagnostic(data, size);
-                        wroteValue = true;
-                        continue;
-                    }
-
-                    out << (wroteValue ? ", " : " value=") << "field " << variantField << "/wire " << variantWire;
-                    wroteValue = true;
-                    if (!skipProtobufField(variantWire, variantCursor, variantEnd))
-                        break;
-                }
-
-                if (!wroteValue)
-                    out << " value=<empty-variant>";
-            }
-
-            if (attributeIndex == 0)
-                return "<none>";
-            return out.str();
-        }
-
         std::vector<uint8_t> compressGameUtilitiesJson(const std::string& json)
         {
             // Blizzard's realm-list JSON blobs start with a little-endian uint32
@@ -1004,6 +822,8 @@ namespace AscEmu::Battlenet
                     } while (result->nextRow());
                 }
             }
+
+            const ForeverSuperDistrictProfile foreverProfile = getForeverSuperDistrictProfile(clientBuild);
 
             std::ostringstream realmJson;
             realmJson << "JSONRealmListUpdates:{\"updates\":[";
@@ -1593,7 +1413,7 @@ namespace AscEmu::Battlenet
         if (m_delayCloseAfterReadCallback)
         {
             m_delayCloseAfterReadCallback = false;
-            sLogger.info( "BNet: connection #{} current TLS read completed; arming delayed socket close.", m_connectionId );
+            sLogger.debug( "BNet: connection #{} current TLS read completed; arming delayed socket close.", m_connectionId );
             delayedDisconnect();
         }
     }
@@ -1722,7 +1542,7 @@ namespace AscEmu::Battlenet
 
             if (header.hasServiceHash && header.hasMethodId)
             {
-                sLogger.info( "BNet RX {}::{} size={} token={}", Protocol::getServiceName(header.serviceHash), Protocol::getMethodName(header.serviceHash, header.methodId), payloadSize, header.hasToken ? header.token : 0u );
+                sLogger.debug( "BNet RX {}::{} size={} token={}", Protocol::getServiceName(header.serviceHash), Protocol::getMethodName(header.serviceHash, header.methodId), payloadSize, header.hasToken ? header.token : 0u );
             }
             else
             {
@@ -1939,7 +1759,7 @@ namespace AscEmu::Battlenet
         if (!sendRpcResponse(token, std::vector<uint8_t>{}))
             return false;
 
-        sLogger.info( "BNet: connection #{} RequestDisconnect response queued; delayed close will be armed after the current TLS read callback finishes.", m_connectionId );
+        sLogger.debug( "BNet: connection #{} RequestDisconnect response queued; delayed close will be armed after the current TLS read callback finishes.", m_connectionId );
 
         // Do not call delayedDisconnect() from inside the RPC/TLS stack. If the
         // socket write queue is already empty it may close synchronously, and
@@ -2153,8 +1973,7 @@ namespace AscEmu::Battlenet
     {
         const std::string commandName = findCommandName(payload, payloadSize);
 
-        sLogger.info( "BNet: connection #{} GameUtilities DIAG RX method={}, token={}, command='{}', payload={} byte(s), hex=[{}]", m_connectionId, methodId, token, commandName.empty() ? std::string("<unnamed>") : commandName, payloadSize, makeCompactHex(payload, payloadSize) );
-        sLogger.info( "BNet: connection #{} GameUtilities DIAG ATTR token={}: {}", m_connectionId, token, describeGameUtilitiesAttributes(payload, payloadSize) );
+        sLogger.debug( "BNet: connection #{} GameUtilities method={}, token={}, command='{}', payload={} byte(s)", m_connectionId, methodId, token, commandName.empty() ? std::string("<unnamed>") : commandName, payloadSize );
 
         if (methodId == Protocol::GameUtilitiesService::GetAllValuesForAttribute)
             return handleGameUtilitiesGetAllValues(token, commandName, payload, payloadSize);
@@ -2235,7 +2054,7 @@ namespace AscEmu::Battlenet
         if (!blob.empty())
             appendGameUtilitiesBlobAttribute(response, "Param_BleepProxyList", blob);
 
-        sLogger.info( "BNet: connection #{} FetchBleepProxies -> token={}, command='{}', proxies=0, response={} byte(s)", m_connectionId, token, commandName, response.size());
+        sLogger.debug( "BNet: connection #{} FetchBleepProxies -> token={}, command='{}', proxies=0, response={} byte(s)", m_connectionId, token, commandName, response.size());
 
         return sendRpcResponse(token, response);
     }
@@ -2612,14 +2431,14 @@ namespace AscEmu::Battlenet
                 std::vector<uint8_t> response;
                 appendMessageField(response, 1, info);
 
-                sLogger.info( "BNet: connection #{} AccountServiceV2.GetAccountInfo -> token={}, battlenet_account={}, response={} byte(s)", m_connectionId, token, m_battleNetAccountId, response.size());
+                sLogger.debug( "BNet: connection #{} AccountServiceV2.GetAccountInfo -> token={}, battlenet_account={}, response={} byte(s)", m_connectionId, token, m_battleNetAccountId, response.size());
                 return sendRpcResponse(token, response);
             }
 
             case Protocol::AccountServiceV2::GetRestriction:
             {
                 // No account-level restrictions for local development accounts.
-                sLogger.info( "BNet: connection #{} AccountServiceV2.GetRestriction -> token={}, restrictions=0", m_connectionId, token);
+                sLogger.debug( "BNet: connection #{} AccountServiceV2.GetRestriction -> token={}, restrictions=0", m_connectionId, token);
                 return sendRpcResponse(token, std::vector<uint8_t>{});
             }
 
@@ -2639,7 +2458,7 @@ namespace AscEmu::Battlenet
                 std::vector<uint8_t> response;
                 appendMessageField(response, 1, links);
 
-                sLogger.info( "BNet: connection #{} AccountServiceV2.GetGameAccountLinks -> token={}, game_accounts={}, response={} byte(s)", m_connectionId, token, m_linkedGameAccounts.size(), response.size());
+                sLogger.debug( "BNet: connection #{} AccountServiceV2.GetGameAccountLinks -> token={}, game_accounts={}, response={} byte(s)", m_connectionId, token, m_linkedGameAccounts.size(), response.size());
                 return sendRpcResponse(token, response);
             }
 
@@ -2678,7 +2497,7 @@ namespace AscEmu::Battlenet
                 std::vector<uint8_t> response;
                 appendMessageField(response, 1, info);
 
-                sLogger.info( "BNet: connection #{} AccountServiceV2.GetGameAccountInfo -> token={}, game_account={}, name='{}', response={} byte(s)", m_connectionId, token, linked->id, displayName, response.size());
+                sLogger.debug( "BNet: connection #{} AccountServiceV2.GetGameAccountInfo -> token={}, game_account={}, name='{}', response={} byte(s)", m_connectionId, token, linked->id, displayName, response.size());
                 return sendRpcResponse(token, response);
             }
 
@@ -2704,7 +2523,7 @@ namespace AscEmu::Battlenet
                 }
 
                 // Empty response means no restrictions, matching reference implementation for an unbanned account.
-                sLogger.info( "BNet: connection #{} AccountServiceV2.GetGameAccountRestriction -> token={}, game_account={}, restrictions=0", m_connectionId, token, accountId);
+                sLogger.debug( "BNet: connection #{} AccountServiceV2.GetGameAccountRestriction -> token={}, game_account={}, restrictions=0", m_connectionId, token, accountId);
                 return sendRpcResponse(token, std::vector<uint8_t>{});
             }
 
@@ -2773,7 +2592,7 @@ namespace AscEmu::Battlenet
         frame.insert(frame.end(), header.begin(), header.end());
         frame.insert(frame.end(), payload.begin(), payload.end());
 
-        sLogger.info( "BNet TX {}::{} size={} token={}", Protocol::getServiceName(serviceHash), Protocol::getMethodName(serviceHash, methodId), payload.size(), token );
+        sLogger.debug( "BNet TX {}::{} size={} token={}", Protocol::getServiceName(serviceHash), Protocol::getMethodName(serviceHash, methodId), payload.size(), token );
         sLogger.debug( "BNet TX frame service=0x{:08X} method={} header={} payload={}\n{}", serviceHash, methodId, header.size(), payload.size(), makeHexDump(frame.data(), std::min(frame.size(), MAX_DIAGNOSTIC_DUMP_SIZE)) );
 
         return writeTlsPlainText(frame.data(), frame.size());
@@ -2800,11 +2619,11 @@ namespace AscEmu::Battlenet
 
         if (m_currentRpcServiceHash != 0)
         {
-            sLogger.info( "BNet TX {}::{}Response size={} token={}", Protocol::getServiceName(m_currentRpcServiceHash), Protocol::getMethodName(m_currentRpcServiceHash, m_currentRpcMethodId), payload.size(), token );
+            sLogger.debug( "BNet TX {}::{}Response size={} token={}", Protocol::getServiceName(m_currentRpcServiceHash), Protocol::getMethodName(m_currentRpcServiceHash, m_currentRpcMethodId), payload.size(), token );
         }
         else
         {
-            sLogger.info("BNet TX Response size={} token={}", payload.size(), token);
+            sLogger.debug("BNet TX Response size={} token={}", payload.size(), token);
         }
 
         sLogger.debug( "BNet TX response frame header={} payload={} token={}\n{}", header.size(), payload.size(), token, makeHexDump(frame.data(), std::min(frame.size(), MAX_DIAGNOSTIC_DUMP_SIZE)) );

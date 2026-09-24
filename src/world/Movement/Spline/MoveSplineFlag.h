@@ -275,7 +275,7 @@ public:
 
     // Constant interface
 
-    bool isSmooth() const { return (raw() & Catmullrom) != 0; }
+    bool isSmooth() const { return (raw() & Mask_CatmullRom) != 0; }
     bool isLinear() const { return !isSmooth(); }
     bool isFacing() const { return (raw() & Mask_Final_Facing) != 0; }
 

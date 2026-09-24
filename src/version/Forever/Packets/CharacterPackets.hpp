@@ -68,7 +68,7 @@ namespace AscEmu::Version::Forever::Packets
 
     uint32_t toCharacterResult(CharacterErrorCodes code);
     uint32_t toDeleteCharacterResult(CharacterErrorCodes code);
-    const std::vector<RaceClassAvailability>& getRaceClassAvailability69913();
+    const std::vector<RaceClassAvailability>& getRaceClassAvailability();
     ByteBuffer buildCreateCharacterResponse(uint32_t result, uint32_t realmId, uint64_t characterGuid);
     ByteBuffer buildCharacterEnumResponse(uint32_t virtualRealmAddress, uint32_t realmId, const std::vector<CharacterEnumEntry>& characters, const std::vector<RaceClassAvailability>& raceClassAvailability);
 }

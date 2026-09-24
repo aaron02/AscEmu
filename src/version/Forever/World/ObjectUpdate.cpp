@@ -86,7 +86,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         constexpr uint8_t FRAGMENT_END_69913 = 0xFFU;
 
 
-        void writeEmptyPlayerHouseInfoComponentCreate69913(ByteBuffer& data)
+        void writeEmptyPlayerHouseInfoComponentCreate(ByteBuffer& data)
         {
             // Forever 69913 empty 0x21 component layout verified for the 69913 wire layout.
             data << uint32_t(0); // Field_8 count (owner)
@@ -111,7 +111,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             writeModernGuid(data, WoWGuid()); // CurrentHouse
         }
 
-        void writeEmptyPlayerInitiativeComponentCreate69913(ByteBuffer& data)
+        void writeEmptyPlayerInitiativeComponentCreate(ByteBuffer& data)
         {
             writeModernGuid(data, WoWGuid()); // NeighborhoodGUID
 
@@ -696,7 +696,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         };
 
 
-        void applyDefaultTransmogOutfit69913(Fields::TransmogOutfitData& outfit, uint32_t id, uint8_t setType, char const* name, bool withSituations, uint32_t flags)
+        void applyDefaultTransmogOutfit(Fields::TransmogOutfitData& outfit, uint32_t id, uint8_t setType, char const* name, bool withSituations, uint32_t flags)
         {
             static constexpr std::array<uint32_t, 7> SituationIds = {1u, 3u, 13u, 18u, 20u, 37u, 32u};
             static constexpr std::array<Fields::TransmogOutfitSlotData, 45> Slots = {{
@@ -765,7 +765,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             outfit.slots.assign(Slots.begin(), Slots.end());
         }
 
-        Fields::ActivePlayerData makeConservativeActivePlayerData69913(Fields::ActivePlayerData const& source)
+        Fields::ActivePlayerData makeConservativeActivePlayerData(Fields::ActivePlayerData const& source)
         {
             // Forever 69913 live profile:
             // Keep only fields whose placement/encoding has been established from
@@ -848,10 +848,10 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             // represented as typed protocol defaults rather than retained packet bytes.
             result.unknownOutfitScalar0_69913 = 2u;
             result.unknownOutfitScalar1_69913 = 3u;
-            applyDefaultTransmogOutfit69913(result.viewedOutfit, 3u, 1u, "Outfit 2", true, 1u);
+            applyDefaultTransmogOutfit(result.viewedOutfit, 3u, 1u, "Outfit 2", true, 1u);
             result.additionalOutfits69913.resize(2);
-            applyDefaultTransmogOutfit69913(result.additionalOutfits69913[0], 2u, 1u, "Outfit 1", true, 1u);
-            applyDefaultTransmogOutfit69913(result.additionalOutfits69913[1], 1u, 0u, "Outfit", false, 0u);
+            applyDefaultTransmogOutfit(result.additionalOutfits69913[0], 2u, 1u, "Outfit 1", true, 1u);
+            applyDefaultTransmogOutfit(result.additionalOutfits69913[1], 1u, 0u, "Outfit", false, 0u);
             result.transmogMetadata.situationTrigger = 0u;
             result.transmogMetadata.transmogOutfitId = 2u;
             result.transmogMetadata.stampedOptionMainHand = 0u;
@@ -932,7 +932,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
 
     namespace
     {
-        void writeStationaryUnitMovement69913(ByteBuffer& data, std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, uint32_t movementTimeMs)
+        void writeStationaryUnitMovement(ByteBuffer& data, std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, uint32_t movementTimeMs)
         {
             // Capture-proven minimal stationary creature layout:
             //   7-byte fixed prefix
@@ -952,7 +952,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         }
     }
 
-    std::vector<uint8_t> buildCreatureCreateBlock69913(std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, uint32_t movementTimeMs, Fields::ObjectData const& objectFields, Fields::UnitData const& unitFields, uint32_t vendorDataFlags69913)
+    std::vector<uint8_t> buildCreatureCreateBlock(std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, uint32_t movementTimeMs, Fields::ObjectData const& objectFields, Fields::UnitData const& unitFields, uint32_t vendorDataFlags69913)
     {
         if (packedGuid.empty())
             return {};
@@ -984,14 +984,14 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         block << uint8_t(1); // CREATE_OBJECT (ordinary world unit)
         block.append(packedGuid.data(), packedGuid.size());
         block << uint8_t(OBJECT_TYPE_UNIT);
-        writeStationaryUnitMovement69913(block, packedGuid, x, y, z, orientation, movementTimeMs);
+        writeStationaryUnitMovement(block, packedGuid, x, y, z, orientation, movementTimeMs);
         block << uint32_t(fieldPayload.size());
         block.append(fieldPayload);
 
         return std::vector<uint8_t>(block.contents(), block.contents() + block.size());
     }
 
-    std::vector<uint8_t> buildGameObjectCreateBlock69913(std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, int64_t packedLocalRotation, Fields::ObjectData const& objectFields, Fields::GameObjectData const& gameObjectFields)
+    std::vector<uint8_t> buildGameObjectCreateBlock(std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, int64_t packedLocalRotation, Fields::ObjectData const& objectFields, Fields::GameObjectData const& gameObjectFields)
     {
         if (packedGuid.empty())
             return {};
@@ -1027,7 +1027,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         return std::vector<uint8_t>(block.contents(), block.contents() + block.size());
     }
 
-    std::vector<uint8_t> buildSelfFieldPayload69913(Fields::ObjectData const& objectFields, Fields::UnitData const& unitFields, Fields::PlayerData const& playerFields, Fields::ActivePlayerData const& activePlayerFields)
+    std::vector<uint8_t> buildSelfFieldPayload(Fields::ObjectData const& objectFields, Fields::UnitData const& unitFields, Fields::PlayerData const& playerFields, Fields::ActivePlayerData const& activePlayerFields)
     {
         ByteBuffer payload;
 
@@ -1046,7 +1046,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         if (!writePlayerDataCreate(payload, playerFields, true))
             return {};
 
-        const Fields::ActivePlayerData activePlayer = makeConservativeActivePlayerData69913(activePlayerFields);
+        const Fields::ActivePlayerData activePlayer = makeConservativeActivePlayerData(activePlayerFields);
 
         ByteBuffer activePlayerPayload;
         if (!writeActivePlayerDataCreate(activePlayerPayload, activePlayer))
@@ -1090,10 +1090,10 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         payload.append(SparseDefaults69913.data(), SparseDefaults69913.size());
 
         payload << uint8_t(1);
-        writeEmptyPlayerHouseInfoComponentCreate69913(payload);
+        writeEmptyPlayerHouseInfoComponentCreate(payload);
 
         payload << uint8_t(1);
-        writeEmptyPlayerInitiativeComponentCreate69913(payload);
+        writeEmptyPlayerInitiativeComponentCreate(payload);
 
         return std::vector<uint8_t>(payload.contents(), payload.contents() + payload.size());
     }
@@ -1141,7 +1141,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             }
         }
 
-        void writeObjectDataUpdate69913(ByteBuffer& data, Fields::ObjectData const& fields)
+        void writeObjectDataUpdate(ByteBuffer& data, Fields::ObjectData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
             if (fields.changes.test(Fields::ObjectData::EntryIdBit))
@@ -1153,7 +1153,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data.flushBits();
         }
 
-        void writeItemDataUpdate69913(ByteBuffer& data, Fields::ItemData const& fields)
+        void writeItemDataUpdate(ByteBuffer& data, Fields::ItemData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
             auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
@@ -1174,7 +1174,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data.flushBits();
         }
 
-        void writeContainerDataUpdate69913(ByteBuffer& data, Fields::ContainerData const& fields)
+        void writeContainerDataUpdate(ByteBuffer& data, Fields::ContainerData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
             auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
@@ -1186,7 +1186,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data.flushBits();
         }
 
-        void writeUnitDataUpdate69913(ByteBuffer& data, Fields::UnitData const& fields)
+        void writeUnitDataUpdate(ByteBuffer& data, Fields::UnitData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
 
@@ -1265,7 +1265,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data.flushBits();
         }
 
-        void writePlayerDataUpdate69913(ByteBuffer& data, Fields::PlayerData const& fields)
+        void writePlayerDataUpdate(ByteBuffer& data, Fields::PlayerData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
             auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
@@ -1285,7 +1285,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data.flushBits();
         }
 
-        void writeGameObjectDataUpdate69913(ByteBuffer& data, Fields::GameObjectData const& fields)
+        void writeGameObjectDataUpdate(ByteBuffer& data, Fields::GameObjectData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
             auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
@@ -1341,7 +1341,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data.flushBits();
         }
 
-        void writeDynamicObjectDataUpdate69913(ByteBuffer& data, Fields::DynamicObjectData const& fields)
+        void writeDynamicObjectDataUpdate(ByteBuffer& data, Fields::DynamicObjectData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
             auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
@@ -1354,7 +1354,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data.flushBits();
         }
 
-        void writeCorpseDataUpdate69913(ByteBuffer& data, Fields::CorpseData const& fields)
+        void writeCorpseDataUpdate(ByteBuffer& data, Fields::CorpseData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
             auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
@@ -1376,7 +1376,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
             data.flushBits();
         }
 
-        void writeActivePlayerDataUpdate69913(ByteBuffer& data, Fields::ActivePlayerData const& fields)
+        void writeActivePlayerDataUpdate(ByteBuffer& data, Fields::ActivePlayerData const& fields)
         {
             writeStructuredChangeMask(data, fields.changes);
             auto changed = [&](std::size_t bit) { return fields.changes.test(bit); };
@@ -1394,7 +1394,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         }
     }
 
-    std::vector<uint8_t> buildValuesUpdateBlock69913(std::span<const uint8_t> packedGuid, bool ownerVisible, Fields::ObjectData const& objectFields, Fields::ItemData const* itemFields, Fields::ContainerData const* containerFields, Fields::UnitData const* unitFields, Fields::PlayerData const* playerFields, Fields::ActivePlayerData const* activePlayerFields, Fields::GameObjectData const* gameObjectFields, Fields::DynamicObjectData const* dynamicObjectFields, Fields::CorpseData const* corpseFields)
+    std::vector<uint8_t> buildValuesUpdateBlock(std::span<const uint8_t> packedGuid, bool ownerVisible, Fields::ObjectData const& objectFields, Fields::ItemData const* itemFields, Fields::ContainerData const* containerFields, Fields::UnitData const* unitFields, Fields::PlayerData const* playerFields, Fields::ActivePlayerData const* activePlayerFields, Fields::GameObjectData const* gameObjectFields, Fields::DynamicObjectData const* dynamicObjectFields, Fields::CorpseData const* corpseFields)
     {
         if (packedGuid.empty())
             return {};
@@ -1418,15 +1418,15 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         payload << uint8_t(1); // CGObject fragment contents changed
         payload << changedObjectTypeMask;
 
-        if (changedObjectTypeMask & (uint32_t(1) << 0)) writeObjectDataUpdate69913(payload, objectFields);
-        if (changedObjectTypeMask & (uint32_t(1) << 1)) writeItemDataUpdate69913(payload, *itemFields);
-        if (changedObjectTypeMask & (uint32_t(1) << 2)) writeContainerDataUpdate69913(payload, *containerFields);
-        if (changedObjectTypeMask & (uint32_t(1) << 5)) writeUnitDataUpdate69913(payload, *unitFields);
-        if (changedObjectTypeMask & (uint32_t(1) << 6)) writePlayerDataUpdate69913(payload, *playerFields);
-        if (changedObjectTypeMask & (uint32_t(1) << 7)) writeActivePlayerDataUpdate69913(payload, *activePlayerFields);
-        if (changedObjectTypeMask & (uint32_t(1) << 8)) writeGameObjectDataUpdate69913(payload, *gameObjectFields);
-        if (changedObjectTypeMask & (uint32_t(1) << 9)) writeDynamicObjectDataUpdate69913(payload, *dynamicObjectFields);
-        if (changedObjectTypeMask & (uint32_t(1) << 10)) writeCorpseDataUpdate69913(payload, *corpseFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 0)) writeObjectDataUpdate(payload, objectFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 1)) writeItemDataUpdate(payload, *itemFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 2)) writeContainerDataUpdate(payload, *containerFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 5)) writeUnitDataUpdate(payload, *unitFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 6)) writePlayerDataUpdate(payload, *playerFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 7)) writeActivePlayerDataUpdate(payload, *activePlayerFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 8)) writeGameObjectDataUpdate(payload, *gameObjectFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 9)) writeDynamicObjectDataUpdate(payload, *dynamicObjectFields);
+        if (changedObjectTypeMask & (uint32_t(1) << 10)) writeCorpseDataUpdate(payload, *corpseFields);
 
         ByteBuffer block;
         block << uint8_t(0); // VALUES
@@ -1436,7 +1436,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         return std::vector<uint8_t>(block.contents(), block.contents() + block.size());
     }
 
-    std::vector<uint8_t> buildUpdateObjectPacket69913(uint16_t mapId, uint32_t updateCount, std::span<const uint8_t> updateBlocks, uint32_t destroyCount, std::span<const uint8_t> destroyGuids, uint32_t outOfRangeCount, std::span<const uint8_t> outOfRangeGuids)
+    std::vector<uint8_t> buildUpdateObjectPacket(uint16_t mapId, uint32_t updateCount, std::span<const uint8_t> updateBlocks, uint32_t destroyCount, std::span<const uint8_t> destroyGuids, uint32_t outOfRangeCount, std::span<const uint8_t> outOfRangeGuids)
     {
         const uint64_t totalRemovalCount64 = static_cast<uint64_t>(destroyCount) + outOfRangeCount;
         if (totalRemovalCount64 > std::numeric_limits<uint32_t>::max())
@@ -1481,7 +1481,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         return std::vector<uint8_t>(packet.contents(), packet.contents() + packet.size());
     }
 
-    std::vector<uint8_t> buildSelfCreatePacket69913(uint16_t mapId, std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, std::span<const uint8_t> fieldPayload)
+    std::vector<uint8_t> buildSelfCreatePacket(uint16_t mapId, std::span<const uint8_t> packedGuid, float x, float y, float z, float orientation, std::span<const uint8_t> fieldPayload)
     {
         if (packedGuid.empty() || fieldPayload.empty())
             return {};
@@ -1518,7 +1518,7 @@ namespace AscEmu::Version::Forever::ObjectUpdate
         block << uint32_t(fieldPayload.size());
         block.append(fieldPayload.data(), fieldPayload.size());
 
-        return buildUpdateObjectPacket69913(mapId, 1, std::span<const uint8_t>(block.contents(), block.size()));
+        return buildUpdateObjectPacket(mapId, 1, std::span<const uint8_t>(block.contents(), block.size()));
     }
 
 

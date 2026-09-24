@@ -42,6 +42,15 @@ target_include_directories(version_client PUBLIC
     ${CMAKE_SOURCE_DIR}/src/shared
     ${CMAKE_SOURCE_DIR}/src/world
 )
+
+# The modern version handlers are compiled inside version_client, but they use
+# world headers whose public structures contain G3D types (for example
+# MySQLStructures.h -> G3D/Quat.h). Since version_client is a separate target,
+# it must receive the same G3D include path explicitly instead of relying on
+# the world executable's private include directories.
+target_include_directories(version_client SYSTEM PRIVATE
+    ${CMAKE_SOURCE_DIR}/dep/g3dlite/include
+)
 # version_client contains modern packet handlers that use zlib directly
 # (for example CMSG_UPDATE_ACCOUNT_DATA). shared links zlib PRIVATE, so its
 # include path/link dependency is not propagated to version_client.
@@ -60,6 +69,7 @@ target_link_libraries(version_client
         shared
     PRIVATE
         ${VERSION_CLIENT_ZLIB_TARGET}
+        g3dlite
 )
 
 unset(VERSION_CLIENT_ZLIB_TARGET)

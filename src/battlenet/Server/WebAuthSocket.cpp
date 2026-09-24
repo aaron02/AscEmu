@@ -454,7 +454,7 @@ namespace AscEmu::Battlenet
         const std::string requestLine = m_httpBuffer.substr(0, requestLineEnd);
         const std::string body = m_httpBuffer.substr(headersSize, contentLength);
 
-        sLogger.info(
+        sLogger.debug(
             "BNet WebAuth: connection #{} HTTP request:\n{}",
             m_connectionId,
             headers
@@ -464,7 +464,7 @@ namespace AscEmu::Battlenet
         {
             const std::string diagnosticBody = redactSensitiveLoginValues(body);
 
-            sLogger.info(
+            sLogger.debug(
                 "BNet WebAuth: connection #{} HTTP body ({} byte(s)):\n{}",
                 m_connectionId,
                 body.size(),
@@ -526,12 +526,12 @@ namespace AscEmu::Battlenet
                     m_connectionId,
                     login
                 );
-                sLogger.info(
+                sLogger.debug(
                     "BNet WebAuth SRP diagnostic: client_M1={} expected_M1={}",
                     clientM1,
                     evidenceDiagnostics.expectedM1
                 );
-                sLogger.info(
+                sLogger.debug(
                     "BNet WebAuth SRP diagnostic variants: fixed128={} littleEvidence={} littleU={}",
                     evidenceDiagnostics.fixedWidthEvidenceM1,
                     evidenceDiagnostics.littleEndianEvidenceM1,
@@ -559,12 +559,9 @@ namespace AscEmu::Battlenet
                 "\"server_evidence_M2\":\"" + serverM2 + "\"}";
 
             sLogger.info(
-                "BNet WebAuth: connection #{} SRP proof accepted for '{}' -> "
-                "DONE, login_ticket='{}', M2={} byte(s)",
+                "BNet WebAuth: connection #{} authentication successful for '{}'.",
                 m_connectionId,
-                login,
-                loginTicket,
-                serverM2.size() / 2
+                login
             );
 
             return sendJsonResponse(response);

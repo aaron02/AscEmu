@@ -8,6 +8,9 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Network/ByteBuffer.hpp"
 #include "MoveSpline.h"
 #include "Objects/Units/Unit.hpp"
+#include "Server/World.h"
+
+#include <algorithm>
 
 namespace MovementMgr {
 
@@ -467,12 +470,16 @@ void PacketBuilder::WriteCreateData(MoveSpline const& moveSpline, ByteBuffer& da
         {
             case MoveSplineFlag::Final_Target:
                 type = MonsterMoveFacingTarget;
+                break;
             case MoveSplineFlag::Final_Angle:
                 type = MonsterMoveFacingAngle;
+                break;
             case MoveSplineFlag::Final_Point:
                 type = MonsterMoveFacingSpot;
+                break;
             default:
                 type = MonsterMoveNormal;
+                break;
         }
 
         data << moveSpline.timePassed();
@@ -570,7 +577,192 @@ void WriteUncompressedCyclicPathMop(Spline<int32_t> const& spline, ByteBuffer& d
         data << spline.getPoint(i).y << spline.getPoint(i).x << spline.getPoint(i).z;
 }
 
-void PacketBuilder::WriteStopMovement([[maybe_unused]] G3D::Vector3 const& pos, [[maybe_unused]] uint32_t splineId, [[maybe_unused]] ByteBuffer& data, [[maybe_unused]] Unit* unit)
+
+#if defined(AE_FOREVER)
+namespace
+{
+    void WriteForeverPackedGuid(ByteBuffer& data, WoWGuid const& guid)
+    {
+        const std::vector<uint8_t> packed = guid.packModern();
+        data.append(packed.data(), packed.size());
+    }
+
+    WoWGuid MakeForeverGuid(Unit const* unit, uint64_t legacyGuid)
+    {
+        if (legacyGuid == 0)
+            return WoWGuid::createModernEmpty();
+
+        return WoWGuid::createModernFromLegacy(
+            legacyGuid,
+            worldConfig.battleNetComm.realmId,
+            static_cast<uint16_t>(unit->GetMapId()),
+            0,
+            0);
+    }
+
+    uint32_t GetForeverSplineFlags(MoveSplineFlag const& flags)
+    {
+        uint32_t result = 0;
+
+        if (flags.fallingSlow)        result |= 0x00000010u;
+        if (flags.done)               result |= 0x00000020u;
+        if (flags.falling)            result |= 0x00000040u;
+        if (flags.no_spline)          result |= 0x00000080u;
+        if (flags.flying)             result |= 0x00000200u;
+        if (flags.orientationFixed)   result |= 0x00000400u;
+        if (flags.catmullrom)         result |= 0x00000800u;
+        if (flags.cyclic)             result |= 0x00001000u;
+        if (flags.enter_cycle)        result |= 0x00002000u;
+        if (flags.transportEnter)     result |= 0x00008000u;
+        if (flags.transportExit)      result |= 0x00010000u;
+        if (flags.orientationInversed)result |= 0x00080000u; // modern Backward
+        if (flags.smoothGroundPath)   result |= 0x00100000u;
+        if (flags.walkmode)           result |= 0x00200000u; // modern WalkMode
+        if (flags.uncompressedPath)   result |= 0x00400000u;
+        if (flags.parabolic)          result |= 0x04000000u;
+
+        // AscEmu's current spline model does not carry the modern FastSteering,
+        // Steering, FadeObject, spline-filter or animation-transition metadata.
+        // Do not synthesize those flags without their corresponding payload blocks.
+        return result;
+    }
+
+    enum class ForeverMonsterMoveType : uint8_t
+    {
+        Normal       = 0,
+        FacingSpot   = 1,
+        FacingTarget = 2,
+        FacingAngle  = 3
+    };
+
+    ForeverMonsterMoveType GetForeverMonsterMoveType(MoveSplineFlag const& flags)
+    {
+        switch (flags & MoveSplineFlag::Mask_Final_Facing)
+        {
+            case MoveSplineFlag::Final_Target: return ForeverMonsterMoveType::FacingTarget;
+            case MoveSplineFlag::Final_Angle:  return ForeverMonsterMoveType::FacingAngle;
+            case MoveSplineFlag::Final_Point:  return ForeverMonsterMoveType::FacingSpot;
+            default:                           return ForeverMonsterMoveType::Normal;
+        }
+    }
+
+}
+
+void PacketBuilder::WriteForeverMovementSpline(MoveSpline const& moveSpline, ByteBuffer& data, Unit* unit)
+{
+        const ForeverMonsterMoveType type = GetForeverMonsterMoveType(moveSpline.splineflags);
+        const uint32_t flags = GetForeverSplineFlags(moveSpline.splineflags) & ~0x00000020u; // Done is not sent in MonsterMove
+        const int32_t elapsed = moveSpline.timePassed();
+        const uint32_t moveTime = static_cast<uint32_t>(std::max(0, moveSpline.Duration()));
+        const uint32_t fadeObjectTime = 0;
+        const uint8_t mode = static_cast<uint8_t>(moveSpline.spline.mode());
+
+        data << flags;
+        data << uint8_t(type);
+        data << elapsed;
+        data << moveTime;
+        data << fadeObjectTime;
+        data << mode;
+
+        const WoWGuid transportGuid = MakeForeverGuid(unit, unit->getTransGuid());
+        WriteForeverPackedGuid(data, transportGuid);
+        data << int8_t(unit->getTransGuid() != 0 ? unit->GetTransSeat() : -1);
+
+        if (type == ForeverMonsterMoveType::FacingSpot)
+        {
+            data << float(moveSpline.facing.f.x);
+            data << float(moveSpline.facing.f.y);
+            data << float(moveSpline.facing.f.z);
+        }
+        else if (type == ForeverMonsterMoveType::FacingTarget)
+        {
+            data << float(moveSpline.facing.angle);
+            WriteForeverPackedGuid(data, MakeForeverGuid(unit, moveSpline.facing.target));
+        }
+        else if (type == ForeverMonsterMoveType::FacingAngle)
+        {
+            data << float(moveSpline.facing.angle);
+        }
+
+        const auto& spline = moveSpline.spline;
+        const auto& points = spline.getPoints();
+        const uint32_t pointCount = static_cast<uint32_t>(spline.getPointCount());
+        const bool cyclic = moveSpline.splineflags.cyclic;
+        const bool uncompressed = moveSpline.splineflags.uncompressedPath;
+
+        uint32_t pointsCount = 0;
+        uint32_t packedDeltasCount = 0;
+        uint32_t lastIdx = 0;
+
+        if (pointCount >= (cyclic ? 4u : 3u))
+        {
+            lastIdx = pointCount - (cyclic ? 4u : 3u);
+            if (uncompressed)
+                pointsCount = lastIdx;
+            else
+            {
+                pointsCount = 1;
+                packedDeltasCount = lastIdx > 1 ? lastIdx - 1 : 0;
+            }
+        }
+
+        const bool hasJumpExtraData = moveSpline.splineflags.parabolic && moveSpline.effect_start_time < moveSpline.Duration();
+
+        data.writeBits(pointsCount, 16);
+        data.writeBit(moveSpline.splineflags.transportExit); // VehicleExitVoluntary
+        data.writeBit(false);                               // TaxiSmoothing
+        data.writeBits(packedDeltasCount, 16);
+        data.writeBit(false); // HasSplineFilter
+        data.writeBit(false); // HasSpellEffectExtraData
+        data.writeBit(hasJumpExtraData);
+        data.writeBit(false); // HasTurnData
+        data.writeBit(false); // HasAnimTierTransition
+        data.writeBit(false); // HasSpellVisualData
+        data.flushBits();
+
+        if (uncompressed)
+        {
+            for (uint32_t i = 0; i < pointsCount; ++i)
+            {
+                const G3D::Vector3& point = points[i + 2];
+                data << point.x << point.y << point.z;
+            }
+        }
+        else if (pointsCount != 0)
+        {
+            const G3D::Vector3* realPath = &points[1];
+            const G3D::Vector3& destination = realPath[lastIdx];
+            data << destination.x << destination.y << destination.z;
+
+            if (packedDeltasCount != 0)
+            {
+                const G3D::Vector3 middle = (realPath[0] + realPath[lastIdx]) / 2.0f;
+                for (uint32_t i = 1; i < lastIdx; ++i)
+                {
+                    const G3D::Vector3 delta = middle - realPath[i];
+                    data.appendPackXYZ(delta.x, delta.y, delta.z);
+                }
+            }
+        }
+
+        if (hasJumpExtraData)
+        {
+            data << float(moveSpline.vertical_acceleration);
+            data << uint32_t(std::max(0, moveSpline.effect_start_time));
+            data << uint32_t(0); // optional duration override
+        }
+    }
+
+void PacketBuilder::WriteForeverMonsterMoveTail(ByteBuffer& data, bool stopUseFaceDirection, uint8_t stopSplineStyle)
+{
+    data.writeBit(false); // CrzTeleport
+    data.writeBit(stopUseFaceDirection);
+    data.writeBits(stopSplineStyle, 3);
+    data.flushBits();
+}
+#endif
+
+void PacketBuilder::WriteStopMovement([[maybe_unused]] Location const& pos, [[maybe_unused]] uint32_t splineId, [[maybe_unused]] ByteBuffer& data, [[maybe_unused]] Unit* unit)
 {
 #if VERSION_STRING == Mop
     bool const hasVehicle = unit->getVehicle() != nullptr;
@@ -706,72 +898,37 @@ void PacketBuilder::WriteStopMovement([[maybe_unused]] G3D::Vector3 const& pos, 
     data.writeByteSeq(guid[2]);
     data.writeByteSeq(guid[4]);
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
-    bool const hasVehicle = unit->getVehicle() != nullptr;
-    WoWGuid guid = unit->getGuid();
-    WoWGuid transport = unit->getTransGuid();
+    // Forever 69913 matches the modern MonsterMove ordering:
+    // MoverGUID, MovementMonsterSpline { ID, MovementSpline, 5 tail bits }, Pos(XYZ).
+    const WoWGuid moverGuid = MakeForeverGuid(unit, unit->getGuid());
+    WriteForeverPackedGuid(data, moverGuid);
 
-    data << float(pos.z);
-    data << float(pos.x);
     data << uint32_t(splineId);
-    data << float(pos.y);
-    data << float(unit->GetTransOffsetY());
-    data << float(unit->GetTransOffsetZ());
-    data << float(unit->GetTransOffsetX());
 
-    data.writeBit(1); // Parabolic speed
-    data.writeBit(guid[0]);
-    data.writeBits(uint32_t(MonsterMoveStop), 3);
-    data.writeBit(1);
-    data.writeBit(1);
-    data.writeBit(!hasVehicle);
-    data.writeBits(0, 20);
-    data.writeBit(1);
-    data.writeBit(guid[3]);
-    data.writeBit(1);
-    data.writeBit(1);
-    data.writeBit(1);
-    data.writeBit(1);
-    data.writeBit(guid[7]);
-    data.writeBit(guid[4]);
-    data.writeBit(1);
-    data.writeBit(guid[5]);
-    data.writeBits(0, 22); // WP count
-    data.writeBit(guid[6]);
-    data.writeBit(0); // Fake bit
-    data.writeBit(transport[7]);
-    data.writeBit(transport[1]);
-    data.writeBit(transport[3]);
-    data.writeBit(transport[0]);
-    data.writeBit(transport[6]);
-    data.writeBit(transport[4]);
-    data.writeBit(transport[5]);
-    data.writeBit(transport[2]);
-    data.writeBit(0); // Send no block
-    data.writeBit(0);
-    data.writeBit(guid[2]);
-    data.writeBit(guid[1]);
+    // Empty MovementSpline for a stop packet.
+    data << uint32_t(0);                    // Flags
+    data << uint8_t(MonsterMoveNormal);     // Face
+    data << int32_t(0);                     // Elapsed
+    data << uint32_t(0);                    // MoveTime
+    data << uint32_t(0);                    // FadeObjectTime
+    data << uint8_t(0);                     // Mode
+    WriteForeverPackedGuid(data, MakeForeverGuid(unit, unit->getTransGuid()));
+    data << int8_t(unit->getTransGuid() != 0 ? unit->GetTransSeat() : -1);
 
+    data.writeBits(0, 16); // PointsCount
+    data.writeBit(false);  // VehicleExitVoluntary
+    data.writeBit(false);  // TaxiSmoothing
+    data.writeBits(0, 16); // PackedDeltasCount
+    data.writeBit(false);  // HasSplineFilter
+    data.writeBit(false);  // HasSpellEffectExtraData
+    data.writeBit(false);  // HasJumpExtraData
+    data.writeBit(false);  // HasTurnData
+    data.writeBit(false);  // HasAnimTierTransition
+    data.writeBit(false);  // HasSpellVisualData
     data.flushBits();
 
-    data.writeByteSeq(guid[1]);
-    data.writeByteSeq(transport[6]);
-    data.writeByteSeq(transport[4]);
-    data.writeByteSeq(transport[1]);
-    data.writeByteSeq(transport[7]);
-    data.writeByteSeq(transport[0]);
-    data.writeByteSeq(transport[3]);
-    data.writeByteSeq(transport[5]);
-    data.writeByteSeq(transport[2]);
-    data.writeByteSeq(guid[5]);
-    data.writeByteSeq(guid[3]);
-    data.writeByteSeq(guid[6]);
-    data.writeByteSeq(guid[0]);
-    if (hasVehicle)
-        data << uint8_t(unit->GetTransSeat());
-    data.writeByteSeq(guid[7]);
-    data.writeByteSeq(guid[2]);
-    data.writeByteSeq(guid[4]);
+    WriteForeverMonsterMoveTail(data, false, 2);
+    data << float(pos.x) << float(pos.y) << float(pos.z);
 #endif
 }
 
@@ -924,7 +1081,7 @@ void PacketBuilder::WriteMonsterMove([[maybe_unused]] MoveSpline const& moveSpli
 
     data.writeByteSeq(guid[6]);
 
-    if (type == MonsterMoveFacingSpot)
+    if (type == ForeverMonsterMoveType::FacingSpot)
         data << moveSpline.facing.f.x << moveSpline.facing.f.y << moveSpline.facing.f.z;
 
     data.writeByteSeq(guid[0]);
@@ -1084,7 +1241,7 @@ void PacketBuilder::WriteMonsterMove([[maybe_unused]] MoveSpline const& moveSpli
 
     data.writeByteSeq(guid[6]);
 
-    if (type == MonsterMoveFacingSpot)
+    if (type == ForeverMonsterMoveType::FacingSpot)
         data << moveSpline.facing.f.x << moveSpline.facing.f.y << moveSpline.facing.f.z;
 
     data.writeByteSeq(guid[0]);
@@ -1097,165 +1254,17 @@ void PacketBuilder::WriteMonsterMove([[maybe_unused]] MoveSpline const& moveSpli
     if (moveSpline.Duration())
         data << uint32_t(moveSpline.Duration());
 #elif defined(AE_FOREVER)
-// Copied from MoP as a temporary baseline. Replace with dedicated Forever values once verified.
-    bool const hasVehicle = unit->getVehicle() != nullptr;
-    WoWGuid guid = unit->getGuid();
-    WoWGuid transport = unit->getTransGuid();
+    // Forever 69913 matches the modern MonsterMove ordering:
+    // MoverGUID, MovementMonsterSpline { ID, MovementSpline, 5 tail bits }, Pos(XYZ).
+    const WoWGuid moverGuid = MakeForeverGuid(unit, unit->getGuid());
+    WriteForeverPackedGuid(data, moverGuid);
 
-    MonsterMoveType type;
-    switch (moveSpline.splineflags & MoveSplineFlag::Mask_Final_Facing)
-    {
-        case MoveSplineFlag::Final_Target: type = MonsterMoveFacingTarget; break;
-        case MoveSplineFlag::Final_Angle:  type = MonsterMoveFacingAngle;  break;
-        case MoveSplineFlag::Final_Point:  type = MonsterMoveFacingSpot;   break;
-        default:                           type = MonsterMoveNormal;      break;
-    }
-
-    bool const hasParabolicSpeed = (moveSpline.splineflags & MoveSplineFlag::Parabolic) != 0 &&
-        moveSpline.effect_start_time < moveSpline.Duration();
-    bool const hasParabolicTime = (moveSpline.splineflags & (MoveSplineFlag::Parabolic | MoveSplineFlag::Animation)) != 0;
-
-    G3D::Vector3 const& firstPoint = moveSpline.spline.getPoint(moveSpline.spline.first());
-    data << float(firstPoint.z);
-    data << float(firstPoint.x);
     data << uint32_t(moveSpline.GetId());
-    data << float(firstPoint.y);
-    data << float(unit->GetTransOffsetY());
-    data << float(unit->GetTransOffsetZ());
-    data << float(unit->GetTransOffsetX());
+    WriteForeverMovementSpline(moveSpline, data, unit);
+    WriteForeverMonsterMoveTail(data, false, 0);
 
-    data.writeBit(!hasParabolicSpeed);
-    data.writeBit(guid[0]);
-    data.writeBits(uint32_t(type), 3);
-
-    if (type == MonsterMoveFacingTarget)
-    {
-        WoWGuid targetGuid = moveSpline.facing.target;
-        data.writeBit(targetGuid[6]);
-        data.writeBit(targetGuid[4]);
-        data.writeBit(targetGuid[3]);
-        data.writeBit(targetGuid[0]);
-        data.writeBit(targetGuid[5]);
-        data.writeBit(targetGuid[7]);
-        data.writeBit(targetGuid[1]);
-        data.writeBit(targetGuid[2]);
-    }
-
-    data.writeBit(!hasParabolicTime);
-    data.writeBit(1);
-    data.writeBit(!hasVehicle);
-
-    uint32_t const uncompressedSplineCount = moveSpline.splineflags & MoveSplineFlag::UncompressedPath
-        ? (moveSpline.splineflags.cyclic
-            ? static_cast<uint32_t>(moveSpline.spline.getPointCount() - 3)
-            : static_cast<uint32_t>(moveSpline.spline.getPointCount() - 2))
-        : 1;
-    data.writeBits(uncompressedSplineCount, 20);
-
-    data.writeBit(!moveSpline.splineflags.raw());
-    data.writeBit(guid[3]);
-    data.writeBit(1);
-    data.writeBit(1);
-    data.writeBit(1);
-    data.writeBit(!moveSpline.Duration());
-    data.writeBit(guid[7]);
-    data.writeBit(guid[4]);
-    data.writeBit(1);
-    data.writeBit(guid[5]);
-
-    int32_t const compressedSplineCount = moveSpline.splineflags & MoveSplineFlag::UncompressedPath
-        ? 0
-        : static_cast<int32_t>(moveSpline.spline.getPointCount() - 3);
-    data.writeBits(compressedSplineCount, 22);
-
-    data.writeBit(guid[6]);
-    data.writeBit(0); // Fake bit
-
-    data.writeBit(transport[7]);
-    data.writeBit(transport[1]);
-    data.writeBit(transport[3]);
-    data.writeBit(transport[0]);
-    data.writeBit(transport[6]);
-    data.writeBit(transport[4]);
-    data.writeBit(transport[5]);
-    data.writeBit(transport[2]);
-
-    data.writeBit(0);
-    data.writeBit(0);
-    data.writeBit(guid[2]);
-    data.writeBit(guid[1]);
-
-    data.flushBits();
-
-    if (compressedSplineCount)
-        WriteLinearPathMop(moveSpline.spline, data);
-
-    data.writeByteSeq(guid[1]);
-    data.writeByteSeq(transport[6]);
-    data.writeByteSeq(transport[4]);
-    data.writeByteSeq(transport[1]);
-    data.writeByteSeq(transport[7]);
-    data.writeByteSeq(transport[0]);
-    data.writeByteSeq(transport[3]);
-    data.writeByteSeq(transport[5]);
-    data.writeByteSeq(transport[2]);
-
-    if (moveSpline.splineflags & MoveSplineFlag::UncompressedPath)
-    {
-        if (moveSpline.splineflags.cyclic)
-            WriteUncompressedCyclicPathMop(moveSpline.spline, data);
-        else
-            WriteUncompressedPathMop(moveSpline.spline, data);
-    }
-    else
-    {
-        G3D::Vector3 const& point = moveSpline.spline.getPoint(static_cast<int>(moveSpline.spline.getPointCount()) - 2);
-        data << point.y << point.x << point.z;
-    }
-
-    if (type == MonsterMoveFacingTarget)
-    {
-        WoWGuid targetGuid = moveSpline.facing.target;
-        data.writeByteSeq(targetGuid[5]);
-        data.writeByteSeq(targetGuid[7]);
-        data.writeByteSeq(targetGuid[0]);
-        data.writeByteSeq(targetGuid[4]);
-        data.writeByteSeq(targetGuid[3]);
-        data.writeByteSeq(targetGuid[2]);
-        data.writeByteSeq(targetGuid[6]);
-        data.writeByteSeq(targetGuid[1]);
-    }
-
-    data.writeByteSeq(guid[5]);
-
-    if (hasParabolicSpeed)
-        data << float(moveSpline.vertical_acceleration);
-
-    if (hasParabolicTime)
-        data << uint32_t(moveSpline.effect_start_time);
-
-    if (type == MonsterMoveFacingAngle)
-        data << float(moveSpline.facing.angle);
-
-    data.writeByteSeq(guid[3]);
-
-    if (moveSpline.splineflags.raw())
-        data << uint32_t(moveSpline.splineflags.raw());
-
-    data.writeByteSeq(guid[6]);
-
-    if (type == MonsterMoveFacingSpot)
-        data << moveSpline.facing.f.x << moveSpline.facing.f.y << moveSpline.facing.f.z;
-
-    data.writeByteSeq(guid[0]);
-    if (hasVehicle)
-        data << uint8_t(unit->GetTransSeat());
-    data.writeByteSeq(guid[7]);
-    data.writeByteSeq(guid[2]);
-    data.writeByteSeq(guid[4]);
-
-    if (moveSpline.Duration())
-        data << uint32_t(moveSpline.Duration());
+    const G3D::Vector3& firstPoint = moveSpline.spline.getPoint(moveSpline.spline.first());
+    data << float(firstPoint.x) << float(firstPoint.y) << float(firstPoint.z);
 #endif
 }
 

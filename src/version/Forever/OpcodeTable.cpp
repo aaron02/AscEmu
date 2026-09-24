@@ -23,7 +23,9 @@ namespace AscEmu::Version::Forever
             CMSG_ENTRY(CMSG_HOTFIX_REQUEST, 0x00440011),
             CMSG_ENTRY(CMSG_QUERY_CREATURE, 0x003E0143),
             CMSG_ENTRY(CMSG_QUERY_GAME_OBJECT, 0x003E0144),           // verified 69913: uint32 entry + modern packed gameobject GUID
+            CMSG_ENTRY(CMSG_UNKNOWN_PLAYER_GUID_003E002D, 0x003E002D), // observed with a packed Player GUID; exact semantics unverified
             CMSG_ENTRY(CMSG_UNKNOWN_NPC_INTERACT_003F0029, 0x003F0029), // observed 69913 near NPC interaction; semantics unverified
+            CMSG_ENTRY(CMSG_CLOSE_INTERACTION, 0x003F002A),
             CMSG_ENTRY(CMSG_LIST_INVENTORY, 0x003F0038),             // verified working on Forever 69913 vendor interaction
             CMSG_ENTRY(CMSG_SET_SELECTION, 0x003F00CD),
             CMSG_ENTRY(CMSG_GET_UNDELETE_CHARACTER_COOLDOWN_STATUS, 0x0044010F),
@@ -43,15 +45,18 @@ namespace AscEmu::Version::Forever
 
             // Forever 69913 movement opcodes.
             // "verified" values were observed directly in Forever captures.
-            // "inferred" values preserve the stable modern movement low-ID layout with Forever's 0x42 group.
+            // The remaining entries use the same low-ID movement layout observed in 69913 and retained
+            // by modern clients; Forever uses the 0x42 client movement group.
             CMSG_ENTRY(CMSG_MOVE_CHANGE_TRANSPORT, 0x0042004E),       // inferred
             CMSG_ENTRY(CMSG_MOVE_JUMP, 0x00420006),                  // verified
             CMSG_ENTRY(CMSG_MOVE_DOUBLE_JUMP, 0x00420007),           // inferred
             CMSG_ENTRY(CMSG_MOVE_FALL_LAND, 0x00420017),             // inferred
             CMSG_ENTRY(CMSG_MOVE_FALL_RESET, 0x00420037),            // inferred
-            CMSG_ENTRY(CMSG_UNKNOWN_003E002D, 0x003E002D),              // observed 69913; semantics unverified
             CMSG_ENTRY(CMSG_MOVE_UPDATE_FALL_SPEED, 0x00420038),     // inferred
-            CMSG_ENTRY(CMSG_MOVE_HEARTBEAT, 0x0042002E),             // verified
+            CMSG_ENTRY(CMSG_MOVE_HEARTBEAT, 0x0042002E),             // verified 69913
+            CMSG_ENTRY(CMSG_MOVE_INIT_ACTIVE_MOVER_COMPLETE, 0x00420064), // verified 69913 login sequence
+            CMSG_ENTRY(CMSG_MOVE_INITIAL_OBJECT_UPDATE_COMPLETE_ACK, 0x00420083), // modern movement layout, observed in 69913 captures
+            CMSG_ENTRY(CMSG_MOVE_SPLINE_DONE, 0x00420036),           // verified 69913: MovementInfo + spline id
             CMSG_ENTRY(CMSG_MOVE_SET_ADV_FLY, 0x00420070),           // inferred
             CMSG_ENTRY(CMSG_MOVE_SET_WALK_MODE, 0x0042000F),         // inferred
             CMSG_ENTRY(CMSG_MOVE_SET_RUN_MODE, 0x0042000E),          // inferred
@@ -89,6 +94,7 @@ namespace AscEmu::Version::Forever
             SMSG_ENTRY(SMSG_AVAILABLE_HOTFIXES, 0x004A0001),
             SMSG_ENTRY(SMSG_CACHE_VERSION, 0x004A000E),
             SMSG_ENTRY(SMSG_QUERY_CREATURE_RESPONSE, 0x004A0006),
+            SMSG_ENTRY(SMSG_QUERY_GAME_OBJECT_RESPONSE, 0x004A0007), // verified 69913
             SMSG_ENTRY(SMSG_VENDOR_INVENTORY, 0x0046005C),
             SMSG_ENTRY(SMSG_UNDELETE_COOLDOWN_STATUS_RESPONSE, 0x00460276),
             SMSG_ENTRY(SMSG_SOCIAL_CONTRACT_REQUEST_RESPONSE, 0x00460325),
@@ -103,6 +109,12 @@ namespace AscEmu::Version::Forever
             SMSG_ENTRY(SMSG_LOGIN_VERIFY_WORLD, 0x0046002F),
             SMSG_ENTRY(SMSG_LOGIN_SET_TIME_SPEED, 0x004601B8),
             SMSG_ENTRY(SMSG_UPDATE_OBJECT, 0x005D0000),
+
+            // Forever 69913 server movement group. These values are present repeatedly in the
+            // official captures; the low IDs match the modern movement opcode layout.
+            SMSG_ENTRY(SMSG_TIME_SYNC_REQUEST, 0x005F0000),
+            SMSG_ENTRY(SMSG_ON_MONSTER_MOVE, 0x005F0002),
+            SMSG_ENTRY(SMSG_MOVE_UPDATE, 0x005F000E),
             SMSG_ENTRY(SMSG_CHARACTER_ENUM_PRELUDE, 0x0046021D),
             SMSG_ENTRY(SMSG_CHARACTER_ENUM_PRELUDE_EXTENDED, 0x0046021C),
             SMSG_ENTRY(SMSG_CHARACTER_SELECT_STATUS, 0x0046029D),

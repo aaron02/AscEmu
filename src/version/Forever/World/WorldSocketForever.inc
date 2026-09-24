@@ -48,6 +48,7 @@ protected:
     bool handleForeverQueryCreatureOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverQueryGameObjectOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverUnknownNpcInteract003F0029Opcode(AscEmu::Version::Forever::Packets::Packet& packet);
+    bool handleCloseInteraction(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverListInventoryOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverSetSelectionOpcode(AscEmu::Version::Forever::Packets::Packet& packet);
     bool handleForeverPingOpcode(AscEmu::Version::Forever::Packets::Packet& packet);

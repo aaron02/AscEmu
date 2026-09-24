@@ -136,7 +136,7 @@ namespace AscEmu::Version::Forever::Packets
         }
     }
 
-    const std::vector<RaceClassAvailability>& getRaceClassAvailability69913()
+    const std::vector<RaceClassAvailability>& getRaceClassAvailability()
     {
         static const std::vector<RaceClassAvailability> availability =
         {

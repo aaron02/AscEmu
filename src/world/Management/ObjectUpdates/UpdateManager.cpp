@@ -197,7 +197,7 @@ void UpdateManager::internalProcessPendingUpdates()
 
         const uint32_t updateCount = m_creationCount + m_updateCount;
         const std::vector<uint8_t> packet =
-            AscEmu::Version::Forever::ObjectUpdate::buildUpdateObjectPacket69913(static_cast<uint16_t>(m_owner->GetMapId()), updateCount, std::span<const uint8_t>(updateBlocks.contents(), updateBlocks.size()), m_destroyIdCount, std::span<const uint8_t>(m_destroyIds.contents(), m_destroyIds.size()), m_outOfRangeIdCount, std::span<const uint8_t>(m_outOfRangeIds.contents(), m_outOfRangeIds.size()));
+            AscEmu::Version::Forever::ObjectUpdate::buildUpdateObjectPacket(static_cast<uint16_t>(m_owner->GetMapId()), updateCount, std::span<const uint8_t>(updateBlocks.contents(), updateBlocks.size()), m_destroyIdCount, std::span<const uint8_t>(m_destroyIds.contents(), m_destroyIds.size()), m_outOfRangeIdCount, std::span<const uint8_t>(m_outOfRangeIds.contents(), m_outOfRangeIds.size()));
 
         if (!packet.empty())
         {

@@ -9,6 +9,8 @@
 #include "world/Server/World.h"
 #include "world/Server/Opcodes.hpp"
 #include "world/Storage/VersionDataBridge.hpp"
+#include "world/Storage/MySQLDataStore.hpp"
+#include "world/Objects/GameObjectProperties.hpp"
 #include "world/Objects/Units/Creatures/CreatureDefines.hpp"
 #include "Objects/Units/Players/Player.hpp"
 #include "Objects/Units/Unit.hpp"
@@ -89,8 +91,34 @@ bool WorldSocket::handleForeverLogoutCancelOpcode(AscEmu::Version::Forever::Pack
 
 bool WorldSocket::handleForeverUnknown003E002DOpcode(AscEmu::Version::Forever::Packets::Packet& packet)
 {
-    // Observed as 0x003E002D with a 5-byte payload. Semantics are not verified yet.
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: UNKNOWN_003E002D received size={}.", packet.size());
+    WoWGuid modernGuid;
+    std::size_t consumed = 0;
+
+    if (!WoWGuid::unpackModern(packet.contents(), packet.size(), modernGuid, consumed) || consumed != packet.size())
+    {
+        sLogger.warning("WorldSocket::Forever: malformed CMSG_UNKNOWN_PLAYER_GUID_003E002D payload={} byte(s), consumed={}.", packet.size(), consumed);
+        return true;
+    }
+
+    if (modernGuid.getModernHighType() != ModernHighGuid::Player)
+    {
+        sLogger.warning(
+            "WorldSocket::Forever: CMSG_UNKNOWN_PLAYER_GUID_003E002D has unexpected modern high type={} realm={} entry={} counter={}.",
+            static_cast<uint32_t>(modernGuid.getModernHighType()),
+            modernGuid.getModernRealmId(),
+            modernGuid.getModernEntry(),
+            modernGuid.getModernCounter());
+        return true;
+    }
+
+    // Observed with a packed Player GUID while interacting/selecting in the world.
+    // The exact semantic meaning is intentionally left unassigned until verified.
+    sLogger.debugFlag(
+        AscEmu::Logging::LF_OPCODE,
+        "WorldSocket::Forever: CMSG_UNKNOWN_PLAYER_GUID_003E002D realm={} low={} counter={}.",
+        modernGuid.getModernRealmId(),
+        modernGuid.getModernLow(),
+        modernGuid.getModernCounter());
     return true;
 }
 
@@ -285,8 +313,58 @@ bool WorldSocket::handleForeverQueryGameObjectOpcode(AscEmu::Version::Forever::P
         return true;
     }
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: CMSG_QUERY_GAME_OBJECT entry={} guidEntry={} counter={} modernLow=0x{:016X} modernHigh=0x{:016X}.", gameObjectEntry, modernGuid.getModernEntry(), modernGuid.getModernCounter(), modernGuid.getModernLow(), modernGuid.getModernHigh());
-    return true;
+    using namespace AscEmu::Version::Forever;
+
+    GameObjectProperties const* gameObject = sMySQLStore.getGameObjectProperties(gameObjectEntry);
+    const auto localized = m_session != nullptr && m_session->language > 0 ? sMySQLStore.getLocalizedGameobject(gameObjectEntry, m_session->language) : nullptr;
+    const std::string name = localized != nullptr ? localized->name : gameObject != nullptr ? gameObject->name : std::string{};
+
+    ByteBuffer response;
+    response << gameObjectEntry;
+    const std::vector<uint8_t> packedGuid = modernGuid.packModern();
+    response.append(packedGuid.data(), packedGuid.size());
+    response.writeBit(gameObject != nullptr);
+    response.flushBits();
+
+    ByteBuffer stats;
+    if (gameObject != nullptr)
+    {
+        stats << static_cast<int32_t>(gameObject->type) << static_cast<int32_t>(gameObject->display_id);
+        stats << name << std::string{} << std::string{} << std::string{};
+        stats << gameObject->category_name << gameObject->cast_bar_text << gameObject->Unkstr;
+
+        const uint32_t data[35] = {
+            gameObject->raw.parameter_0, gameObject->raw.parameter_1, gameObject->raw.parameter_2, gameObject->raw.parameter_3, gameObject->raw.parameter_4,
+            gameObject->raw.parameter_5, gameObject->raw.parameter_6, gameObject->raw.parameter_7, gameObject->raw.parameter_8, gameObject->raw.parameter_9,
+            gameObject->raw.parameter_10, gameObject->raw.parameter_11, gameObject->raw.parameter_12, gameObject->raw.parameter_13, gameObject->raw.parameter_14,
+            gameObject->raw.parameter_15, gameObject->raw.parameter_16, gameObject->raw.parameter_17, gameObject->raw.parameter_18, gameObject->raw.parameter_19,
+            gameObject->raw.parameter_20, gameObject->raw.parameter_21, gameObject->raw.parameter_22, gameObject->raw.parameter_23, gameObject->raw.parameter_24,
+            gameObject->raw.parameter_25, gameObject->raw.parameter_26, gameObject->raw.parameter_27, gameObject->raw.parameter_28, gameObject->raw.parameter_29,
+            gameObject->raw.parameter_30, gameObject->raw.parameter_31, gameObject->raw.parameter_32, 0, 0
+        };
+        for (uint32_t value : data)
+            stats << static_cast<int32_t>(value);
+
+        stats << gameObject->size;
+
+        uint8_t questItemCount = 0;
+        for (uint32_t questItem : gameObject->QuestItems)
+            if (questItem != 0)
+                ++questItemCount;
+        stats << questItemCount;
+        for (uint32_t questItem : gameObject->QuestItems)
+            if (questItem != 0)
+                stats << static_cast<int32_t>(questItem);
+
+        stats << int32_t(0) << int32_t(0); // ContentTuningID, RequiredLevel
+    }
+
+    response << static_cast<uint32_t>(stats.size());
+    if (stats.size() != 0)
+        response.append(stats.contents(), stats.size());
+
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: CMSG_QUERY_GAME_OBJECT entry={} guidEntry={} counter={} found={} stats={} byte(s).", gameObjectEntry, modernGuid.getModernEntry(), modernGuid.getModernCounter(), gameObject != nullptr ? 1 : 0, stats.size());
+    return sendForeverPacket(Opcode::SMSG_QUERY_GAME_OBJECT_RESPONSE, response.contents(), static_cast<uint32_t>(response.size()));
 }
 
 bool WorldSocket::handleForeverUnknownNpcInteract003F0029Opcode(AscEmu::Version::Forever::Packets::Packet& packet)
@@ -308,8 +386,29 @@ bool WorldSocket::handleForeverUnknownNpcInteract003F0029Opcode(AscEmu::Version:
 
     // Observed as 0x003F0029 with a modern packed creature GUID near NPC interaction.
     // The exact semantic meaning is intentionally left unassigned until verified.
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "WorldSocket::Forever: UNKNOWN_NPC_INTERACT_003F0029 entry={} counter={} modernLow=0x{:016X} modernHigh=0x{:016X}.", modernGuid.getModernEntry(), modernGuid.getModernCounter(), modernGuid.getModernLow(), modernGuid.getModernHigh());
+    sLogger.info("WorldSocket::Forever: UNKNOWN_NPC_INTERACT_003F0029 entry={} counter={} modernLow=0x{:016X} modernHigh=0x{:016X}.", modernGuid.getModernEntry(), modernGuid.getModernCounter(), modernGuid.getModernLow(), modernGuid.getModernHigh());
 
+    return true;
+}
+
+bool WorldSocket::handleCloseInteraction(AscEmu::Version::Forever::Packets::Packet& packet)
+{
+    WoWGuid modernGuid;
+    std::size_t consumed = 0;
+
+    if (!WoWGuid::unpackModern(packet.contents(), packet.size(), modernGuid, consumed) || consumed != packet.size())
+    {
+        sLogger.warning("WorldSocket::Forever: malformed CMSG_CLOSE_INTERACTION payload={} byte(s), consumed={}.", packet.size(), consumed);
+        return true;
+    }
+
+    if (modernGuid.getModernHighType() != ModernHighGuid::Creature && modernGuid.getModernHighType() != ModernHighGuid::Vehicle)
+    {
+        sLogger.warning("WorldSocket::Forever: CMSG_CLOSE_INTERACTION target has unexpected modern high type={} entry={} counter={}.", static_cast<uint32_t>(modernGuid.getModernHighType()), modernGuid.getModernEntry(), modernGuid.getModernCounter());
+        return true;
+    }
+
+    sLogger.info("WorldSocket::Forever: CMSG_CLOSE_INTERACTION entry={} counter={} modernLow=0x{:016X} modernHigh=0x{:016X}.", modernGuid.getModernEntry(), modernGuid.getModernCounter(), modernGuid.getModernLow(), modernGuid.getModernHigh());
     return true;
 }
 
@@ -448,8 +547,6 @@ bool WorldSocket::handleMovementOpcodes(AscEmu::Version::Forever::Packets::Packe
         mover->handleFall(movementInfo);
     else if ((movementInfo.flags & MOVEFLAG_FALLING) == 0)
         mover->m_zAxisPosition = movementInfo.position.z;
-
-    sLogger.debugMove("Forever movement {} mover=0x{:016X} pos=({:.3f}, {:.3f}, {:.3f}, {:.3f}) flags=0x{:016X} time={}.", sOpcodeTable.getNameForInternalId(packet.getOpcode()), moverGuid, status.position.x, status.position.y, status.position.z, status.position.o, status.flags, status.moveTime);
 
     return true;
 }

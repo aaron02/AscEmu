@@ -750,6 +750,69 @@ namespace {
 
         return map0 != nullptr;
     }
+
+    bool loadForeverModernTerrainStores(WDB::StoreProblemList& errors, std::string const& dbcPath)
+    {
+        WDB::WDC5File areaTable;
+        WDB::WDC5File liquidType;
+        WDB::WDC5File wmoAreaTable;
+
+        if (!loadForeverWDC5Group({ { areaTable, ForeverFormat::AreaTable }, { liquidType, ForeverFormat::LiquidType }, { wmoAreaTable, ForeverFormat::WMOAreaTable } }, errors, dbcPath))
+            return false;
+
+        sAreaStore.clear();
+        for (uint32_t row = 0; row < areaTable.getRecordCount(); ++row)
+        {
+            WDB::Structures::AreaTableEntry entry{};
+            entry.id = areaTable.getRecordId(row);
+            entry.map_id = areaTable.getUInt16(row, 2);              // ContinentID
+            entry.zone = areaTable.getUInt16(row, 3);                // ParentAreaID
+            entry.explore_flag = static_cast<uint32_t>(areaTable.getInt16(row, 4)); // AreaBit
+            entry.area_level = static_cast<int32_t>(areaTable.getInt8(row, 11));    // ExplorationLevel
+            entry.team = areaTable.getUInt8(row, 14);                // FactionGroupMask
+            entry.flags = areaTable.getUInt32(row, 22, 0);           // Flags[0]
+            for (uint32_t i = 0; i < 4; ++i)
+                entry.liquid_type_override[i] = areaTable.getUInt16(row, 23, i);
+
+            // Modern AreaTable no longer carries the legacy elevation field.
+            // Terrain height continues to come from maps/vmaps.
+            entry.elevation = 0.0f;
+            sAreaStore[entry.id] = std::move(entry);
+        }
+
+        std::vector<std::pair<uint32_t, WDB::Structures::LiquidTypeEntry>> liquidEntries;
+        liquidEntries.reserve(liquidType.getRecordCount());
+        for (uint32_t row = 0; row < liquidType.getRecordCount(); ++row)
+        {
+            WDB::Structures::LiquidTypeEntry entry{};
+            entry.Id = liquidType.getRecordId(row);
+            // AscEmu's legacy Type is the liquid category used to build
+            // MAP_LIQUID_TYPE_* masks. Modern clients expose that as SoundBank.
+            entry.Type = liquidType.getUInt8(row, 3);                // SoundBank
+            entry.SpellId = liquidType.getUInt32(row, 5);           // SpellID
+            liquidEntries.emplace_back(entry.Id, entry);
+        }
+        sLiquidTypeStore.assignEntries(liquidEntries);
+
+        std::vector<std::pair<uint32_t, WDB::Structures::WMOAreaTableEntry>> wmoEntries;
+        wmoEntries.reserve(wmoAreaTable.getRecordCount());
+        for (uint32_t row = 0; row < wmoAreaTable.getRecordCount(); ++row)
+        {
+            WDB::Structures::WMOAreaTableEntry entry{};
+            entry.id = wmoAreaTable.getRecordId(row);
+            entry.rootId = static_cast<int32_t>(wmoAreaTable.getUInt16(row, 2)); // WMOID
+            entry.adtId = static_cast<int32_t>(wmoAreaTable.getUInt8(row, 3));   // NameSetID
+            entry.groupId = wmoAreaTable.getInt32(row, 4);                      // WMOGroupID
+            entry.areaId = wmoAreaTable.getUInt16(row, 13);                     // AreaTableID
+            entry.flags = wmoAreaTable.getUInt32(row, 14);                      // Flags
+            wmoEntries.emplace_back(entry.id, entry);
+        }
+        sWMOAreaTableStore.assignEntries(wmoEntries);
+
+        sLogger.info("Forever terrain DB2 stores: AreaTable={} LiquidType={} WMOAreaTable={}",
+            sAreaStore.size(), liquidEntries.size(), wmoEntries.size());
+        return !sAreaStore.empty() && !liquidEntries.empty();
+    }
 #endif
 
     void buildAreaMapCollection()
@@ -845,6 +908,7 @@ bool loadDBCs()
     loadForeverModernTaxiStores(bad_dbc_files, dbc_path);
     loadForeverModernItemStores(bad_dbc_files, dbc_path);
     loadForeverModernMapStores(bad_dbc_files, dbc_path);
+    loadForeverModernTerrainStores(bad_dbc_files, dbc_path);
 #endif
 
     // Load ChrClasses.dbc first to ensure the dbcLocaleId is set correctly before loading other DBC files that may depend on it
@@ -897,6 +961,7 @@ bool loadDBCs()
     );
 #endif
 
+#if !defined(AE_FOREVER)
     WDB::loadUnifiedWDBStore<WDB::Structures::AreaTableEntry>(
         bad_dbc_files, sAreaStore, dbc_path,
         []<typename RawType>(const RawType& raw, WDB::Structures::AreaTableEntry& entry) {
@@ -937,6 +1002,8 @@ bool loadDBCs()
             }
         }
     );
+
+#endif
 
     MapManagement::AreaManagement::AreaStorage::initialise(&sAreaStore);
 
@@ -1258,7 +1325,9 @@ bool loadDBCs()
 #endif
 
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sLFGDungeonStore, dbc_path, "LFGDungeons.dbc");
+#if !defined(AE_FOREVER)
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sLiquidTypeStore, dbc_path, "LiquidType.dbc");
+#endif
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sLockStore, dbc_path, "Lock.dbc");
 
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sMailTemplateStore, dbc_path, "MailTemplate.dbc");
@@ -1502,8 +1571,11 @@ bool loadDBCs()
 
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sTransportAnimationStore, dbc_path, "TransportAnimation.dbc");
 
+#if !defined(AE_FOREVER)
     WDB::loadWDBFile(available_dbc_locales, bad_dbc_files, sWMOAreaTableStore, dbc_path, "WMOAreaTable.dbc");
+#endif
     {
+        sWMOAreaInfoByTripple.clear();
         for (uint32_t i = 0; i < sWMOAreaTableStore.getNumRows(); ++i)
         {
             if (auto entry = sWMOAreaTableStore.lookupEntry(i))

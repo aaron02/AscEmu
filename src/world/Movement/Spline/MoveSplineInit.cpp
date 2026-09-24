@@ -80,7 +80,9 @@ int32_t MoveSplineInit::Launch()
 
     // should i do the things that user should do? - no.
     if (args.path.empty())
+    {
         return 0;
+    }
 
     // corrent first vertex
     args.path[0] = real_position;
@@ -141,7 +143,9 @@ int32_t MoveSplineInit::Launch()
 #endif
 
     if (!args.Validate(unit))
+    {
         return 0;
+    }
 
     unit->obj_movement_info.flags = moveFlags;
     move_spline.Initialize(args);

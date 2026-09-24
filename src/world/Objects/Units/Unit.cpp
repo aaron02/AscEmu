@@ -321,10 +321,7 @@ void Unit::onAttachToWorld()
     m_zAxisPosition = 0.0f;
 #endif
 
-#ifndef AE_FOREVER
-    // This Crashes our Client
-    //getMovementManager()->addToWorld();
-#endif
+    getMovementManager()->addToWorld();
 
     Object::onAttachToWorld();
 }

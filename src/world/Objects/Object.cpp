@@ -560,7 +560,7 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
         Unit* const unit = static_cast<Unit*>(this);
         Creature* const creature = static_cast<Creature*>(this);
         const std::vector<uint8_t> block =
-            AscEmu::Version::Forever::ObjectUpdate::buildCreatureCreateBlock69913(packedGuid, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(), static_cast<uint32_t>(Util::getMSTime()), foreverObjectFields(), unit->foreverUnitFields(), creature->isVendor() ? 1U : 0U);
+            AscEmu::Version::Forever::ObjectUpdate::buildCreatureCreateBlock(packedGuid, GetPositionX(), GetPositionY(), GetPositionZ(), LocationVector::normalizeOrientation(GetOrientation()), static_cast<uint32_t>(Util::getMSTime()), foreverObjectFields(), unit->foreverUnitFields(), creature->isVendor() ? 1U : 0U);
 
         if (block.empty())
             return 0;
@@ -582,7 +582,7 @@ uint32_t Object::buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* targe
 
         GameObject* const gameObject = static_cast<GameObject*>(this);
         const std::vector<uint8_t> block =
-            AscEmu::Version::Forever::ObjectUpdate::buildGameObjectCreateBlock69913(packedGuid, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(), gameObject->getPackedLocalRotation(), foreverObjectFields(), gameObject->foreverGameObjectFields());
+            AscEmu::Version::Forever::ObjectUpdate::buildGameObjectCreateBlock(packedGuid, GetPositionX(), GetPositionY(), GetPositionZ(), LocationVector::normalizeOrientation(GetOrientation()), gameObject->getPackedLocalRotation(), foreverObjectFields(), gameObject->foreverGameObjectFields());
 
         if (block.empty())
             return 0;
@@ -2529,7 +2529,7 @@ uint32_t Object::BuildValuesUpdateBlockForPlayer(ByteBuffer* data, Player* targe
         static_cast<uint16_t>(GetMapId()),
         0);
     const std::vector<uint8_t> packedGuid = modernGuid.packModern();
-    const std::vector<uint8_t> block = AscEmu::Version::Forever::ObjectUpdate::buildValuesUpdateBlock69913(std::span<const uint8_t>(packedGuid.data(), packedGuid.size()), ownerVisible, m_foreverObjectFields, item ? &item->foreverItemFields() : nullptr, container ? &container->foreverContainerFields() : nullptr, unit ? &unit->foreverUnitFields() : nullptr, player ? &player->foreverPlayerFields() : nullptr, ownerVisible ? &player->foreverActivePlayerFields() : nullptr, gameObject ? &gameObject->foreverGameObjectFields() : nullptr, dynamicObject ? &dynamicObject->foreverDynamicObjectFields() : nullptr, corpse ? &corpse->foreverCorpseFields() : nullptr);
+    const std::vector<uint8_t> block = AscEmu::Version::Forever::ObjectUpdate::buildValuesUpdateBlock(std::span<const uint8_t>(packedGuid.data(), packedGuid.size()), ownerVisible, m_foreverObjectFields, item ? &item->foreverItemFields() : nullptr, container ? &container->foreverContainerFields() : nullptr, unit ? &unit->foreverUnitFields() : nullptr, player ? &player->foreverPlayerFields() : nullptr, ownerVisible ? &player->foreverActivePlayerFields() : nullptr, gameObject ? &gameObject->foreverGameObjectFields() : nullptr, dynamicObject ? &dynamicObject->foreverDynamicObjectFields() : nullptr, corpse ? &corpse->foreverCorpseFields() : nullptr);
 
     if (block.empty())
         return 0;

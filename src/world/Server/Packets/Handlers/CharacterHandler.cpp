@@ -1188,7 +1188,7 @@ void WorldSession::fullLoginForever(Player* player)
     // Build the Forever 69913 self CreateObject2 entirely from structured fields
     // and explicit build defaults. Unknown wire regions remain deliberately named.
     const std::vector<uint8_t> createFieldPayload =
-        AscEmu::Version::Forever::ObjectUpdate::buildSelfFieldPayload69913(player->foreverObjectFields(), player->foreverUnitFields(), player->foreverPlayerFields(), player->foreverActivePlayerFields());
+        AscEmu::Version::Forever::ObjectUpdate::buildSelfFieldPayload(player->foreverObjectFields(), player->foreverUnitFields(), player->foreverPlayerFields(), player->foreverActivePlayerFields());
 
     if (createFieldPayload.empty())
     {
@@ -1198,7 +1198,7 @@ void WorldSession::fullLoginForever(Player* player)
     }
 
     const std::vector<uint8_t> selfCreatePacket =
-        AscEmu::Version::Forever::ObjectUpdate::buildSelfCreatePacket69913(static_cast<uint16_t>(player->GetMapId()), packedPlayerGuid, player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation(), createFieldPayload);
+        AscEmu::Version::Forever::ObjectUpdate::buildSelfCreatePacket(static_cast<uint16_t>(player->GetMapId()), packedPlayerGuid, player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation(), createFieldPayload);
 
     if (selfCreatePacket.empty())
     {

@@ -281,8 +281,7 @@ namespace AscEmu::Battlenet
         const bool sent = sendPacket(packet);
         if (sent)
         {
-            sLogger.info("BattleNetComm: queued pending world session account={} realm={} build={} ticket_bytes={} expires={}",
-                session.accountId, session.realmId, session.clientBuild, session.realmJoinTicket.size(), session.expiresAt);
+            sLogger.debug("BattleNetComm: queued pending world session account={} realm={} build={} ticket_bytes={} expires={}", session.accountId, session.realmId, session.clientBuild, session.realmJoinTicket.size(), session.expiresAt);
         }
         return sent;
     }
